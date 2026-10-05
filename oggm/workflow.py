@@ -4,6 +4,7 @@ import glob
 import json
 import logging
 import os
+import re
 import shutil
 import warnings
 import tarfile
@@ -48,17 +49,6 @@ ICEBOOST_V2_FILES = {
 # Farinotti et al. (2019) consensus (ITMIX) reference volume table (RGI6 only)
 CONSENSUS_REF_TABLE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/g2ti/'
                            'rgi62_itmix_df_v20260617.parquet')
-
-"""
-For dealing with multiprocessing with fork. Child processes must reset
-zarr's async globals so they don't inherit stale references that cause
-deadlocks when starting new I/O threads.
-"""
-try:
-    from zarr.core.sync import reset_resources_after_fork as _zarr_reset
-    os.register_at_fork(after_in_child=_zarr_reset)
-except (ImportError, AttributeError):
-    pass
 
 # Multiprocessing Pool
 _mp_manager = None
@@ -160,25 +150,6 @@ def reset_multiprocessing():
         _mp_manager.shutdown()
         _mp_manager = None
     cfg.CONFIG_MODIFIED = False
-    # Flush zarr's background async I/O threads so they don't deadlock
-    # child processes after fork
-    try:
-        import zarr.core.sync as _zs
-
-        _iothread = _zs.iothread[0]  # save ref before cleanup clears it
-        _loop = _zs.loop[0]
-        if _loop is not None and not _loop.is_closed():
-            _exc = getattr(_loop, "_default_executor", None)
-            if _exc is not None:
-                _exc.shutdown(wait=True)
-                _loop._default_executor = None
-        _zs.cleanup_resources()
-        # cleanup_resources() waits only 0.2 s for iothread; ensure it is
-        # truly dead before any subsequent fork (Pool/Manager creation).
-        if _iothread is not None and _iothread.is_alive():
-            _iothread.join(timeout=5.0)  # TODO: Play around with timeout
-    except Exception:
-        pass
 
 
 def execute_entity_task(task, gdirs, **kwargs):
@@ -390,6 +361,51 @@ def _get_applied_levels(rgi_id:str)->set[int]:
     return included
 
 
+def _layered_level_tars(
+    tar_base: str, rgi_id: str, level: int, locate, append=False
+) -> dict[int, str]:
+    """Gets the bundle tars to layer for a glacier, keyed by level.
+
+    A delta bundle needs the levels its manifest `requires`, which may
+    require more. Legacy and standalone bundles are enough on their own.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the bundle tar of the requested level.
+    rgi_id : str
+        The glacier's RGI ID.
+    level : int
+        The requested level.
+    locate : callable
+        Returns the path to the bundle tar of a given level.
+    append : bool
+        Whether the levels already in the glacier directory count as there.
+
+    Returns
+    -------
+    dict[int, str]
+        The bundle tars to layer, keyed by level.
+    """
+    tars = {level: tar_base}
+    manifest = _peek_level_manifest(tar_base, rgi_id, level)
+    if manifest is None or manifest.get("kind") == "standalone":
+        return tars
+    included = set(manifest.get("includes_levels") or [level])
+    if append:
+        included |= _get_applied_levels(rgi_id)
+    missing = set(manifest.get("requires") or []) - included
+    while missing:
+        lvl = max(missing)
+        tb = locate(lvl)
+        tars[lvl] = tb
+        m = _peek_level_manifest(tb, rgi_id, lvl)
+        included |= set((m.get("includes_levels") if m else None) or [lvl])
+        missing |= set((m.get("requires") if m else None) or [])
+        missing -= included
+    return tars
+
+
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
                      base_url=None, append=False):
@@ -399,36 +415,20 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     if prepro_rgi_version is None:
         prepro_rgi_version = cfg.PARAMS['rgi_version']
 
-    if isinstance(entity, pd.Series):
-        try:
-            rid = entity.RGIId
-        except AttributeError:
-            rid = entity.rgi_id
-    else:
-        rid = entity
+    rid = _rgi_id_of(entity)
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
 
-    tars = {from_prepro_level: tar_base}
-    manifest = _peek_level_manifest(tar_base, rid, from_prepro_level)
-    if manifest is not None and manifest.get("kind") != "standalone":
-        # for deltas fetch whatever required levels the requested
-        # artifact doesn't include
-        included = set(manifest.get("includes_levels") or [from_prepro_level])
-        if append:
-            included |= _get_applied_levels(rid)
-        missing = set(manifest.get("requires") or []) - included
-        while missing:
-            lvl = max(missing)
-            tb = utils.get_prepro_gdir(
-                prepro_rgi_version, rid, prepro_border, lvl, base_url=base_url
-            )
-            tars[lvl] = tb
-            m = _peek_level_manifest(tb, rid, lvl)
-            included |= set((m.get("includes_levels") if m else None) or [lvl])
-            missing |= set((m.get("requires") if m else None) or [])
-            missing -= included
+    tars = _layered_level_tars(
+        tar_base,
+        rid,
+        from_prepro_level,
+        lambda lvl: utils.get_prepro_gdir(
+            prepro_rgi_version, rid, prepro_border, lvl, base_url=base_url
+        ),
+        append=append,
+    )
 
     # Legacy bundles without manifest are cumulative so one fetch is enough
     from_tar = [
@@ -442,31 +442,61 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     return oggm.GlacierDirectory(entity, from_tar=from_tar, append=append)
 
 
-def gdir_from_tar(entity, from_tar):
+def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
+                  prepro_rgi_version=None):
 
-    try:
-        rgi_id = entity.RGIId
-    except AttributeError:
-        rgi_id = entity
+    rgi_id = _rgi_id_of(entity)
 
     # The region dir, the new 100-glacier bundle name and the old
     # 1000-glacier bundle name use the same slices for RGI6 and RGI7.
     # TODO: add support for bundle sizes of 10 and 1
     region = rgi_id[:-6]
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
-    zip_path = os.path.join(from_tar, region, new_bundle + ".zip")
-    new_path = os.path.join(from_tar, region, new_bundle + ".tar")
-    old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
-    if os.path.exists(zip_path):
-        from_tar = os.path.join(zip_path[:-4], rgi_id + ".zip")
-    elif os.path.exists(new_path):
-        from_tar = os.path.join(new_path[:-4], rgi_id + ".tar.gz")
-    elif os.path.exists(old_path):
-        from_tar = os.path.join(old_path[:-4], rgi_id + ".tar.gz")
-    else:
+
+    def locate(level_dir):
+        new_path = os.path.join(level_dir, region, new_bundle + ".tar")
+        old_path = os.path.join(level_dir, region, rgi_id[:-3] + ".tar")
+        if os.path.exists(new_path):
+            return new_path
+        if os.path.exists(old_path):
+            return old_path
         raise FileNotFoundError(
-            "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
+            "Cannot find bundle tar for {} in {}".format(rgi_id, level_dir)
         )
+
+    tar_base = locate(from_tar)
+    # A delta level folder (`L<n>`) takes its required levels from the
+    # sibling folders of the same tree, else from `base_url`. A chunked
+    # run writes L3 and L4 to disk, while L0 to L2 are only published.
+    root, name = os.path.split(os.path.normpath(from_tar))
+
+    def locate_level(lvl):
+        try:
+            return locate(os.path.join(root, f"L{lvl}"))
+        except FileNotFoundError:
+            if base_url is None:
+                raise
+        return utils.get_prepro_gdir(
+            prepro_rgi_version or cfg.PARAMS["rgi_version"],
+            rgi_id,
+            prepro_border or int(cfg.PARAMS["border"]),
+            lvl,
+            base_url=base_url,
+        )
+
+    if re.fullmatch(r"L\d", name):
+        tars = _layered_level_tars(
+            tar_base, rgi_id, int(name[1:]), locate_level
+        )
+    else:
+        tars = {0: tar_base}
+
+    from_tar = [
+        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz")
+        for _, tb in sorted(tars.items())
+    ]
+    if len(from_tar) == 1:
+        from_tar = from_tar[0]
     return oggm.GlacierDirectory(entity, from_tar=from_tar)
 
 
@@ -507,6 +537,162 @@ def _check_rgi_input(rgidf=None, err_on_lvl2=False):
     if len(u) < len(rgi_ids):
         raise InvalidWorkflowError('Found duplicates in the list of '
                                    'RGI IDs: {}'.format(u[c > 1]))
+
+
+def _rgi_id_of(entity):
+    """The RGI id of a single entity.
+
+    `entity` is either a row of an RGI dataframe - RGI6 has the id in `RGIId`
+    and RGI7 in `rgi_id` - or already the id itself.
+    """
+
+    if isinstance(entity, pd.Series):
+        try:
+            return entity.RGIId
+        except AttributeError:
+            # RGI7
+            return entity.rgi_id
+    return entity
+
+
+def _rgi_ids_of(rgidf):
+    """The RGI ids of a dataframe (RGI6 or RGI7) or of a list of ids."""
+
+    if isinstance(rgidf, pd.DataFrame):
+        try:
+            return np.asarray(rgidf.RGIId)
+        except AttributeError:
+            # RGI7
+            return np.asarray(rgidf.rgi_id)
+    return np.asarray(utils.tolist(rgidf))
+
+
+def _chunk_index_of(rgi_ids, chunk_size):
+    """The chunk index of each glacier, out of its RGI id.
+
+    Chunks are blocks of the RGI id space, not slices of the sorted list of
+    glaciers: this is what makes them line up with the tar bundles written by
+    :py:func:`oggm.utils.base_dir_to_tar`. The slices below are correct for
+    both RGI6 (14 char ids) and RGI7 (23 char ids), as everywhere else in
+    OGGM where the bundles are computed.
+    """
+
+    if chunk_size == 1000:
+        sl = slice(-5, -3)
+    elif chunk_size == 100:
+        sl = slice(-5, -2)
+    else:
+        # The read side (gdir_from_tar, _get_prepro_gdir_unlocked) only knows
+        # how to locate 100- and 1000-glacier bundles, so anything else would
+        # make chunks that overlap the tar bundles - and chunks writing into
+        # the same bundle overwrite each other.
+        raise InvalidParamsError('chunk_size must be 100 or 1000, got '
+                                 '{}'.format(chunk_size))
+
+    return np.array([int(rid[sl]) for rid in rgi_ids])
+
+
+def count_rgi_chunks(rgidf, chunk_size=1000):
+    """Number of chunks the given glaciers fall into.
+
+    This is derived from the RGI ids, not chosen: it is the highest chunk
+    index plus one. Note that chunks can therefore be uneven, and the last
+    one is often small.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame or list of str
+        the glaciers to partition (an RGI dataframe or a list of RGI ids)
+    chunk_size : int
+        100 or 1000 (default). See :py:func:`oggm.workflow.get_rgi_chunk`.
+
+    Returns
+    -------
+    the number of chunks (int)
+    """
+
+    idx = _chunk_index_of(_rgi_ids_of(rgidf), chunk_size)
+    if len(idx) == 0:
+        return 0
+    return int(idx.max()) + 1
+
+
+def get_rgi_chunk(rgidf, chunk_idx, chunk_size=1000):
+    """Select the glaciers belonging to one chunk.
+
+    A chunk is a block of the RGI id space: with ``chunk_size=1000``, chunk 3
+    is made of the glaciers whose id ends in 03000 to 03999. This is what
+    makes chunks line up with the tar bundles written by
+    :py:func:`oggm.utils.base_dir_to_tar`, so that several chunk jobs writing
+    into the same output folder produce disjoint, complete bundle files.
+
+    Because the RGI ids have gaps, chunks are not all the same size, and a
+    chunk can even be empty - callers should handle that gracefully rather
+    than error out.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame or list of str
+        the glaciers to partition (an RGI dataframe or a list of RGI ids)
+    chunk_idx : int
+        which chunk to select, from 0 to ``count_rgi_chunks() - 1``
+    chunk_size : int
+        100 or 1000 (default). Only these two are allowed: they are the
+        bundle sizes that the glacier directory tars are written and read
+        with.
+
+    Returns
+    -------
+    the same type as `rgidf`, with only the glaciers of this chunk
+    """
+
+    if chunk_idx < 0:
+        raise InvalidParamsError('chunk_idx should be positive, got '
+                                 '{}'.format(chunk_idx))
+
+    idx = _chunk_index_of(_rgi_ids_of(rgidf), chunk_size)
+    sel = idx == chunk_idx
+
+    if isinstance(rgidf, pd.DataFrame):
+        return rgidf.loc[sel].copy()
+    return [rid for rid, ok in zip(utils.tolist(rgidf), sel) if ok]
+
+
+def print_slurm_array(rgidf, chunk_size=1000, command=None):
+    """Print the SLURM array directive matching a chunked run.
+
+    A convenience for writing cluster scripts: it tells you how many chunks
+    your glaciers fall into, and how to wire the array task id to
+    :py:func:`oggm.workflow.get_rgi_chunk`.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame or list of str
+        the glaciers to partition
+    chunk_size : int
+        100 or 1000 (default)
+    command : str
+        the command to run for each chunk. The chunk arguments are appended
+        to it. Defaults to a generic `oggm_prepro` call.
+
+    Returns
+    -------
+    the printed text (str)
+    """
+
+    n_chunks = count_rgi_chunks(rgidf, chunk_size=chunk_size)
+    if n_chunks == 0:
+        raise InvalidParamsError('No glaciers to chunk!')
+    if command is None:
+        command = 'oggm_prepro <your options>'
+
+    out = ('#SBATCH --array=0-{}\n'
+           '{} \\\n'
+           '    --chunk-idx $SLURM_ARRAY_TASK_ID \\\n'
+           '    --chunk-size {}'
+           ''.format(n_chunks - 1, command, chunk_size))
+    print(out)
+    return out
 
 
 def _isdir(path):
@@ -556,8 +742,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: the preprocessed directory url from
-        which to download the directories (became mandatory in OGGM v1.6)
+        for `from_prepro_level`: the preprocessed directory url from
+        which to download the directories (became mandatory in OGGM v1.6).
+        With a `from_tar` level folder, where to download the levels it
+        requires which are not in the sibling folders.
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -587,8 +775,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         if cfg.PARAMS['has_internet'] and not utils.url_exists(url):
             raise InvalidParamsError("base url seems unreachable with these "
                                      "parameters: {}".format(url))
+        # str() because the preprocessing also knows the half levels
+        # '3a' and '4a', which do not compare against an int
         if ('oggm_v1.4' in url and
-                from_prepro_level >= 3 and
+                str(from_prepro_level)[0] >= '3' and
                 not cfg.PARAMS['prcp_fac']):
             log.warning('You seem to be using v1.4 directories with a more '
                         'recent version of OGGM. While this is possible, be '
@@ -639,7 +829,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         else:
             # We can set the intersects file automatically here
             if (cfg.PARAMS['use_intersects'] and
-                    len(cfg.PARAMS['intersects_gdf']) == 0 and
+                    len(cfg.INTERSECTS_GDF) == 0 and
                     not from_tar):
                 try:
                     rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
@@ -679,8 +869,14 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                         pass
 
             if _isdir(from_tar):
-                gdirs = execute_entity_task(gdir_from_tar, entities,
-                                            from_tar=from_tar)
+                gdirs = execute_entity_task(
+                    gdir_from_tar,
+                    entities,
+                    from_tar=from_tar,
+                    base_url=prepro_base_url,
+                    prepro_border=prepro_border,
+                    prepro_rgi_version=prepro_rgi_version,
+                )
             else:
                 gdirs = execute_entity_task(utils.GlacierDirectory, entities,
                                             reset=reset,
@@ -925,6 +1121,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                                        ref_table=None,
                                        ignore_missing=True,
                                        fs=0, a_bounds=(0.1, 10),
+                                       glen_a_factor=None,
                                        apply_fs_on_mismatch=False,
                                        error_on_mismatch=True,
                                        filter_inversion_output=True,
@@ -933,6 +1130,11 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
 
     This method finds the "best Glen A" to match all glaciers in gdirs with
     a valid inverted volume.
+
+    The A factor it converged to (and the `fs` that goes with it) are
+    available on the returned dataframe as ``df.attrs['glen_a_factor']`` and
+    ``df.attrs['fs']``, so that they can be stored and given back with
+    `glen_a_factor` later on.
 
     Parameters
     ----------
@@ -987,6 +1189,14 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         invert with sliding (default: no)
     a_bounds: tuple
         factor to apply to default A
+    glen_a_factor : float
+        set this to skip the calibration altogether and invert all glaciers
+        with the given A factor (relative to the `inversion_glen_a` setting)
+        and the given `fs`. This is useful to reproduce a previous
+        calibration, for example when the glaciers of a region are processed
+        in several independent jobs: calibrate once, then pass the resulting
+        factor here. Everything else (including what is written to the
+        observations file) is unchanged.
     apply_fs_on_mismatch: false
         on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
         Oerlemans) and try to optimize A again.
@@ -1030,7 +1240,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         # A per-glacier reference table is only needed when matching individual
         # volumes. When matching a single total volume (ref_volume_m3) and
         # no table was explicitly provided, we skip loading/downloading it.
-        if ref_volume_m3 is not None and ref_table is None:
+        if (glen_a_factor is not None and ref_volume_m3 is None and
+                ref_table is None):
+            # We are not calibrating anything, so no reference is needed
+            df = pd.DataFrame(index=rids_use)
+            ref_col = None
+        elif ref_volume_m3 is not None and ref_table is None:
             df = pd.DataFrame(index=rids_use)
             ref_col = None
         elif ref_volume_m3 is None and ref_table is not None:
@@ -1092,6 +1307,23 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
             return odf.dropna(subset=[ref_col, 'oggm'])
         else:
             return odf
+
+    if glen_a_factor is not None:
+        # No calibration: the caller already knows which A to use
+        log.workflow('calibrate_inversion_from_ref_table: skipping the '
+                     'calibration, using the given Glen A factor {} with '
+                     'fs={}.'.format(glen_a_factor, fs))
+        out_fac = glen_a_factor
+        return _apply_inversion_a_factor(
+            gdirs, df, out_fac, def_a, fs,
+            settings_filesuffix=settings_filesuffix,
+            observations_filesuffix=observations_filesuffix,
+            input_filesuffix=input_filesuffix,
+            output_filesuffix=output_filesuffix,
+            ref_volume_year=ref_volume_year,
+            rids=rids, rids_use=rids_use,
+            filter_inversion_output=filter_inversion_output,
+            add_to_log_file=add_to_log_file)
 
     def to_minimize(x):
         log.workflow('Reference volume optimisation with '
@@ -1156,7 +1388,30 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         log.workflow('We use A factor = {} and fs = {} and move on.'
                      ''.format(out_fac, fs))
 
-    # Compute the final volume with the correct A for all gdirs
+    return _apply_inversion_a_factor(
+        gdirs, df, out_fac, def_a, fs,
+        settings_filesuffix=settings_filesuffix,
+        observations_filesuffix=observations_filesuffix,
+        input_filesuffix=input_filesuffix,
+        output_filesuffix=output_filesuffix,
+        ref_volume_year=ref_volume_year,
+        rids=rids, rids_use=rids_use,
+        filter_inversion_output=filter_inversion_output,
+        add_to_log_file=add_to_log_file)
+
+
+def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, *,
+                              settings_filesuffix, observations_filesuffix,
+                              input_filesuffix, output_filesuffix,
+                              ref_volume_year, rids, rids_use,
+                              filter_inversion_output, add_to_log_file):
+    """Compute the final volume with the chosen A for all gdirs.
+
+    The last step of `calibrate_inversion_from_ref_table`, shared by the
+    calibrated and the `glen_a_factor` code paths so that both write exactly
+    the same thing to the glacier directories.
+    """
+
     if len(rids_use) != len(rids):
         df = pd.DataFrame(index=rids)
     inversion_tasks(gdirs, settings_filesuffix=settings_filesuffix,
@@ -1185,6 +1440,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
             current_vol = {'value': vol_single}
         current_vol['year'] = year_single
         gdir.observations['ref_volume_m3'] = current_vol
+
+    # Tell the caller which A was used, so that it can be stored and given
+    # back with `glen_a_factor` later on
+    df.attrs['glen_a_factor'] = out_fac
+    df.attrs['glen_a'] = out_fac * def_a
+    df.attrs['fs'] = fs
 
     return df
 

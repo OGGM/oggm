@@ -2,30 +2,76 @@
 
 import io
 import json
+import logging
 import os
+from pathlib import Path
 import tarfile
+from types import SimpleNamespace
 
 import shutil
 
 import numpy as np
 import pytest
-import xarray as xr
 
 import oggm
 from oggm import cfg, utils, workflow
 from oggm.exceptions import InvalidWorkflowError
 from oggm.utils import _downloads
+from oggm.utils.transcoder import encode_npz
 
 pytestmark = pytest.mark.test_env("utils")
+
+
+def _create_npz_data(name: str = "flux"):
+    """Minimal stand-in for an npz data store.
+
+    Contains a single npz file similar to an inversion flowline's flux.
+    """
+    data = np.array(
+        4000 + np.sin(np.linspace(0, np.pi, 20) * 10e5), dtype=np.float64
+    )
+    arrays, meta = encode_npz(data, name)
+    yield arrays, meta
+
+
+@pytest.fixture(name="npz_data", scope="function")
+def fixture_npz_data():
+    """Fixture for a minimal npz data store."""
+    yield from _create_npz_data()
+
+
+def _write_npz_store(
+    path: str | Path,
+    arrays: dict,
+    meta: dict,
+    name: str = "inversion_flowlines",
+):
+    """Write a minimal npz data store to disk."""
+
+    store = Path(path) / "data_store"
+    store.mkdir(parents=True, exist_ok=True)
+    # avoid double suffixes
+    fp = store / f"{name.removesuffix(".npz")}.npz"
+    tmp_fp = f"{fp}.tmp{os.getpid()}"
+
+    with open(tmp_fp, "wb") as f:
+        np.savez(
+            f,
+            **arrays,
+            __meta__=json.dumps(meta),
+            allow_pickle=False,
+        )
+    os.replace(tmp_fp, fp)
+    return Path(store)
 
 
 def _make_fake_gdir(path, extra_file=None):
     """A minimal on-disk stand-in for a glacier directory.
 
-    Contains regular files plus a data_store.zarr with one group, which
-    is the structure snapshot_gdir_state must understand.
+    Contains regular files plus a data_store with an npz, in a structure
+    readable by `snapshot_gdir_state`.
     """
-    os.makedirs(path, exist_ok=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
     with open(os.path.join(path, "diagnostics.json"), "w") as f:
         json.dump({"a": 1}, f)
     with open(os.path.join(path, "log.txt"), "w") as f:
@@ -33,16 +79,29 @@ def _make_fake_gdir(path, extra_file=None):
     if extra_file:
         with open(os.path.join(path, extra_file), "w") as f:
             f.write("data\n")
-    ds = xr.Dataset({"thick": ("x", np.arange(5, dtype=float))})
-    store = os.path.join(path, "data_store.zarr")
-    ds.to_zarr(
-        store,
-        group="inversion_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
-    )
-    return path
+    # leaving this here in case we want to construct a linestring
+    # line_data = np.array(np.arange(20).reshape((10, 2)), dtype=np.float64)
+    # line_data[:, 1] = 0  # replace second coordinate with zeros
+    # match flux in inversion flowlines
+    arrays, meta = next(_create_npz_data())
+    _write_npz_store(path, arrays, meta)
+    return Path(path)
+
+
+def test_make_fake_dir(tmp_path):
+    # use pathlib instead of tmp_path to avoid pytest tmp_path cleanup
+    gdir_dir = _make_fake_gdir(tmp_path / "test_gdir", extra_file="dem.tif")
+    assert gdir_dir.is_dir()
+    assert (gdir_dir / "diagnostics.json").is_file()
+    assert (gdir_dir / "log.txt").is_file()
+    assert (gdir_dir / "dem.tif").is_file()
+    assert (gdir_dir / "data_store").is_dir()
+    assert (gdir_dir / "data_store" / "inversion_flowlines.npz").is_file()
+    test_npz = np.load(gdir_dir / "data_store" / "inversion_flowlines.npz")
+    assert "flux" in test_npz
+    test_flux = test_npz["flux"]
+    assert test_flux.shape == (20,)
+    np.testing.assert_array_less(0.0, test_flux)
 
 
 def test_snapshot_gdir_state(tmp_path):
@@ -53,14 +112,9 @@ def test_snapshot_gdir_state(tmp_path):
     # Regular files are keyed by relative path
     assert "diagnostics.json" in state
     assert "log.txt" in state
-    # The zarr store is keyed per top-level group, not per chunk file
-    assert "data_store.zarr/inversion_flowlines" in state
-    assert not any(
-        k.startswith("data_store.zarr/inversion_flowlines/") for k in state
-    )
-    # Root consolidated metadata is not tracked (stale after layering)
-    assert "data_store.zarr/.zmetadata" not in state
-    assert "data_store.zarr/zarr.json" not in state
+    group_key = "data_store/inversion_flowlines.npz"
+    assert group_key in state
+    assert "data_store" not in state
 
     # Unchanged directory -> identical snapshot
     assert utils.snapshot_gdir_state(gdir_dir) == state
@@ -71,26 +125,25 @@ def test_snapshot_gdir_state(tmp_path):
     new_state = utils.snapshot_gdir_state(gdir_dir)
     assert new_state["diagnostics.json"] != state["diagnostics.json"]
     assert new_state["log.txt"] == state["log.txt"]
-    assert (
-        new_state["data_store.zarr/inversion_flowlines"]
-        == state["data_store.zarr/inversion_flowlines"]
-    )
+    assert new_state[group_key] == state[group_key]
 
-    # Adding a zarr group shows up as a new key; existing group unchanged
-    ds = xr.Dataset({"w": ("x", np.ones(3))})
-    ds.to_zarr(
-        os.path.join(gdir_dir, "data_store.zarr"),
-        group="model_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
-    )
+    # Adding an npz group gives a new key, the existing group is unchanged
+    store = gdir_dir / "data_store"
+    np.savez(store / "model_flowlines.npz", w=np.ones(3), allow_pickle=False)
     grown = utils.snapshot_gdir_state(gdir_dir)
-    assert "data_store.zarr/model_flowlines" in grown
-    assert (
-        grown["data_store.zarr/inversion_flowlines"]
-        == state["data_store.zarr/inversion_flowlines"]
+    assert "data_store/model_flowlines.npz" in grown
+    assert grown[group_key] == state[group_key]
+
+    # Rewriting a group changes its digest
+    np.savez(
+        store / "inversion_flowlines.npz", w=np.zeros(3), allow_pickle=False
     )
+    rewritten = utils.snapshot_gdir_state(gdir_dir)
+    assert rewritten[group_key] != state[group_key]
+
+    # ensure partial npz left by interrupted write_npz is never snapshotted
+    (store / "x.npz.tmp123").write_bytes(b"partial")
+    assert "data_store/x.npz.tmp123" not in utils.snapshot_gdir_state(gdir_dir)
 
 
 def test_write_level_manifest_schema(tmp_path):
@@ -98,25 +151,25 @@ def test_write_level_manifest_schema(tmp_path):
     prev_state = utils.snapshot_gdir_state(gdir_dir)
 
     # Simulate a level's work: one updated file, one new file, one new
-    # zarr group
+    # npz store
+
     with open(os.path.join(gdir_dir, "log.txt"), "a") as f:
         f.write("more work\n")
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
         json.dump({"melt_f": 5.0}, f)
-    ds = xr.Dataset({"w": ("x", np.ones(3))})
-    ds.to_zarr(
-        os.path.join(gdir_dir, "data_store.zarr"),
-        group="model_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
+
+    np.savez(
+        gdir_dir / "data_store" / "model_flowlines",
+        w=np.ones(3),
+        allow_pickle=False,
     )
+    assert (gdir_dir / "data_store" / "model_flowlines.npz").is_file()
 
     manifest_path, changed = utils.write_level_manifest(
         gdir_dir,
         level=3,
         prev_state=prev_state,
-        dataset_tag="abc123",
+        artefact_tag="abc123",
         requires=[0, 1, 2],
         border=80,
         rgi_version="62",
@@ -132,23 +185,76 @@ def test_write_level_manifest_schema(tmp_path):
     assert manifest["level"] == 3
     assert manifest["requires"] == [0, 1, 2]
     assert manifest["includes_levels"] == [3]
-    assert manifest["dataset_tag"] == "abc123"
+    assert manifest["artefact_tag"] == "abc123"
     assert manifest["border"] == 80
     assert manifest["rgi_version"] == "62"
     assert manifest["oggm_version"]
     assert manifest["created"]
     assert manifest["files"]["added"] == ["mb_calib.json"]
     assert manifest["files"]["updated"] == ["log.txt"]
-    assert manifest["zarr_groups"] == ["model_flowlines"]
+    assert manifest["data_store"] == ["model_flowlines.npz"]
 
     # changed_paths is what gdir_to_tar(include=...) needs: the changed
     # files, the changed store groups, and the manifest itself
     assert set(changed) == {
         "mb_calib.json",
         "log.txt",
-        "data_store.zarr/model_flowlines",
+        "data_store/model_flowlines.npz",
         "L3.manifest.json",
     }
+
+
+@pytest.mark.parametrize(
+    "level, requires, includes, kind, expected",
+    [
+        (3, [], [0, 1, 2, 3], "delta", "materialisation"),
+        (3, [], [0, 1, 2, 3], "materialisation", "materialisation"),
+        (0, [], [0], "delta", "delta"),
+        (4, [0, 1, 2, 3], None, "delta", "delta"),
+        (5, [], [5], "standalone", "standalone"),
+    ],
+)
+def test_write_level_manifest_kind(
+    tmp_path, level, requires, includes, kind, expected
+):
+    gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+    manifest_path, _ = utils.write_level_manifest(
+        gdir_dir,
+        level=level,
+        prev_state={},
+        artefact_tag="abc123",
+        requires=requires,
+        includes_levels=includes,
+        kind=kind,
+        border=80,
+        rgi_version="62",
+    )
+    with open(manifest_path) as f:
+        assert json.load(f)["kind"] == expected
+
+
+@pytest.mark.parametrize(
+    "requires, includes, kind",
+    [
+        ([0, 1, 2], [0, 1, 2, 3], "materialisation"),
+        ([], [3], "materialisation"),
+        ([], [3], "delta"),
+    ],
+)
+def test_write_level_manifest_invalid_kind(tmp_path, requires, includes, kind):
+    gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+    with pytest.raises(ValueError, match="materialisation"):
+        utils.write_level_manifest(
+            gdir_dir,
+            level=3,
+            prev_state={},
+            artefact_tag="abc123",
+            requires=requires,
+            includes_levels=includes,
+            kind=kind,
+            border=80,
+            rgi_version="62",
+        )
 
 
 class _FakeGdir:
@@ -165,23 +271,33 @@ def _simulate_level(gdir_dir, level=3):
         f.write(f"level {level} work\n")
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
         json.dump({"melt_f": 5.0, "level": level}, f)
-    ds = xr.Dataset({"w": ("x", np.ones(3) * level)})
-    ds.to_zarr(
-        os.path.join(gdir_dir, "data_store.zarr"),
-        group="model_flowlines",
-        mode="a",
-        zarr_format=2,
-        consolidated=True,
-    )
+    arrays, meta = next(_create_npz_data(name="w"))
+    arrays["w"] = arrays["w"] * level  # make it different per level
+    _write_npz_store(gdir_dir, arrays, meta, name="model_flowlines")
     return utils.write_level_manifest(
         gdir_dir,
         level=level,
         prev_state=prev_state,
-        dataset_tag="abc123",
+        artefact_tag="abc123",
         requires=list(range(level)),
         border=80,
         rgi_version="62",
     )
+
+
+def test_simulate_level(tmp_path):
+    gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+    manifest_path, changed = _simulate_level(gdir_dir, level=3)
+    assert os.path.basename(manifest_path) == "L3.manifest.json"
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    assert manifest["level"] == 3
+    assert set(changed) == {
+        "mb_calib.json",
+        "log.txt",
+        "data_store/model_flowlines.npz",
+        "L3.manifest.json",
+    }
 
 
 def test_gdir_to_tar_include(tmp_path):
@@ -199,15 +315,12 @@ def test_gdir_to_tar_include(tmp_path):
     assert f"{rid}/mb_calib.json" in files
     assert f"{rid}/log.txt" in files
     assert f"{rid}/L3.manifest.json" in files
-    # zarr group directory is included recursively
-    assert any(
-        n.startswith(f"{rid}/data_store.zarr/model_flowlines/") for n in files
-    )
+    # npz group is included
+    assert any(n.startswith(f"{rid}/data_store/model_flowlines") for n in files)
     # unchanged files are not shipped
     assert not any("dem.tif" in n or "diagnostics.json" in n for n in files)
     assert not any(
-        n.startswith(f"{rid}/data_store.zarr/inversion_flowlines")
-        for n in files
+        n.startswith(f"{rid}/data_store/inversion_flowlines") for n in files
     )
     os.remove(opath)
 
@@ -281,14 +394,14 @@ class TestLayeredGdir:
         workbase = str(tmp_path / "work")
         workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
         shutil.copytree(hef_gdir.dir, workdir)
-        assert os.path.isdir(os.path.join(workdir, "data_store.zarr"))
+        assert os.path.isdir(os.path.join(workdir, "data_store"))
 
         # Materialisation artifact: everything up to L3 in one tar
         utils.write_level_manifest(
             workdir,
             level=3,
             prev_state={},
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[],
             includes_levels=[0, 1, 2, 3],
             border=80,
@@ -301,29 +414,21 @@ class TestLayeredGdir:
             materialisation_tar, str(tmp_path / "materialisation.tar.gz")
         )
 
-        # L4 delta: a changed file and a new zarr group, written the way a
-        # delta ships it: group subtree only, no root consolidated metadata
+        # L4 delta: a changed file and a new npz group
         prev = utils.snapshot_gdir_state(workdir)
         with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
             json.dump({"melt_f": 6.0}, f)
-        ds = xr.Dataset({"w": ("x_delta", np.ones(4))})
-        ds.to_zarr(
-            os.path.join(workdir, "data_store.zarr"),
-            group="delta_check",
-            mode="a",
-            zarr_format=2,
-            consolidated=False,
-        )
+        arrays, meta = encode_npz(np.ones(4), "delta_check")
+        _write_npz_store(workdir, arrays, meta, name="delta_check")
         _, changed = utils.write_level_manifest(
             workdir,
             level=4,
             prev_state=prev,
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[0, 1, 2, 3],
             border=80,
             rgi_version="62",
         )
-        # The delta must not ship the store's root metadata
         delta_tar = utils.gdir_to_tar.unwrapped(
             _FakeGdir(workdir, workbase), delete=False, include=changed
         )
@@ -341,40 +446,44 @@ class TestLayeredGdir:
         # Both manifests document the layering
         assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
         assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
-        # Consolidated metadata was rebuilt: the new group is visible
-        # through the consolidated read path, and existing groups still
-        # read fine
-        new_group = gdir.read_zarr("delta_check", consolidated=True)
-        np.testing.assert_allclose(new_group["w"].values, np.ones(4))
+        np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
-    def test_convert_pickles_to_zarr(self, tmp_path, hef_gdir):
-        """Pickles are rewritten into the zarr store and then removed,
+    @pytest.mark.parametrize("arg_delete", [True, False])
+    def test_convert_pickles_to_npz(self, tmp_path, hef_gdir, arg_delete):
+        """Pickles are rewritten into the npz store and then removed,
         with the data reading back equivalently."""
-        from oggm.utils import compat
+        from oggm.utils import _compat
 
         rid = hef_gdir.rgi_id
-        workbase = str(tmp_path / "work")
-        workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
+        workbase = Path(tmp_path / "work")
+        # workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
+        workdir = workbase / rid[:-6] / rid[:-3] / rid
+
+        # we delete pickles in this test, so work on copy
         shutil.copytree(hef_gdir.dir, workdir)
         gdir = oggm.GlacierDirectory(rid, base_dir=workbase)
 
         # Simulate pickle-only dataset by writing back out as pickles.
-        # Write_pickle drops the zarr group
+        # Write_pickle drops the npz group
         names = ["inversion_flowlines", "model_flowlines"]
         original = {n: gdir.read_store(n) for n in names}
         for n in names:
-            gdir.write_pickle(original[n], n)
-            assert os.path.isfile(os.path.join(gdir.dir, f"{n}.pkl"))
-            assert not os.path.isdir(
-                os.path.join(gdir.dir, "data_store.zarr", n)
-            )
+            gdir._write_pickle(original[n], n)
+            assert Path(gdir.dir, f"{n}.pkl").is_file()
+            assert not Path(gdir.dir, "data_store", n).is_dir()
 
-        compat._convert_pickles_to_zarr(gdir)
+        _compat.convert_pickles_to_npz(gdir, delete=arg_delete)
 
+        # check the pickles are gone
         for n in names:
-            assert not os.path.isfile(os.path.join(gdir.dir, f"{n}.pkl"))
-            assert os.path.isdir(os.path.join(gdir.dir, "data_store.zarr", n))
+            assert Path(gdir.dir, "data_store").is_dir()
+            assert Path(gdir.dir, "data_store", f"{n}.npz").is_file()
+            if arg_delete:
+                assert not Path(gdir.dir, f"{n}.pkl").is_file()
+            else:
+                assert Path(gdir.dir, f"{n}.pkl").is_file()
+
             assert len(gdir.read_store(n)) == len(original[n])
 
 
@@ -406,7 +515,7 @@ class TestDeltaServer:
             workdir,
             level=3,
             prev_state={},
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[],
             includes_levels=[0, 1, 2, 3],
             border=80,
@@ -419,24 +528,17 @@ class TestDeltaServer:
             ),
         )
 
-        # L4 delta (requires 0..3): changed file + new zarr group, no
-        # root store metadata shipped
+        # L4 delta (requires 0..3): changed file + new npz group
         prev = utils.snapshot_gdir_state(workdir)
         with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
             json.dump({"melt_f": 6.0}, f)
-        ds = xr.Dataset({"w": ("x_delta", np.ones(4))})
-        ds.to_zarr(
-            os.path.join(workdir, "data_store.zarr"),
-            group="delta_check",
-            mode="a",
-            zarr_format=2,
-            consolidated=False,
-        )
+        arrays, meta = encode_npz(np.ones(4), "delta_check")
+        _write_npz_store(workdir, arrays, meta, name="delta_check")
         _, changed = utils.write_level_manifest(
             workdir,
             level=4,
             prev_state=prev,
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[0, 1, 2, 3],
             border=80,
             rgi_version="62",
@@ -458,7 +560,7 @@ class TestDeltaServer:
             kind="standalone",
             border=80,
             rgi_version="62",
-            dataset_tag="ds1",
+            artefact_tag="ds1",
         )
         publish(
             5,
@@ -509,8 +611,7 @@ class TestDeltaServer:
         assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
-        new_group = gdir.read_zarr("delta_check", consolidated=True)
-        np.testing.assert_allclose(new_group["w"].values, np.ones(4))
+        np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
 
         # Level 5 is standalone: one fetch only
         calls.clear()
@@ -553,8 +654,84 @@ class TestDeltaServer:
         assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
-        new_group = gdir.read_zarr("delta_check", consolidated=True)
-        np.testing.assert_allclose(new_group["w"].values, np.ones(4))
+        np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
+
+    def test_init_from_local_delta_tree(self, delta_server, served_calls):
+        """Test initialization from a local delta tree.
+
+        Server tree is read from disk, so the L4 delta is missing the
+        the grid from the L3 tar.
+        """
+        server, _ = delta_server
+        calls, rid = served_calls
+        gdirs = workflow.init_glacier_directories(
+            [rid], from_tar=os.path.join(server, "RGI62", "b_080", "L4")
+        )
+        gdir = gdirs[0]
+        assert calls == []
+        assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
+        assert gdir.grid.nx > 0
+        with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
+            assert json.load(f)["melt_f"] == 6.0
+
+    @pytest.fixture
+    def local_l4_only(self, delta_server, tmp_path):
+        """A local tree with the L4 delta but none of the levels it requires."""
+        server, _ = delta_server
+        local = tmp_path / "local" / "RGI62" / "b_080" / "L4"
+        shutil.copytree(Path(server, "RGI62", "b_080", "L4"), local)
+        return str(local)
+
+    def test_init_from_local_tree_fetches_missing_level(
+        self, served_calls, local_l4_only
+    ):
+        calls, rid = served_calls
+        gdirs = workflow.init_glacier_directories(
+            [rid],
+            from_tar=local_l4_only,
+            prepro_base_url=self.BASE_URL,
+            prepro_border=80,
+        )
+        gdir = gdirs[0]
+        assert len(calls) == 1
+        assert "/L3/" in calls[0]
+        assert Path(gdir.dir, "L3.manifest.json").is_file()
+        assert Path(gdir.dir, "L4.manifest.json").is_file()
+        assert gdir.grid.nx > 0
+        mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
+        assert mb_calib["melt_f"] == 6.0
+
+    def test_local_tree_missing_level_without_base_url(
+        self, served_calls, local_l4_only
+    ):
+        calls, rid = served_calls
+        with pytest.raises(FileNotFoundError):
+            workflow.gdir_from_tar(rid, local_l4_only)
+        assert calls == []
+
+
+class TestStartState:
+    """`_start_state` at a `3a` resume, with and without the L2 state."""
+
+    @pytest.fixture
+    def gdir(self, tmp_path):
+        return SimpleNamespace(dir=str(tmp_path), rgi_id="RGI60-11.00897")
+
+    def test_missing_l2_state_is_delta(self, gdir, caplog):
+        from oggm.cli.prepro_levels import _start_state
+
+        with caplog.at_level(logging.WARNING, logger="oggm.cli.prepro_levels"):
+            assert _start_state(gdir, True) is None
+        assert "L2.state.json" in caplog.text
+
+    def test_l2_state_is_loaded_and_removed(self, gdir):
+        from oggm.cli.prepro_levels import _start_state
+
+        fp = Path(gdir.dir, "L2.state.json")
+        fp.write_text(json.dumps({"a.txt": "abc"}))
+        assert _start_state(gdir, True) == {"a.txt": "abc"}
+        assert not fp.exists()
 
 
 L12_BASE_URL = (
@@ -596,18 +773,18 @@ def test_convert_prepro_to_deltas(tmp_path):
         rgi_version="62",
         workdir=str(tmp_path / "conv"),
         output_dir=output_dir,
-        dataset_tag="oggm_v1.6_2025.6_elev_bands_w5e5",
+        artefact_tag="oggm_v1.6_2025.6_elev_bands_w5e5",
     )
 
     expected = {
         0: dict(kind="delta", includes=[0], requires=[]),
         1: dict(kind="delta", includes=[1], requires=[0]),
         2: dict(kind="delta", includes=[2], requires=[0, 1]),
-        3: dict(kind="delta", includes=[0, 1, 2, 3], requires=[]),
+        3: dict(kind="materialisation", includes=[0, 1, 2, 3], requires=[]),
         4: dict(kind="delta", includes=[4], requires=[0, 1, 2, 3]),
         5: dict(kind="standalone", includes=[5], requires=[]),
     }
-    dataset_ids = set()
+    artefact_ids = set()
     for rid in rgi_ids:
         region = rid[:-6]
         bundle = f"{region}.{rid[-5:-2]}"
@@ -621,9 +798,9 @@ def test_convert_prepro_to_deltas(tmp_path):
             assert manifest["kind"] == exp["kind"]
             assert manifest["includes_levels"] == exp["includes"]
             assert manifest["requires"] == exp["requires"]
-            dataset_ids.add(manifest["dataset_id"])
+            artefact_ids.add(manifest["artefact_id"])
     # One logical dataset across both source URLs
-    assert len(dataset_ids) == 1
+    assert len(artefact_ids) == 1
 
 
 def test_level_consistency_mismatch(tmp_path):
@@ -635,7 +812,7 @@ def test_level_consistency_mismatch(tmp_path):
         gdir_dir,
         level=3,
         prev_state={},
-        dataset_tag="ds1",
+        artefact_tag="ds1",
         requires=[],
         includes_levels=[0, 1, 2, 3],
         border=80,
@@ -644,7 +821,9 @@ def test_level_consistency_mismatch(tmp_path):
     materialisation_tar = utils.gdir_to_tar.unwrapped(
         _FakeGdir(gdir_dir, base), delete=False
     )
-    materialisation_tar = shutil.move(materialisation_tar, str(tmp_path / "materialisation.tar.gz"))
+    materialisation_tar = shutil.move(
+        materialisation_tar, str(tmp_path / "materialisation.tar.gz")
+    )
 
     # A level-4 delta from a *different* dataset
     prev = utils.snapshot_gdir_state(gdir_dir)
@@ -654,7 +833,7 @@ def test_level_consistency_mismatch(tmp_path):
         gdir_dir,
         level=4,
         prev_state=prev,
-        dataset_tag="OTHER",
+        artefact_tag="OTHER",
         requires=[0, 1, 2, 3],
         border=80,
         rgi_version="62",
@@ -664,7 +843,7 @@ def test_level_consistency_mismatch(tmp_path):
     )
     delta_tar = shutil.move(delta_tar, str(tmp_path / "delta.tar.gz"))
 
-    with pytest.raises(InvalidWorkflowError, match="dataset"):
+    with pytest.raises(InvalidWorkflowError, match="different artefacts"):
         oggm.GlacierDirectory(
             rid,
             base_dir=str(tmp_path / "layered"),

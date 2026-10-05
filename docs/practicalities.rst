@@ -304,6 +304,106 @@ run on one node only. This way, we avoid using MPI and do not require
 communication between nodes, while still using our cluster at near 100%.
 
 
+.. _chunked-runs:
+
+Splitting a region into chunks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One job per RGI region is simple, but the regions are very unequal: RGI region
+06 (Iceland) is done in minutes while region 13 (Central Asia) can run for many
+hours. If your cluster has a wall time, the big regions will eventually hit it.
+
+You can split a region into **chunks** instead, and run each chunk as its own
+job. A chunk is a block of the RGI id space: with a chunk size of 1000, chunk 3
+holds the glaciers whose id ends in 03000 to 03999. This is not an arbitrary
+choice - it is what makes the chunks line up with the glacier directory tar
+files, so that several chunk jobs writing into the same output folder produce
+files which do not overlap. Only 100 and 1000 are allowed, for the same reason.
+Because the RGI ids have gaps, chunks are not all the same size, and some can
+even be empty (such a job simply logs that there is nothing to do and exits).
+
+Use :py:func:`workflow.get_rgi_chunk` to select a chunk in your own scripts,
+:py:func:`workflow.count_rgi_chunks` to know how many there are, and
+:py:func:`workflow.print_slurm_array` to get the matching ``#SBATCH --array=``
+line.
+
+Chunked preprocessing runs
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Most of the preprocessing is per-glacier, but two things need the whole region
+at once: the Glen A calibration (it looks for the single A which matches the
+total volume of the region against a reference dataset), and the ``compile_*``
+tasks which write the region wide summary files.
+
+``oggm_prepro`` therefore knows two **half levels**, which stop exactly where
+the per-glacier work ends:
+
+- ``3a``: L3 up to and including the apparent mass balance, i.e. without the
+  inversion and without the summary files.
+- ``4a``: the L4 runs, without the summary files.
+
+A chunked run is then four stages, alternating between many small chunk jobs
+and one job for the whole region::
+
+    stage 1  array         2  -> 3a   climate, mass balance calibration
+    stage 2  1 job/region  3a -> 3    Glen A, inversion, L3 summaries
+    stage 3  array         3  -> 4a   the historical and spinup runs
+    stage 4  1 job/region  4a -> 5    L4 summaries, then the L5 directories
+
+The stages hand the glacier directories over as tar files on disk, with
+``--start-from-dir`` (the equivalent of ``--start-base-url``, but local)::
+
+    oggm_prepro --start-level 2  --max-level 3a --output $SCRATCH \
+                --start-base-url <the L2 url> \
+                --chunk-idx $SLURM_ARRAY_TASK_ID --chunk-size 1000
+
+    oggm_prepro --start-level 3a --max-level 3  --output $OUT \
+                --start-from-dir $SCRATCH
+
+    oggm_prepro --start-level 3  --max-level 4a --output $OUT \
+                --start-from-dir $OUT \
+                --chunk-idx $SLURM_ARRAY_TASK_ID --chunk-size 1000
+
+    oggm_prepro --start-level 4a --max-level 5  --output $OUT \
+                --start-from-dir $OUT
+
+``$SCRATCH`` only holds the intermediate ``L3a`` directories and can be deleted
+once stage 2 is done. ``4a`` needs no scratch folder: it holds exactly the L4
+directories, only the summary files are missing, so it writes straight into
+``L4``.
+
+The number of chunks of a region is a property of the region, not something you
+choose. Ask for it with ``oggm_prepro_chunks``, and chain the stages with
+``sbatch --dependency``, which on an array job waits for every task::
+
+    #!/bin/bash
+    set -e
+    for REG in $(seq -w 1 19); do
+        LAST=$(( $(oggm_prepro_chunks --rgi-reg $REG --chunk-size 1000) - 1 ))
+        j1=$(sbatch --parsable --array=0-$LAST      run_prepro.sh 1 $REG)
+        j2=$(sbatch --parsable --dependency=afterok:$j1 run_prepro.sh 2 $REG)
+        j3=$(sbatch --parsable --dependency=afterok:$j2 --array=0-$LAST \
+                                                        run_prepro.sh 3 $REG)
+        j4=$(sbatch --parsable --dependency=afterok:$j3 run_prepro.sh 4 $REG)
+    done
+
+All 19 chains are independent, so the small regions finish and give their nodes
+back while the big ones are still working - which is the whole point.
+
+Two things to keep in mind. ``afterok`` fails the rest of the chain if any task
+of the array fails, which is what you want for correctness but means one bad
+chunk stalls a region. And each chunk job needs its own working directory
+(``init_glacier_directories`` empties the ``log`` folder of the one it gets),
+which is automatic if you build it from ``$SLURM_JOB_ID`` as in the example
+above.
+
+Finally, the whole-region stage writes the Glen A factor it converged to into
+``L3/summary/inversion_glen_a_{rgi_reg}.json``. If you ever need to reproduce
+an inversion without calibrating again, give it back with
+``--inversion-glen-a-factor`` (and ``--inversion-fs``): the chunk jobs then no
+longer need a whole-region stage at all.
+
+
 Reproducibility with OGGM
 -------------------------
 

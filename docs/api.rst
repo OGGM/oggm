@@ -33,6 +33,9 @@ Tools to set-up and run OGGM.
     workflow.merge_glacier_tasks
     workflow.calibrate_inversion_from_consensus
     workflow.invert_from_params
+    workflow.get_rgi_chunk
+    workflow.count_rgi_chunks
+    workflow.print_slurm_array
 
 Troubleshooting
 ===============
@@ -74,6 +77,31 @@ Input/Output
     global_tasks.compile_fixed_geometry_mass_balance
     global_tasks.compile_climate_statistics
     global_tasks.compile_ela
+
+.. _api-diagnostics:
+
+Diagnostics of a preprocessing run
+==================================
+
+The tables and the report of the ``oggm_prepro_diag`` command. Each of them
+can also be used on its own, e.g. in a notebook.
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    diagnostics.compile_prepro_diagnostics
+    diagnostics.read_prepro_run
+    diagnostics.PreproRun
+    diagnostics.compute_completion
+    diagnostics.compute_errors
+    diagnostics.compute_spinup
+    diagnostics.compute_mb_params
+    diagnostics.compute_rgi_reference
+    diagnostics.compute_timeseries
+    diagnostics.compute_area_match
+    diagnostics.compute_geodetic
+    diagnostics.prepro_diag_report
 
 .. _apishop:
 

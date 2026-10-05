@@ -346,6 +346,8 @@ Explanation of the naming convention for the folder name extensions:
     To see the code that generated these directories (for example if you want to
     make your own, visit :py:func:`cli.prepro_levels.run_prepro_levels`
     or this `file on github <https://github.com/OGGM/oggm/blob/master/oggm/cli/prepro_levels.py>`_).
+    If you make your own on a cluster and the big RGI regions take too long in
+    a single job, you can split them into chunks: see :ref:`chunked-runs`.
 
     The urls used by OGGM per default are in the following ftp server:
 

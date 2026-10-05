@@ -106,10 +106,22 @@ class Flowline(Centerline):
         self.map_trafo = None
         if grid is not None:
             gdir.settings_filesuffix = settings_filesuffix
-            self.settings = gdir.settings
+            settings = gdir.settings
             self.map_trafo = partial(grid.ij_to_crs, crs=salem.wgs84)
         else:
-            self.settings = cfg.PARAMS.copy()
+            settings = cfg.PARAMS
+        # a flowline only needs these two parameters (for its length), so we
+        # store them instead of a reference to the settings: the latter would
+        # be pickled with every flowline, together with everything it points
+        # to (the gdir, and a copy of cfg.PARAMS with its intersects_gdf)
+        try:
+            self.min_ice_thick_for_length = settings['min_ice_thick_for_length']
+        except KeyError:
+            self.min_ice_thick_for_length = 0
+        try:
+            self.glacier_length_method = settings['glacier_length_method']
+        except KeyError:
+            self.glacier_length_method = None
         # volume not yet removed from the flowline
         self.calving_bucket_m3 = 0
 
@@ -156,16 +168,14 @@ class Flowline(Centerline):
     def length_m(self):
         # TODO: take calving bucket into account for fine tuned length?
         try:
-            lt = self.settings['min_ice_thick_for_length']
-        except KeyError:
-            lt = 0
+            lt = self.min_ice_thick_for_length
         except AttributeError:
             # this is for backwards-compatibility with old gdirs
             lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
 
         # this is for backwards-compatibility with old gdirs
         try:
-            glacier_length_method = self.settings['glacier_length_method']
+            glacier_length_method = self.glacier_length_method
         except AttributeError:
             glacier_length_method = cfg.PARAMS.get('glacier_length_method')
 
@@ -183,16 +193,14 @@ class Flowline(Centerline):
         # the index of the last point with ice thickness above
         # min_ice_thick_for_length and consistent with length
         try:
-            lt = self.settings['min_ice_thick_for_length']
-        except KeyError:
-            lt = 0
+            lt = self.min_ice_thick_for_length
         except AttributeError:
             # this is for backwards-compatibility with old gdirs
             lt = cfg.PARAMS.get('min_ice_thick_for_length', 0)
 
         # this is for backwards-compatibility with old gdirs
         try:
-            glacier_length_method = self.settings['glacier_length_method']
+            glacier_length_method = self.glacier_length_method
         except AttributeError:
             glacier_length_method = cfg.PARAMS.get('glacier_length_method')
         if glacier_length_method == 'consecutive':
@@ -688,8 +696,11 @@ class FlowlineModel(object):
         if gdir is not None:
             gdir.settings_filesuffix = settings_filesuffix
             self.settings = gdir.settings
+            # only used for logging - gdir may be a duck-typed stub
+            self.rgi_id = getattr(gdir, 'rgi_id', None)
         else:
             self.settings = cfg.PARAMS.copy()
+            self.rgi_id = None
 
         self.is_tidewater = is_tidewater
         self.is_lake_terminating = is_lake_terminating
@@ -1634,10 +1645,8 @@ class FlowlineModel(object):
                     # out below, truncated to the last completed step. The
                     # error is re-raised once the files are written.
                     run_error = e
-                    log.workflow('run_until_and_store: the run failed at year '
-                                 '%s (%s). Writing output truncated to the '
-                                 'last completed step before re-raising.',
-                                 yr, repr(e))
+                    log.workflow('%s: run truncated at year %s (%s)',
+                                 self.rgi_id or '?', yr, repr(e))
                     break
 
             # Glacier geometry
@@ -3640,6 +3649,69 @@ def calving_glacier_downstream_line(line, n_points):
     return shpg.LineString(np.array([x, y]).T)
 
 
+def stabilize_trapezoid_section(section, surface_h, bed_h, lambdas,
+                                rgi_id=''):
+    """Keeps trapezoid sections above their physical minimum.
+
+    A sloping trapezoid requires ``section > lambda * thick**2 / 2``, i.e. a
+    strictly positive origin width. The inversion can land exactly on that
+    boundary, since it brackets the thickness at ``width / lambda`` (where
+    ``w0 = 0``), and there floating point cancellation can make the origin
+    width computed by :py:class:`MixedBedFlowline` zero or slightly negative.
+
+    Sections which are only a few ulp below the minimum are numerical noise
+    and are nudged back just above it (a degenerate, triangular trapezoid).
+    Sections which are materially below it are a real inconsistency and raise.
+
+    Note that the minimum has to be computed from the thickness as
+    ``MixedBedFlowline`` recomputes it (``surface_h - bed_h``), which is not
+    always bit-identical to the inverted thickness. Using the latter, the
+    correction can be undone by the round trip and the origin width still
+    comes out as zero or negative.
+
+    Parameters
+    ----------
+    section : ndarray
+        the cross-sections along the flowline (m2)
+    surface_h : ndarray
+        the surface elevations along the flowline (m)
+    bed_h : ndarray
+        the bed elevations along the flowline (m)
+    lambdas : ndarray
+        the trapezoid lambdas (nan for non-trapezoid grid points)
+    rgi_id : str
+        for a more informative error message
+
+    Returns
+    -------
+    the corrected sections (m2)
+    """
+
+    thick = surface_h - bed_h
+    is_sloping_trap = np.isfinite(lambdas) & (lambdas > 0) & (thick > 0)
+    min_section = lambdas * thick ** 2 / 2
+
+    # `thick` is a difference of two elevations, so its own rounding error
+    # scales with the elevation, not with the thickness: a thin trapezoid
+    # high up in the mountains has a much larger absolute uncertainty on its
+    # minimum section than `min_section` alone would suggest.
+    eps = np.finfo(np.float64).eps
+    scale = min_section + lambdas * thick * np.maximum(np.abs(surface_h),
+                                                       np.abs(bed_h))
+    tol = 16 * eps * np.maximum(1, scale)
+    invalid = is_sloping_trap & (section < min_section - tol)
+    if np.any(invalid):
+        raise ValueError(f'({rgi_id}) the trapezoid section is below its '
+                         'physical minimum (lambda * thick**2 / 2) at grid '
+                         f'points {np.flatnonzero(invalid).tolist()}.')
+
+    at_boundary = is_sloping_trap & (section <= min_section)
+    if np.any(at_boundary):
+        section = np.where(at_boundary, min_section * (1 + 64 * eps), section)
+
+    return section
+
+
 @entity_task(log, writes=['model_flowlines'])
 def init_present_time_glacier(gdir, settings_filesuffix='',
                               input_filesuffix=None, output_filesuffix=None,
@@ -3709,6 +3781,9 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
 
             # Where the flux and the thickness is zero we just assume trapezoid:
             lambdas[bed_shape == 0] = def_lambda
+
+            section = stabilize_trapezoid_section(
+                section, surface_h, bed_h, lambdas, rgi_id=gdir.rgi_id)
 
         else:
             # here we use binned thickness data for the initialisation
@@ -4006,7 +4081,8 @@ def flowline_model_run(gdir, settings_filesuffix='',
 
     # ensure the flowlines are using the right settings
     for fl in fls:
-        fl.settings = gdir.settings
+        fl.min_ice_thick_for_length = gdir.settings['min_ice_thick_for_length']
+        fl.glacier_length_method = gdir.settings['glacier_length_method']
 
     if (gdir.settings['use_kcalving_for_run'] and gdir.is_tidewater and
             water_level is None):
@@ -4544,6 +4620,22 @@ def run_with_hydro(gdir, settings_filesuffix='',
     ``use_previous_mbs`` is set to True after the dynamical run, because the
     mass balance values stored during the run are revisited here.
 
+    Two area-weighted air temperature diagnostics can be computed as well
+    (the temperature after downscaling, i.e. the one used by the mass balance
+    model for melt and for the solid/liquid precipitation split). Like the
+    other hydro variables they are computed if their name is in
+    PARAMS['store_diagnostic_variables'] (the default).
+
+    - ``temp_on_glacier``: weighted by the (evolving) glacier area, at the
+      surface elevation of the model at that time.
+    - ``temp_ref_area``: weighted by the reference area, at the reference
+      surface elevation, i.e. fixed geometry. This one is independent of the
+      glacier evolution and is the diagnostic asked for by GlacierMIP4.
+      Note that with the default ``ref_area_yr=None`` the reference area is
+      the largest area of the simulation while the elevations are the ones of
+      the first year of the (reference) geometry file: use ``ref_area_yr`` or
+      ``ref_area_from_y0`` for a consistent fixed geometry.
+
     TODOs:
         - Add the possibility to record MB during run to improve performance
           (requires change in API)
@@ -4630,9 +4722,8 @@ def run_with_hydro(gdir, settings_filesuffix='',
     # end (the files carry a `partial_output` flag in the meantime).
     run_error = getattr(out, 'run_error', None)
     if run_error is not None:
-        log.workflow('run_with_hydro: the dynamic run was truncated by an '
-                     'error (%s). Adding hydro diagnostics over the available '
-                     'years before re-raising.', repr(run_error))
+        log.debug('%s: hydro diagnostics added over truncated run (%s)',
+                  gdir.rgi_id, repr(run_error))
 
     do_spinup = fixed_geometry_spinup_yr is not None
     if do_spinup:
@@ -4716,11 +4807,13 @@ def run_with_hydro(gdir, settings_filesuffix='',
     bin_area_2ds = []
     bin_elev_2ds = []
     ref_areas = []
+    ref_elevs = []
     snow_buckets = []
     for fl in fmod_ref.fls:
         # Glacier area on bins
         bin_area = fl.bin_area_m2
         ref_areas.append(bin_area)
+        ref_elevs.append(fl.surface_h.copy())
         snow_buckets.append(bin_area * 0)
 
         # Output 2d data
@@ -4838,6 +4931,18 @@ def run_with_hydro(gdir, settings_filesuffix='',
                      else np.full(oshape, np.nan)),
         }
 
+    # Area-weighted temperatures are means, not sums: we accumulate the
+    # numerator and the denominator separately and divide at the end
+    out['temp_on_glacier'] = {
+        'description': 'Area-weighted 2m air temperature over the glacierized '
+                       'area, at the surface elevation of the model',
+        'unit': 'degC',
+        'agg': 'mean',
+        'data': np.full(oshape, np.nan),
+    }
+    t_on_num = np.zeros(oshape)
+    t_on_den = np.zeros(oshape)
+
     for i, yr in enumerate(years):
 
         # Now the loop over the months
@@ -4862,12 +4967,12 @@ def run_with_hydro(gdir, settings_filesuffix='',
                         mb_out = mb_mod.get_monthly_mb(bin_elev, fl_id=fl_id,
                                                        year=flt_yr,
                                                        add_climate=True)
-                        mb, _, _, prcp, prcpsol = mb_out
+                        mb, temp, _, prcp, prcpsol = mb_out
                         seconds = mb_mod.sec_in_month(flt_yr)
                     else:
                         mb_out = mb_mod.get_annual_mb(bin_elev, fl_id=fl_id,
                                                       year=yr, add_climate=True)
-                        mb, _, _, prcp, prcpsol = mb_out
+                        mb, temp, _, prcp, prcpsol = mb_out
                         seconds = mb_mod.sec_in_year(yr)
                 except ValueError as e:
                     if 'too many values to unpack' in str(e):
@@ -4945,6 +5050,10 @@ def run_with_hydro(gdir, settings_filesuffix='',
                 out['liq_prcp_on_glacier']['data'][i, m-1] += np.sum(liq_prcp_on_g)
                 out['snowfall_off_glacier']['data'][i, m-1] += np.sum(prcpsol_off_g)
                 out['snowfall_on_glacier']['data'][i, m-1] += np.sum(prcpsol_on_g)
+
+                # Area-weighted temperature (mean - divided by the weights below)
+                t_on_num[i, m-1] += np.sum(temp * bin_area)
+                t_on_den[i, m-1] += np.sum(bin_area)
 
                 # Snow bucket is a state variable - stored at end of timestamp
                 if store_monthly_hydro:
@@ -5050,8 +5159,48 @@ def run_with_hydro(gdir, settings_filesuffix='',
             out['ice_melt_on_glacier']['data'][i, :] += \
                 np.where(has_comp, 0, final_melt)
 
-    # Convert to xarray
+    # Area-weighted temperature: NaN where there is no glacier left
+    out['temp_on_glacier']['data'] = np.where(t_on_den > 0,
+                                              t_on_num / np.where(t_on_den > 0,
+                                                                  t_on_den, 1),
+                                              np.nan)
+
     out_vars = gdir.settings['store_diagnostic_variables']
+
+    if 'temp_ref_area' in out_vars:
+        # Area-weighted temperature over the reference geometry (fixed area
+        # and fixed elevation). This is independent of the dynamical run, so
+        # we compute it in its own loop.
+        num = np.zeros(oshape)
+        den = np.zeros(oshape)
+        for fl_id, (ref_area, ref_elev) in enumerate(zip(ref_areas, ref_elevs)):
+            fl_mb_mod = _get_fl_mb_mod(fl_id)
+            if not hasattr(fl_mb_mod, 'get_annual_climate'):
+                raise InvalidWorkflowError(
+                    "'temp_ref_area' needs a MB model with a "
+                    "`get_annual_climate` (and `get_monthly_climate`) method, "
+                    "which {} does not have."
+                    "".format(type(fl_mb_mod).__name__))
+            for i, yr in enumerate(years):
+                for m in months:
+                    if store_monthly_hydro:
+                        flt_yr = utils.date_to_floatyear(int(yr), m)
+                        t = fl_mb_mod.get_monthly_climate(ref_elev,
+                                                          year=flt_yr)[0]
+                    else:
+                        t = fl_mb_mod.get_annual_climate(ref_elev, year=yr)[0]
+                    num[i, m-1] += np.sum(t * ref_area)
+                    den[i, m-1] += np.sum(ref_area)
+
+        out['temp_ref_area'] = {
+            'description': 'Area-weighted 2m air temperature over the '
+                           'reference geometry (fixed area and elevation)',
+            'unit': 'degC',
+            'agg': 'mean',
+            'data': np.where(den > 0, num / np.where(den > 0, den, 1), np.nan),
+        }
+
+    # Convert to xarray
     ods = xr.Dataset()
     ods.coords['time'] = fmod.years
     if store_monthly_hydro:
@@ -5062,6 +5211,7 @@ def run_with_hydro(gdir, settings_filesuffix='',
         ods.coords['calendar_month_2d'] = ('month_2d', np.arange(1, 13))
     for varname, d in out.items():
         data = d.pop('data')
+        agg = d.pop('agg', 'sum')
         if varname not in out_vars:
             continue
         if len(data.shape) == 2:
@@ -5069,6 +5219,10 @@ def run_with_hydro(gdir, settings_filesuffix='',
             if varname == 'snow_bucket':
                 # Snowbucket is a state variable
                 ods[varname] = ('time', data[:, 0])
+            elif agg == 'mean':
+                # Intensive variables (e.g. temperature) are averaged
+                data[-1, :] = np.nan
+                ods[varname] = ('time', np.mean(data, axis=1))
             else:
                 # Last year is never good
                 data[-1, :] = np.nan

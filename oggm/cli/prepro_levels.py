@@ -32,6 +32,157 @@ from oggm.utils import get_prepro_base_url, file_downloader
 
 log = logging.getLogger(__name__)
 
+# The preprocessing levels. Besides the usual 0 to 5, two "half levels" allow
+# to split L3 and L4 where the work stops being per-glacier and starts needing
+# the whole RGI region at once. This is what makes it possible to run the
+# expensive part in many small chunk jobs on a cluster:
+#
+#   2  -> 3a   climate, mass balance calibration, apparent mb   (chunkable)
+#   3a -> 3    Glen A calibration, inversion, L3 summaries      (whole region)
+#   3  -> 4a   the historical and dynamic spinup runs           (chunkable)
+#   4a -> 5    L4 summaries, then the L5 directories            (whole region)
+#
+# `3a` holds different glacier directory content than `3`, so it is written to
+# its own `L3a` folder (a scratch one, it can be deleted afterwards). `4a` on
+# the other hand holds exactly the L4 directories - only the summary files are
+# missing - so it writes straight into `L4`. The rule is: the folder is named
+# after the glacier directory content.
+PREPRO_LEVELS = ['0', '1', '2', '3a', '3', '4a', '4', '5']
+
+# The half levels, as (integer level, name of the flag they set)
+_HALF_LEVELS = {'3a': 3, '4a': 4}
+
+
+def _parse_max_level(max_level):
+    """Split `max_level` into an int and the two "stop early" flags."""
+
+    max_level = str(max_level)
+    if max_level not in PREPRO_LEVELS[1:]:
+        raise InvalidParamsError('max_level should be one of {}'
+                                 ''.format(PREPRO_LEVELS[1:]))
+    # '3a' stops before the inversion, '4a' before the L4 summaries
+    if max_level in _HALF_LEVELS:
+        return _HALF_LEVELS[max_level], max_level == '3a', max_level == '4a'
+    return int(max_level), False, False
+
+
+def _parse_start_level(start_level):
+    """Split `start_level` into an int and the two "resume here" flags.
+
+    The integer is the level the *previous* full level block ends at, so that
+    all the existing `start_level <= n` logic keeps working untouched: a run
+    resuming at `3a` still has to enter the L3 block, hence start_level 2.
+    """
+
+    if start_level is None:
+        return 0, False, False
+
+    start_level = str(start_level)
+    if start_level not in PREPRO_LEVELS[:-1]:
+        raise InvalidParamsError('start_level should be one of {}'
+                                 ''.format(PREPRO_LEVELS[:-1]))
+    if start_level in _HALF_LEVELS:
+        return _HALF_LEVELS[start_level] - 1, start_level == '3a', start_level == '4a'
+    return int(start_level), False, False
+
+
+def _level_dir_name(level):
+    """The folder name holding the glacier directories of a level.
+
+    Almost always `L<level>`, but `4a` holds exactly the L4 directories - only
+    the summary files are missing - so it shares the `L4` folder instead of
+    making a copy of the largest directories of the workflow. `3a` does hold
+    something else than `L3` and gets its own folder.
+    """
+    return 'L4' if str(level) == '4a' else f'L{level}'
+
+
+def _level_dir(root, rgi_version, border, level):
+    """The folder holding the glacier directories of a level.
+
+    Mirrors the layout that :py:func:`oggm.utils.get_prepro_base_url` builds
+    for the remote ones.
+    """
+    return (Path(root) / f'RGI{rgi_version}' / f'b_{border:03d}' /
+            _level_dir_name(level))
+
+
+def _forward_summary_path(basename, level, start_from_dir, start_base_url,
+                          rgi_version, border):
+    """Where to read a summary file which is only carried forward.
+
+    A run starting from glacier directories it did not make itself still has
+    to copy the summary files of the level it started from along. Those can
+    sit next to the directories on disk, or on the base url they were
+    downloaded from. A chunked run often has both at once: the directories
+    are local, because the previous stage wrote them, while the summary files
+    are still remote, because no local run ever made them.
+    """
+
+    if start_from_dir is not None:
+        ipath = (_level_dir(start_from_dir, rgi_version, border, level) /
+                 'summary' / basename)
+        if ipath.exists():
+            return ipath
+        if start_base_url is None:
+            raise InvalidWorkflowError(
+                f'Could not find {ipath}. This run has to carry the L{level} '
+                'summary files forward, but they are not next to the glacier '
+                'directories it started from - which is normal if a previous '
+                'stage made those directories without writing any summary. '
+                'Also point start_base_url at the url they came from.')
+
+    return file_downloader(os.path.join(
+        get_prepro_base_url(base_url=start_base_url, rgi_version=rgi_version,
+                            border=border, prepro_level=int(level)),
+        'summary', basename))
+
+
+def apply_rgi_fixes(rgidf, rgi_version, rgi_reg):
+    """The RGI input quality fixes the preprocessing applies before running.
+
+    These are based on visual checks of large glaciers in the RGI. Note that
+    for Greenland this also *removes* glaciers, which is why the chunk
+    definition has to be computed after this has been applied - see
+    :py:func:`oggm.workflow.get_rgi_chunk`.
+
+    Parameters
+    ----------
+    rgidf : geopandas.GeoDataFrame
+        the RGI region file
+    rgi_version : str
+        the RGI version it comes from
+    rgi_reg : str
+        the RGI region, zero padded to two digits
+
+    Returns
+    -------
+    the fixed dataframe
+    """
+
+    if rgi_version != '62':
+        return rgidf
+
+    ids_to_ice_cap = [
+        'RGI60-05.10315',  # huge Greenland ice cap
+        'RGI60-03.01466',  # strange thing next to Devon
+        'RGI60-09.00918',  # Academy of sciences Ice cap
+        'RGI60-09.00969',
+        'RGI60-09.00958',
+        'RGI60-09.00957',
+    ]
+    rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = 1
+
+    # In AA almost all large ice bodies are actually ice caps
+    if rgi_reg == '19':
+        rgidf.loc[rgidf.Area > 100, 'Form'] = 1
+
+    # For greenland we omit connectivity level 2
+    if rgi_reg == '05':
+        rgidf = rgidf.loc[rgidf['Connect'] != 2]
+
+    return rgidf
+
 
 @utils.entity_task(log)
 def _rename_dem_folder(gdir, source=''):
@@ -99,14 +250,45 @@ def _move_hypsometry_to_dem_folder(gdir, source=''):
     os.rename(hypso_f, os.path.join(out, os.path.basename(hypso_f)))
 
 
+# The L3a directories already hold L3 files, so a run resuming at `3a`
+# can't diff against what it loaded. The `3a` stage leaves the L2 state
+# in this file.
+_L2_STATE = 'L2.state.json'
+
+
+def _start_state(gdir, resume_at_inversion):
+    """The state the first level written by this run is a delta against.
+
+    Normally this is the current initialised directory, except at `3a`,
+    where it is the L2 state left by the `3a` stage. Returns None if
+    that state is missing (e.g. an L3a written before it was added), so
+    the level is then shipped as a materialisation.
+    """
+    if not resume_at_inversion:
+        return utils.snapshot_gdir_state(gdir.dir)
+    fp = os.path.join(gdir.dir, _L2_STATE)
+    if not os.path.exists(fp):
+        log.warning(
+            "(%s) no %s in the L3a directory: the L3 tar will " "be a materialisation.",
+            gdir.rgi_id,
+            _L2_STATE,
+        )
+        return None
+    with open(fp) as f:
+        state = json.load(f)
+    # Not an L3 file: it must not end up in the L3 tar
+    os.remove(fp)
+    return state
+
+
 def _delta_tar_entries(
     gdirs: list[GlacierDirectory],
     level: int,
     states: dict,
     border: int,
     rgi_version: str,
-    dataset_tag: str,
-    dataset_id: str = "",
+    artefact_tag: str,
+    artefact_id: str = "",
 ) -> list[tuple[GlacierDirectory, dict]]:
     """Write per-glacier delta manifests for this level.
 
@@ -118,41 +300,46 @@ def _delta_tar_entries(
         The directory processing level (0-5).
     states : dict
         A dict of previous level manifest states, keyed by RGI ID.
-    dataset_tag : str
-        The dataset tag for this run.
+    artefact_tag : str
+        The artefact tag for this run.
     border : int
         The number of pixels at the maps border.
     rgi_version : str
         The RGI version.
-    dataset_id : str, optional
-        The dataset ID for this run.
+    artefact_id : str, optional
+        The artefact ID for this run.
 
     Returns
     --------
     list
         A list of ``(gdir, {'include': changed_paths})`` entries for
-        ``execute_entity_task(utils.gdir_to_archive, entries, ...)``, so
-        each level artifact ships only what the level changed. Glaciers
-        whose manifest cannot be written (e.g. errored directories) fall
-        back to a full legacy archive.
+        ``execute_entity_task(utils.gdir_to_tar, entries, ...)``, so
+        each level tar ships only what the level changed. Glaciers whose
+        manifest cannot be written (e.g. errored directories) fall back
+        to a full, manifest-less (legacy) tar.
     """
-    if not dataset_id:
-        dataset_id = utils.dataset_id_from_tag(
-            dataset_tag, border, rgi_version
+    if not artefact_id:
+        artefact_id = utils.artefact_id_from_tag(
+            artefact_tag, border, rgi_version
         )
     entries = []
     for gdir in gdirs:
         try:
+            if gdir.rgi_id in states:
+                layers = dict(requires=list(range(level)))
+            else:
+                # Nothing to diff against if a run started from gdirs on disk
+                layers = dict(requires=[],
+                              includes_levels=list(range(level + 1)))
             _, changed = utils.write_level_manifest(
                 gdir,
                 level=level,
                 prev_state=states.get(gdir.rgi_id, {}),
-                dataset_tag=dataset_tag,
-                dataset_id=dataset_id,
-                requires=list(range(level)),
+                artefact_tag=artefact_tag,
+                artefact_id=artefact_id,
                 border=border,
                 rgi_version=rgi_version,
-                format_version=2,
+                **layers,
             )
             states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
             entries.append((gdir, {"include": changed}))
@@ -189,14 +376,22 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_export_thickness_geotiff=False, compute_hypsometry=False,
                       custom_climate_task=None,
                       custom_climate_task_kwargs=None,
-                      start_level=None, start_base_url=None, max_level=5,
-                      dataset_tag=None,
+                      start_level=None,
+                      start_base_url=None,
+                      start_from_dir=None,
+                      max_level=5,
+                      artefact_tag=None,
+                      chunk_idx=None,
+                      chunk_size=1000,
+                      glen_a_factor=None,
+                      inversion_fs=0,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, ref_mb_err_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
-                      dynamic_spinup_periods_to_try=None,
+                      dynamic_spinup_extra_years_to_try=None,
+                      dynamic_spinup_allow_shorter=True,
                       continue_on_error=True, store_fl_diagnostics=False,
-                      store_hydro_output=False, store_monthly_hydro=True,
+                      store_hydro_output=False, store_monthly_hydro=False,
                       ref_area_yr=None, temp_bias_run=False):
     """Generate the preprocessed OGGM glacier directories for this OGGM version
 
@@ -221,7 +416,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     params_file : str
         path to the OGGM parameter file (to override defaults)
     is_test : bool
-        to test on a couple of glaciers only!
+        to test on a couple of glaciers only! Picks 4 glaciers, always the
+        same ones (see `test_ids` to choose them): a chunked run needs every
+        job to select the same glaciers.
     test_ids : list
         if is_test: list of ids to process
     rgi_file : str or geopandas.GeoDataFrame, optional
@@ -250,18 +447,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         - 'informed_threestep' (default)
         - 'melt_temp'
         - 'temp_melt'
-        Add the `_regional` suffix to use regional values instead,
-        for example `informed_threestep_regional`
     geodetic_mb_file_path : str
         optional path or URL to a custom geodetic MB file, passed to
         utils.get_geodetic_mb_dataframe and
         tasks.mb_calibration_from_geodetic_mb.
     temp_bias_file_path : str
-        optional path or URL to a custom temperature-bias file, passed to
-        tasks.mb_calibration_from_geodetic_mb (only used with the
-        'informed_threestep' calibration strategy). Use this together with a
-        `custom_climate_task` to calibrate on an arbitrary climate dataset.
-        The file must follow the same format as the default temp-bias files.
+        path or URL to the temperature-bias prior file, passed to
+        tasks.mb_calibration_from_geodetic_mb. Required by the
+        'informed_threestep' calibration strategy (and unused otherwise):
+        there is no default, the file has to match the setup it is used with
+        (climate dataset, RGI version, ...). It is created with a
+        `temp_bias_run` and the `oggm_temp_bias` command (see
+        utils.get_temp_bias_dataframe).
     select_source_from_dir : str
         if starting from a level 1 "ALL" or "STANDARD" DEM sources directory,
         select the chosen DEM source here. If you set it to "BY_RES" here,
@@ -307,17 +504,56 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         the default process_climate_data.
     custom_climate_task_kwargs : dict
         optional kwargs passed to the custom climate task when it is executed.
-    start_level : int
+    start_level : str or int
         the pre-processed level to start from (default is to start from
-        scratch). If set, you'll need to indicate start_base_url as well.
+        scratch). If set, you'll need to indicate start_base_url or
+        start_from_dir as well. One of 0, 1, 2, '3a', 3, '4a', 4 - see
+        `max_level` for what the half levels are.
     start_base_url : str
         the pre-processed base-url to fetch the data from.
-    max_level : int
-        the maximum pre-processing level before stopping
-    dataset_tag : str
-        explicit label identifying this dataset generation. It gets
-        hashed into level manifest's `dataset_id` to check layered
+    start_from_dir : str
+        like `start_base_url`, but for glacier directory tar files which are
+        already on disk (a url can only be fetched over http). This is what
+        chains the stages of a chunked run together: it points at the folder
+        which contains the `RGI{version}/b_{border}/L{level}/` tree, and the
+        directories are read from there instead of being downloaded.
+        It can be combined with `start_base_url`, and often has to be: the
+        directories then come from disk, while the summary files which are
+        only carried forward are still fetched from the url. That is the
+        normal case when the previous stage made the directories without
+        writing any summary file (`max_level` '3a' or '4a').
+    max_level : str or int
+        the maximum pre-processing level before stopping. Besides 1 to 5,
+        two half levels split L3 and L4 where the work stops being
+        per-glacier and starts needing the whole RGI region at once:
+        - '3a': L3 up to and including the apparent mass balance, i.e. no
+          inversion and no summary files. This is the chunkable part of L3.
+        - '4a': the L4 runs, without the summary files. This is the chunkable
+          part of L4.
+        A chunked cluster run is then 2 -> '3a' (chunks), '3a' -> 3 (whole
+        region), 3 -> '4a' (chunks), '4a' -> 5 (whole region).
+    artefact_tag : str
+        explicit label identifying this artefact generation. It gets
+        hashed into level manifest's `artefact_id` to check layered
         levels belong together. Defaults to the output folder name.
+    chunk_idx : int
+        process only the glaciers of this chunk (see `chunk_size`). Chunks are
+        blocks of the RGI id space, so that several chunk jobs writing into
+        the same output folder produce disjoint, complete tar files. Use
+        :py:func:`oggm.workflow.count_rgi_chunks` to know how many chunks a
+        region has. Default is to process all glaciers.
+    chunk_size : int
+        the number of glaciers per chunk: 100 or 1000 (default). These are the
+        only two allowed, because they are the bundle sizes the glacier
+        directory tars are written and read with.
+    glen_a_factor : float
+        skip the Glen A calibration and invert with this factor instead (and
+        with `inversion_fs`). The values of a previous calibration are written
+        to `L3/summary/inversion_glen_a_{rgi_reg}.json` by the run which did
+        it, so they can be given back here.
+    inversion_fs : float
+        the sliding parameter to use together with `glen_a_factor`. Ignored if
+        `glen_a_factor` is not set.
     skip_inversion : bool
          do not run the inversion (level 3 files). This is a temporary
          workaround for workflows that wont run that far into level 3.
@@ -340,11 +576,21 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     dynamic_spinup_start_year : int
         if dynamic_spinup is set, define the starting year for the simulation.
         The default is 1979, unless the climate data starts later.
-    dynamic_spinup_periods_to_try : list or None
-        If the spinup_period defined by rgi_date - dynamic_spinup_start_yr was
-        not successful, you can provide here a list of spinup periods which
-        should be tried in order.
+    dynamic_spinup_extra_years_to_try : list or None
+        As a last resort, if all other spinup periods failed, you can provide
+        here a list of years to try to start the spinup *before*
+        dynamic_spinup_start_year (e.g. [10, 20] means the start years
+        'dynamic_spinup_start_year - 10' and 'dynamic_spinup_start_year - 20'
+        are tried, in this order, so the longest spinup is tried last). Start
+        years before the start of the climate data are clipped to it.
         Default is None
+    dynamic_spinup_allow_shorter : bool
+        If True, and the spinup starting at dynamic_spinup_start_year was not
+        successful, shorter spinup periods are tried first (down to the start
+        year of the geodetic mass balance period), before the
+        dynamic_spinup_extra_years_to_try. If False, the dynamic spinup never
+        starts after dynamic_spinup_start_year.
+        Default is True
     continue_on_error : bool
         if True the workflow continues if a task raises an error. For operational
         runs it should be set to True (the default).
@@ -354,8 +600,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     store_hydro_output : bool
         if True, also store the hydrological model output.
     store_monthly_hydro : bool
-        if True and store_hydro_output is True the hydrological mode output will
-        also be stored in a monthly resolution (see flowline.run_with_hydro)
+        if True and store_hydro_output is True, the hydrological model output
+        is also stored at monthly resolution (see flowline.run_with_hydro).
+        This increases data usage quite a bit, hence the False default.
     ref_area_yr : int
         the hydrological output is computed over a reference area, which
         per default is the largest area covered by the glacier in the simulation
@@ -368,7 +615,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         skips everything which is of no use for this purpose: the glacier
         directory tar files, the climate statistics and the fixed geometry
         mass balance. `mb_calibration_strategy` has to be set explicitly to
-        `temp_melt` (or `temp_melt_regional`), an error is raised otherwise.
+        `temp_melt`, an error is raised otherwise.
         The only output is the L3 `glacier_statistics` file, which is then
         turned into the temperature bias file with the `oggm_temp_bias`
         command (the grouping of climate grid points crosses RGI region
@@ -378,27 +625,75 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # The temp bias preset overrides a couple of options. We log about it
     # further down, once cfg.initialize() has set the logging up.
     if temp_bias_run:
-        if not mb_calibration_strategy.startswith('temp_melt'):
+        if mb_calibration_strategy != 'temp_melt':
             raise InvalidParamsError(
                 'With `temp_bias_run`, the mass balance calibration strategy '
-                'has to be set explicitly to `temp_melt` (or to '
-                '`temp_melt_regional` for the regional flavor of the '
-                f'temperature bias file), not `{mb_calibration_strategy}`.')
+                'has to be set explicitly to `temp_melt`, not '
+                f'`{mb_calibration_strategy}`.')
         max_level = 3
         skip_inversion = True
 
-    # Input check
-    if max_level not in [1, 2, 3, 4, 5]:
-        raise InvalidParamsError('max_level should be one of [1, 2, 3, 4, 5]')
+    # Input check. The levels are strings so that they can carry the two half
+    # levels '3a' and '4a', but everything below works on the integer part
+    # plus a flag - see `_parse_max_level` / `_parse_start_level`.
+    max_level_name = str(max_level)
+    max_level, stop_before_inversion, skip_summary = _parse_max_level(max_level)
 
-    if start_level is not None:
-        if start_level not in [0, 1, 2, 3, 4]:
-            raise InvalidParamsError('start_level should be one of [0, 1, 2, 3, 4]')
-        if start_level > 0 and start_base_url is None:
+    start_level_name = '0' if start_level is None else str(start_level)
+    start_level, resume_at_inversion, summary_only = \
+        _parse_start_level(start_level)
+
+    if mb_calibration_strategy not in ['informed_threestep', 'melt_temp',
+                                       'temp_melt']:
+        raise InvalidParamsError('mb_calibration_strategy not understood: '
+                                 f'{mb_calibration_strategy}')
+
+    if start_level_name != '0':
+        if start_base_url is None and start_from_dir is None:
             raise InvalidParamsError('With start_level, please also indicate '
-                                     'start_base_url')
-    else:
-        start_level = 0
+                                     'start_base_url or start_from_dir')
+    # We log about this further down, once cfg.initialize() has set the
+    # logging up - `log.workflow` does not exist before that
+    ignoring_intersects = start_level_name != '0' and intersects_file is not None
+
+    if start_level_name == '0' and start_from_dir is not None:
+        raise InvalidParamsError('start_from_dir needs a start_level: with '
+                                 'level 0 the glacier directories are built '
+                                 'from the RGI file, not read from tars.')
+
+    if stop_before_inversion and skip_inversion:
+        # `3a` exists to hand the directories over to the whole-region job
+        # which does the inversion, and that job needs the apparent mass
+        # balance - which skip_inversion is what skips
+        raise InvalidParamsError('max_level `3a` and skip_inversion cannot be '
+                                 'combined: `3a` stops right before the '
+                                 'inversion so that another run can do it, '
+                                 'while skip_inversion drops it altogether.')
+
+    if PREPRO_LEVELS.index(max_level_name) <= \
+            PREPRO_LEVELS.index(start_level_name):
+        raise InvalidParamsError(
+            f'max_level ({max_level_name}) should be above start_level '
+            f'({start_level_name}).')
+
+    if chunk_idx is not None:
+        # Fail early on a bad chunk_size, rather than after the RGI file has
+        # been read (this validates it and returns 0 on the empty list)
+        workflow.count_rgi_chunks([], chunk_size=chunk_size)
+        if chunk_idx < 0:
+            raise InvalidParamsError('chunk_idx should be positive, got '
+                                     f'{chunk_idx}')
+
+    # The mass balance is calibrated in L3 only - and not by a run which
+    # resumes at the inversion, since that part is already done by then
+    if (start_level <= 2 and max_level >= 3 and not resume_at_inversion and
+            mb_calibration_strategy == 'informed_threestep' and
+            temp_bias_file_path is None):
+        raise InvalidParamsError(
+            'The `informed_threestep` calibration strategy needs a temperature '
+            'bias prior file: set `temp_bias_file_path` to the file matching '
+            'your setup. Such a file is created with a `temp_bias_run` and '
+            'the `oggm_temp_bias` command.')
 
     if dynamic_spinup:
         if dynamic_spinup not in ['area/dmdtda', 'volume/dmdtda']:
@@ -414,6 +709,37 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         h, m = divmod(m, 60)
         log.workflow('OGGM prepro_levels is done! Time needed: '
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
+
+    def _write_level_tars(level, gdirs, deltas=True):
+        """Tar the glacier directories of a level into the output folder.
+
+        With `deltas`, the per-glacier delta manifests are written first and
+        each tar ships only what the level changed. `deltas=False` tars the
+        directories whole (L0 and L5, whose manifests are written by their
+        caller, and the multi-DEM L1 branch, which has none).
+
+        A `temp_bias_run` ships no glacier directories at all, so this is
+        then a no-op.
+        """
+        if temp_bias_run:
+            return
+        log.workflow(f'L{level} done. Writing to tar...')
+        entries = gdirs
+        if deltas:
+            entries = _delta_tar_entries(
+                gdirs=gdirs,
+                level=level,
+                states=manifest_states,
+                border=border,
+                rgi_version=rgi_version,
+                artefact_tag=artefact_tag,
+                artefact_id=artefact_id,
+            )
+        level_base_dir = Path(output_base_dir) / f'L{level}'
+        workflow.execute_entity_task(
+            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+        )
+        utils.base_dir_to_tar(level_base_dir)
 
     # Local paths
     if override_params is None:
@@ -462,6 +788,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # Prepare the download of climate file to be shared across processes
     # TODO
 
+    if ignoring_intersects:
+        log.workflow('`intersects_file` is ignored with start_level > 0: '
+                     'the intersects are written to the glacier '
+                     'directories at L0 and are already in the prepro '
+                     'files we start from.')
+
     if temp_bias_run:
         log.workflow('`temp_bias_run` is set: forcing max_level=3 and '
                      'skip_inversion=True. The only output will be the L3 '
@@ -481,12 +813,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgi_version = cfg.PARAMS['rgi_version']
     output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
 
-    if dataset_tag is None:
-        dataset_tag = (
+    if artefact_tag is None:
+        artefact_tag = (
             os.path.basename(os.path.normpath(str(output_folder)))
             or "oggm-prepro"
         )
-    dataset_id = utils.dataset_id_from_tag(dataset_tag, border, rgi_version)
+    artefact_id = utils.artefact_id_from_tag(artefact_tag, border, rgi_version)
     # Per-glacier content snapshots of the previous level for deltas
     manifest_states = {}
 
@@ -501,8 +833,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
-        # We use intersects
-        if rgi_version != '70C':
+        # We use intersects. They are only needed to build the glacier
+        # directories from the RGI (L0): from L1 on, each directory has its
+        # own intersects.shp and the region wide file is never read again
+        if rgi_version != '70C' and start_level == 0:
             if intersects_file is None:
                 rgif = utils.get_rgi_intersects_region_file(rgi_reg,
                                                             version=rgi_version)
@@ -510,32 +844,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 rgif = intersects_file
             cfg.set_intersects_db(rgif)
 
-        if rgi_version == '62':
-            # Some RGI input quality checks - this is based on visual checks
-            # of large glaciers in the RGI
-            ids_to_ice_cap = [
-                'RGI60-05.10315',  # huge Greenland ice cap
-                'RGI60-03.01466',  # strange thing next to Devon
-                'RGI60-09.00918',  # Academy of sciences Ice cap
-                'RGI60-09.00969',
-                'RGI60-09.00958',
-                'RGI60-09.00957',
-            ]
-            rgidf.loc[rgidf.RGIId.isin(ids_to_ice_cap), 'Form'] = 1
-
-            # In AA almost all large ice bodies are actually ice caps
-            if rgi_reg == '19':
-                rgidf.loc[rgidf.Area > 100, 'Form'] = 1
-
-            # For greenland we omit connectivity level 2
-            if rgi_reg == '05':
-                rgidf = rgidf.loc[rgidf['Connect'] != 2]
+        rgidf = apply_rgi_fixes(rgidf, rgi_version, rgi_reg)
     else:
         if isinstance(rgi_file, str):
             rgidf = gpd.read_file(rgi_file)
         else:
             rgidf = rgi_file
-        cfg.set_intersects_db(intersects_file)
+        if start_level == 0:
+            cfg.set_intersects_db(intersects_file)
 
     if is_test:
         if test_ids is not None:
@@ -545,16 +861,36 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 # RGI7
                 rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
-            rgidf = rgidf.sample(4)
+            # Seeded for chucked runs
+            rgidf = rgidf.sample(4, random_state=0)
 
     if len(rgidf) == 0:
         raise InvalidParamsError('Zero glaciers selected!')
+
+    # Select our chunk of glaciers, if any. This has to happen after all the
+    # filtering above (region 05 connectivity, the RGI62 fixes, ...) so that
+    # a given chunk index always means the same glaciers. What comes after
+    # (the 70C dates, the DEM source lookup) are per-glacier maps and works
+    # just as well on a subset.
+    if chunk_idx is not None:
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=chunk_size)
+        rgidf = workflow.get_rgi_chunk(rgidf, chunk_idx,
+                                       chunk_size=chunk_size)
+        log.workflow('Selected chunk {} of {} (chunk size {}): {} glaciers.'
+                     ''.format(chunk_idx, n_chunks, chunk_size, len(rgidf)))
+        if len(rgidf) == 0:
+            # Chunks are blocks of the RGI id space, and the ids have gaps,
+            # so an empty chunk is a normal thing. Stop here, but without an
+            # error: on a cluster this is one task of an array job, and a
+            # failure would take the dependent jobs down with it.
+            log.workflow('This chunk is empty, nothing to do.')
+            _time_log()
+            return
 
     log.workflow('Starting prepro run for RGI reg: {} '
                  'and border: {}'.format(rgi_reg, border))
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
-    # Try to avoid concurrency
     if rgi_version == '70C':
         from oggm.utils._downloads import get_lock
         with get_lock():
@@ -595,33 +931,49 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L0 OK - compress all in output directory
         if not temp_bias_run:
-            log.workflow('L0 done. Writing to tar...')
             for gdir in gdirs:
-            # L0 is the root artifact so fully shipped
-            utils.write_level_manifest(
-                gdir,
-                level=0,
-                prev_state={},
-                dataset_tag=dataset_tag,
-                dataset_id=dataset_id,  # save an extra computation
-                requires=[],
-                includes_levels=[0],
-                border=border,
-                rgi_version=rgi_version,
-                format_version=2,
-            )
-            manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
-        level_base_dir = Path(output_base_dir) / 'L0'
-        workflow.execute_entity_task(
-            utils.gdir_to_archive, gdirs, delete=False, base_dir=level_base_dir
-            )
-        utils.base_dir_to_bundles(level_base_dir)
+                # L0 is the root artifact so fully shipped
+                utils.write_level_manifest(
+                    gdir,
+                    level=0,
+                    prev_state={},
+                    artefact_tag=artefact_tag,
+                    artefact_id=artefact_id,  # save an extra computation
+                    requires=[],
+                    includes_levels=[0],
+                    border=border,
+                    rgi_version=rgi_version,
+                )
+                manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(
+                    gdir.dir
+                )
+        _write_level_tars(0, gdirs, deltas=False)
         if max_level == 0:
             _time_log()
             return
+    elif start_from_dir is not None:
+        # The tar files are already on disk (this is how the stages of a
+        # chunked run are chained together)
+        from_tar = _level_dir(start_from_dir, rgi_version, border,
+                              start_level_name)
+        if not from_tar.is_dir():
+            raise InvalidParamsError('Could not find the glacier directories '
+                                     f'to start from in {from_tar}')
+        log.workflow(f'Reading the L{start_level_name} glacier directories '
+                     f'from {from_tar}')
+        # The lower levels a delta requires come from start_base_url when
+        # they are not on disk
+        gdirs = workflow.init_glacier_directories(
+            rgidf, reset=True, force=True, from_tar=str(from_tar),
+            prepro_base_url=start_base_url, prepro_border=border,
+            prepro_rgi_version=rgi_version)
     else:
+        # The level to fetch is the one the directories are *stored* under,
+        # which is not the integer we use for the level logic: resuming at
+        # '4a' means reading the L4 directories, and start_level is 3 there.
+        prepro_level = _level_dir_name(start_level_name)[1:]
         gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True,
-                                                  from_prepro_level=start_level,
+                                                  from_prepro_level=prepro_level,
                                                   prepro_border=border,
                                                   prepro_rgi_version=rgi_version,
                                                   prepro_base_url=start_base_url
@@ -629,6 +981,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # The first level produced is a delta against the downloaded state
         for gdir in gdirs:
             manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
+
+    if start_level > 0:
+        # The first level produced is a delta against the loaded state
+        for gdir in gdirs:
+            state = _start_state(gdir, resume_at_inversion)
+            if state is not None:
+                manifest_states[gdir.rgi_id] = state
 
     # L1 - Add dem files
     if start_level == 0:
@@ -685,13 +1044,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs, source=dem_source)
 
             # L1 OK - compress all in output directory
-            if not temp_bias_run:
-                log.workflow('L1 done. Writing to tar...')
-                level_base_dir = Path(output_base_dir) / 'L1'
-                workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
-                                             delete=False,
-                                             base_dir=level_base_dir)
-                utils.base_dir_to_tar(level_base_dir)
+            _write_level_tars(1, gdirs, deltas=False)
 
             _time_log()
             return
@@ -722,25 +1075,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L1 OK - compress all in output directory
-        if not temp_bias_run:
-            log.workflow('L1 done. Writing to tar...')
-            entries = _delta_tar_entries(
-            gdirs=gdirs,
-            level=1,
-            states=manifest_states,
-            border=border,
-            rgi_version=rgi_version,
-            dataset_tag=dataset_tag,
-            dataset_id=dataset_id,
-        )
-        level_base_dir = Path(output_base_dir) / 'L1'
-        workflow.execute_entity_task(
-            utils.gdir_to_archive,
-            entries,
-            delete=False,
-            base_dir=level_base_dir,
-            )
-        utils.base_dir_to_bundles(level_base_dir)
+        _write_level_tars(1, gdirs)
         if max_level == 1:
             _time_log()
             return
@@ -907,25 +1242,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                              path=opath)
 
         # L2 OK - compress all in output directory
-        if not temp_bias_run:
-            log.workflow('L2 done. Writing to tar...')
-            entries = _delta_tar_entries(
-            gdirs=gdirs,
-            level=2,
-            states=manifest_states,
-            border=border,
-            rgi_version=rgi_version,
-            dataset_tag=dataset_tag,
-            dataset_id=dataset_id,
-        )
-        level_base_dir = Path(output_base_dir) / 'L2'
-        workflow.execute_entity_task(
-            utils.gdir_to_archive,
-            entries,
-            delete=False,
-            base_dir=level_base_dir,
-            )
-        utils.base_dir_to_bundles(level_base_dir)
+        _write_level_tars(2, gdirs)
         if max_level == 2:
             _time_log()
             return
@@ -933,63 +1250,85 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # L3 - Tasks
     if start_level <= 2:
         sum_dir = Path(output_base_dir) / 'L3' / 'summary'
+
+        # Everything down to the apparent mass balance is per-glacier, so it
+        # is the part of L3 which can be run in chunks. A run resuming at
+        # `3a` has it done already and goes straight to the inversion.
+        if resume_at_inversion:
+            log.workflow('Resuming L3 at the inversion: the climate and the '
+                         'mass balance calibration are read from the glacier '
+                         'directories we started from.')
+        else:
+            # Climate
+            climate_kwargs = custom_climate_task_kwargs or {}
+            if custom_climate_task:
+                try:
+                    mod_path, func_name = custom_climate_task.rsplit(':', 1)
+                except ValueError:
+                    raise InvalidParamsError('custom_climate_task must be of the form "module:function"')
+                try:
+                    mod = importlib.import_module(mod_path)
+                except ModuleNotFoundError as err:
+                    raise InvalidParamsError(f'Cannot import module {mod_path}') from err
+                try:
+                    custom_task_func = getattr(mod, func_name)
+                except AttributeError as err:
+                    raise InvalidParamsError(f'Module {mod_path} has no attribute {func_name}') from err
+                workflow.execute_entity_task(custom_task_func, gdirs, **climate_kwargs)
+            else:
+                workflow.execute_entity_task(tasks.process_climate_data, gdirs)
+
+            if mb_calibration_strategy == 'informed_threestep':
+                workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                             gdirs,
+                                             informed_threestep=True,
+                                             mb_model_class=mb_model_class,
+                                             file_path=geodetic_mb_file_path,
+                                             temp_bias_file_path=temp_bias_file_path)
+            elif mb_calibration_strategy == 'melt_temp':
+                workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                             gdirs,
+                                             calibrate_param1='melt_f',
+                                             calibrate_param2='temp_bias',
+                                             mb_model_class=mb_model_class,
+                                             file_path=geodetic_mb_file_path)
+            elif mb_calibration_strategy == 'temp_melt':
+                workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
+                                             gdirs,
+                                             calibrate_param1='temp_bias',
+                                             calibrate_param2='melt_f',
+                                             mb_model_class=mb_model_class,
+                                             file_path=geodetic_mb_file_path)
+            else:
+                raise InvalidParamsError('mb_calibration_strategy not understood: '
+                                         f'{mb_calibration_strategy}')
+
+            if not skip_inversion:
+                workflow.execute_entity_task(tasks.apparent_mb_from_any_mb,
+                                             gdirs,
+                                             mb_model_class=mb_model_class,)
+
+        if stop_before_inversion:
+            # End of the chunkable part of L3. Write the directories out so
+            # that a whole-region job can calibrate Glen A and finish the
+            # level: that calibration needs all the glaciers at once.
+            log.workflow('L3a done (no inversion, no summary). '
+                         'Writing to tar...')
+            level_base_dir = Path(output_base_dir) / 'L3a'
+            # The L3 delta written after `3a` is against L2, not L3a
+            for gdir in gdirs:
+                if gdir.rgi_id in manifest_states:
+                    with open(os.path.join(gdir.dir, _L2_STATE), 'w') as f:
+                        json.dump(manifest_states[gdir.rgi_id], f)
+            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+                                         base_dir=level_base_dir)
+            utils.base_dir_to_tar(level_base_dir)
+            _time_log()
+            return
+
         utils.mkdir(sum_dir)
 
-        # Climate
-        climate_kwargs = custom_climate_task_kwargs or {}
-        if custom_climate_task:
-            try:
-                mod_path, func_name = custom_climate_task.rsplit(':', 1)
-            except ValueError:
-                raise InvalidParamsError('custom_climate_task must be of the form "module:function"')
-            try:
-                mod = importlib.import_module(mod_path)
-            except ModuleNotFoundError as err:
-                raise InvalidParamsError(f'Cannot import module {mod_path}') from err
-            try:
-                custom_task_func = getattr(mod, func_name)
-            except AttributeError as err:
-                raise InvalidParamsError(f'Module {mod_path} has no attribute {func_name}') from err
-            workflow.execute_entity_task(custom_task_func, gdirs, **climate_kwargs)
-        else:
-            workflow.execute_entity_task(tasks.process_climate_data, gdirs)
-
-        use_regional_avg = False
-        if '_regional' in mb_calibration_strategy:
-            use_regional_avg = True
-            mb_calibration_strategy = mb_calibration_strategy.replace('_regional', '')
-
-        if mb_calibration_strategy == 'informed_threestep':
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                         gdirs,
-                                         informed_threestep=True,
-                                         mb_model_class=mb_model_class,
-                                         use_regional_avg=use_regional_avg,
-                                         file_path=geodetic_mb_file_path,
-                                         temp_bias_file_path=temp_bias_file_path)
-        elif mb_calibration_strategy == 'melt_temp':
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                         gdirs,
-                                         calibrate_param1='melt_f',
-                                         calibrate_param2='temp_bias',
-                                         mb_model_class=mb_model_class,
-                                         use_regional_avg=use_regional_avg,
-                                         file_path=geodetic_mb_file_path)
-        elif mb_calibration_strategy == 'temp_melt':
-            workflow.execute_entity_task(tasks.mb_calibration_from_geodetic_mb,
-                                         gdirs,
-                                         calibrate_param1='temp_bias',
-                                         calibrate_param2='melt_f',
-                                         mb_model_class=mb_model_class,
-                                         use_regional_avg=use_regional_avg,
-                                         file_path=geodetic_mb_file_path)
-        else:
-            raise InvalidParamsError('mb_calibration_strategy not understood: '
-                                     f'{mb_calibration_strategy}')
-
         if not skip_inversion:
-            workflow.execute_entity_task(tasks.apparent_mb_from_any_mb, gdirs,
-                                         mb_model_class=mb_model_class,)
 
             filter = border >= 20
 
@@ -1008,12 +1347,29 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     "consensus estimate is only available for RGI62).")
 
             # 'iceboost'/'consensus' map directly to ref_table presets
-            workflow.calibrate_inversion_from_ref_table(
+            inv_df = workflow.calibrate_inversion_from_ref_table(
                 gdirs,
                 ref_table=inversion_volume_dataset,
+                glen_a_factor=glen_a_factor,
+                fs=inversion_fs,
                 apply_fs_on_mismatch=True,
                 error_on_mismatch=False,
                 filter_inversion_output=filter)
+
+            # Write down which Glen A this region ended up with, so that a
+            # later run can reproduce it with `glen_a_factor` instead of
+            # calibrating again (the calibration needs the whole region)
+            opath = sum_dir / f'inversion_glen_a_{rgi_reg}.json'
+            with open(opath, 'w') as f:
+                json.dump({'rgi_version': rgi_version,
+                           'rgi_reg': rgi_reg,
+                           'border': border,
+                           'ref_table': inversion_volume_dataset,
+                           'n_glaciers': len(gdirs),
+                           'glen_a_factor': float(inv_df.attrs['glen_a_factor']),
+                           'glen_a': float(inv_df.attrs['glen_a']),
+                           'fs': float(inv_df.attrs['fs']),
+                           }, f, indent=2)
 
             # Distribute thickness per altitude for gridded data
             if add_distributed_thickness:
@@ -1054,24 +1410,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                   mb_model_class=mb_model_class)
 
         # L3 OK - compress all in output directory
-        log.workflow('L3 done. Writing to tar...')
-        entries = _delta_tar_entries(
-            gdirs=gdirs,
-            level=3,
-            states=manifest_states,
-            border=border,
-            rgi_version=rgi_version,
-            dataset_tag=dataset_tag,
-            dataset_id=dataset_id,
-        )
-        level_base_dir = Path(output_base_dir) / 'L3'
-        workflow.execute_entity_task(
-            utils.gdir_to_archive,
-            entries,
-            delete=False,
-            base_dir=level_base_dir,
-        )
-        utils.base_dir_to_bundles(level_base_dir)
+        _write_level_tars(3, gdirs)
         if max_level == 3:
             _time_log()
             return
@@ -1086,143 +1425,149 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # L4 - Tasks (add historical runs (old default) and dynamic spinup runs)
     if start_level <= 3:
         sum_dir = Path(output_base_dir) / 'L4' / 'summary'
-        utils.mkdir(sum_dir)
 
-        # Copy L3 files for consistency
-        for bn in ['glacier_statistics', 'climate_statistics',
-                   'fixed_geometry_mass_balance']:
-            if start_level <= 2:
-                ipath = sum_dir_L3 / f'{bn}_{rgi_reg}.csv'
-            else:
-                ipath = file_downloader(os.path.join(
-                    get_prepro_base_url(base_url=start_base_url,
-                                        rgi_version=rgi_version, border=border,
-                                        prepro_level=start_level), 'summary',
-                    bn + '_{}.csv'.format(rgi_reg)))
+        # The summary files are written by the whole-region part of L4, so a
+        # chunked run stopping at `4a` has nothing to do with them
+        if not skip_summary:
+            utils.mkdir(sum_dir)
 
-            opath = sum_dir / f'{bn}_{rgi_reg}.csv'
-            shutil.copyfile(ipath, opath)
+            # Copy L3 files for consistency
+            for bn in ['glacier_statistics', 'climate_statistics',
+                       'fixed_geometry_mass_balance']:
+                if start_level <= 2:
+                    ipath = sum_dir_L3 / f'{bn}_{rgi_reg}.csv'
+                else:
+                    ipath = _forward_summary_path(
+                        f'{bn}_{rgi_reg}.csv', start_level,
+                        start_from_dir, start_base_url, rgi_version, border)
 
-        # Get end date. The first gdir might have blown up, try some others
-        i = 0
-        while True:
-            if i >= len(gdirs):
-                raise RuntimeError('Found no valid glaciers!')
-            try:
-                y0 = gdirs[i].get_climate_info()['baseline_yr_0']
-                # One adds 1 because the run ends at the end of the year
-                ye = gdirs[i].get_climate_info()['baseline_yr_1'] + 1
-                break
-            except BaseException:
-                i += 1
+                opath = sum_dir / f'{bn}_{rgi_reg}.csv'
+                shutil.copyfile(ipath, opath)
 
-        # here we define the actual start date of the model outputs
-        if y0 > dynamic_spinup_start_year:
-            dynamic_spinup_start_year = y0
-
-        # conduct historical run before dynamic melt_f calibration
-        # (for comparison to old default behavior)
-        kwargs_run_from_climate_data = {
-            'min_ys': y0, 'ye': ye, 'mb_model_class': mb_model_class,
-            'save_mb_diagnostics_filesuffix': '_historical' if store_mb_diagnostics else None,
-            'output_filesuffix': '_historical',
-            'fixed_geometry_spinup_yr': dynamic_spinup_start_year,
-        }
-        if not store_hydro_output:
-            workflow.execute_entity_task(
-                tasks.run_from_climate_data, gdirs,
-                **kwargs_run_from_climate_data
-            )
+        # The runs are per-glacier: this is the part of L4 which can be run
+        # in chunks. A run resuming at `4a` has them done already and only
+        # needs to compile the summary files, which needs the whole region.
+        if summary_only:
+            log.workflow('Resuming L4 at the summary files: the model runs '
+                         'are read from the glacier directories we started '
+                         'from.')
         else:
-            workflow.execute_entity_task(
-                tasks.run_with_hydro, gdirs,
-                run_task=tasks.run_from_climate_data,
-                store_monthly_hydro=store_monthly_hydro,
-                ref_area_yr=ref_area_yr,
-                **kwargs_run_from_climate_data
-            )
-        # Now compile the output
-        opath = Path(sum_dir) / f'historical_run_output_{rgi_reg}.nc'
-        utils.compile_run_output(gdirs, path=opath, input_filesuffix='_historical')
+            # Get end date. The first gdir might have blown up, try some others
+            i = 0
+            while True:
+                if i >= len(gdirs):
+                    raise RuntimeError('Found no valid glaciers!')
+                try:
+                    y0 = gdirs[i].get_climate_info()['baseline_yr_0']
+                    # One adds 1 because the run ends at the end of the year
+                    ye = gdirs[i].get_climate_info()['baseline_yr_1'] + 1
+                    break
+                except BaseException:
+                    i += 1
+
+            # here we define the actual start date of the model outputs
+            if y0 > dynamic_spinup_start_year:
+                dynamic_spinup_start_year = y0
+
+            # conduct historical run before dynamic melt_f calibration
+            # (for comparison to old default behavior)
+            kwargs_run_from_climate_data = {
+                'min_ys': y0, 'ye': ye, 'mb_model_class': mb_model_class,
+                'save_mb_diagnostics_filesuffix': '_historical' if store_mb_diagnostics else None,
+                'output_filesuffix': '_historical',
+                'fixed_geometry_spinup_yr': dynamic_spinup_start_year,
+            }
+            if not store_hydro_output:
+                workflow.execute_entity_task(
+                    tasks.run_from_climate_data, gdirs,
+                    **kwargs_run_from_climate_data
+                )
+            else:
+                workflow.execute_entity_task(
+                    tasks.run_with_hydro, gdirs,
+                    run_task=tasks.run_from_climate_data,
+                    store_monthly_hydro=store_monthly_hydro,
+                    ref_area_yr=ref_area_yr,
+                    **kwargs_run_from_climate_data
+                )
+
+        if not skip_summary:
+            # Now compile the output
+            opath = Path(sum_dir) / f'historical_run_output_{rgi_reg}.nc'
+            utils.compile_run_output(gdirs, path=opath,
+                                     input_filesuffix='_historical')
 
         # conduct dynamic spinup if wanted
         if dynamic_spinup:
 
-            minimise_for = dynamic_spinup.split('/')[0]
+            if not summary_only:
+                minimise_for = dynamic_spinup.split('/')[0]
 
-            melt_f_max = cfg.PARAMS['melt_f_max']
-            kwargs_run_dynamic_melt_f_calibration = {
-                'ref_mb_err_scaling_factor': ref_mb_err_scaling_factor,
-                'ys': dynamic_spinup_start_year, 'ye': ye,
-                'melt_f_max': melt_f_max,
-                'mb_model_class': mb_model_class,
-                'kwargs_run_function': {'minimise_for': minimise_for,
-                                        'spinup_periods_to_try':
-                                            dynamic_spinup_periods_to_try
-                                        },
-                'ignore_errors': True,
-                'kwargs_fallback_function': {'minimise_for': minimise_for,
-                                             'spinup_periods_to_try':
-                                                 dynamic_spinup_periods_to_try
-                                             },
-                'save_mb_diagnostics_filesuffix': ('_spinup_historical'
-                                                   if store_mb_diagnostics else None),
-                'output_filesuffix': '_spinup_historical',
-            }
+                melt_f_max = cfg.PARAMS['melt_f_max']
+                kwargs_run_dynamic_melt_f_calibration = {
+                    'ref_mb_err_scaling_factor': ref_mb_err_scaling_factor,
+                    'ys': dynamic_spinup_start_year, 'ye': ye,
+                    'melt_f_max': melt_f_max,
+                    'mb_model_class': mb_model_class,
+                    'kwargs_run_function': {
+                        'minimise_for': minimise_for,
+                        'spinup_extra_years_to_try':
+                            dynamic_spinup_extra_years_to_try,
+                        'allow_shorter_spinup': dynamic_spinup_allow_shorter,
+                    },
+                    'ignore_errors': True,
+                    'kwargs_fallback_function': {
+                        'minimise_for': minimise_for,
+                        'spinup_extra_years_to_try':
+                            dynamic_spinup_extra_years_to_try,
+                        'allow_shorter_spinup': dynamic_spinup_allow_shorter,
+                    },
+                    'save_mb_diagnostics_filesuffix': ('_spinup_historical'
+                                                       if store_mb_diagnostics else None),
+                    'output_filesuffix': '_spinup_historical',
+                }
 
-            if not store_hydro_output:
-                workflow.execute_entity_task(
-                    tasks.run_dynamic_melt_f_calibration, gdirs,
-                    **kwargs_run_dynamic_melt_f_calibration
+                if not store_hydro_output:
+                    workflow.execute_entity_task(
+                        tasks.run_dynamic_melt_f_calibration, gdirs,
+                        **kwargs_run_dynamic_melt_f_calibration
+                        )
+                else:
+                    workflow.execute_entity_task(
+                        tasks.run_with_hydro, gdirs,
+                        run_task=tasks.run_dynamic_melt_f_calibration,
+                        store_monthly_hydro=store_monthly_hydro,
+                        ref_area_yr=ref_area_yr,
+                        **kwargs_run_dynamic_melt_f_calibration
                     )
-            else:
-                workflow.execute_entity_task(
-                    tasks.run_with_hydro, gdirs,
-                    run_task=tasks.run_dynamic_melt_f_calibration,
-                    store_monthly_hydro=store_monthly_hydro,
-                    ref_area_yr=ref_area_yr,
-                    **kwargs_run_dynamic_melt_f_calibration
-                )
 
-            # Now compile the output
-            opath = sum_dir / f'spinup_historical_run_output_{rgi_reg}.nc'
-            utils.compile_run_output(gdirs, path=opath,
-                                     input_filesuffix='_spinup_historical')
+            if not skip_summary:
+                # Now compile the output
+                opath = sum_dir / f'spinup_historical_run_output_{rgi_reg}.nc'
+                utils.compile_run_output(gdirs, path=opath,
+                                         input_filesuffix='_spinup_historical')
 
-        # Glacier statistics we recompute here for error analysis
-        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
-        utils.compile_glacier_statistics(gdirs, path=opath)
+        if not skip_summary:
+            # Glacier statistics we recompute here for error analysis
+            opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
+            utils.compile_glacier_statistics(gdirs, path=opath)
 
-        # Add the extended files
-        pf = sum_dir / f'historical_run_output_{rgi_reg}.nc'
-        # We have copied the files above
-        mf = sum_dir / f'fixed_geometry_mass_balance_{rgi_reg}.csv'
-        sf = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
-        opath = sum_dir / f'historical_run_output_extended_{rgi_reg}.nc'
-        utils.extend_past_climate_run(past_run_file=pf,
-                                      fixed_geometry_mb_file=mf,
-                                      glacier_statistics_file=sf,
-                                      path=opath)
+            # Add the extended files
+            pf = sum_dir / f'historical_run_output_{rgi_reg}.nc'
+            # We have copied the files above
+            mf = sum_dir / f'fixed_geometry_mass_balance_{rgi_reg}.csv'
+            sf = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
+            opath = sum_dir / f'historical_run_output_extended_{rgi_reg}.nc'
+            utils.extend_past_climate_run(past_run_file=pf,
+                                          fixed_geometry_mb_file=mf,
+                                          glacier_statistics_file=sf,
+                                          path=opath)
 
-        # L4 OK - compress all in output directory
-        log.workflow('L4 done. Writing to tar...')
-        entries = _delta_tar_entries(
-            gdirs=gdirs,
-            level=4,
-            states=manifest_states,
-            border=border,
-            rgi_version=rgi_version,
-            dataset_tag=dataset_tag,
-            dataset_id=dataset_id,
-        )
-        level_base_dir = Path(output_base_dir) / 'L4'
-        workflow.execute_entity_task(
-            utils.gdir_to_archive,
-            entries,
-            delete=False,
-            base_dir=level_base_dir,
-        )
-        utils.base_dir_to_bundles(level_base_dir)
+        # L4 OK - compress all in output directory. A run which only added
+        # the summary files did not touch the directories, and the `4a` stage
+        # has already written them to the very same folder.
+        if not summary_only:
+            _write_level_tars(4, gdirs)
 
         sum_dir_L4 = sum_dir
 
@@ -1246,11 +1591,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if start_level <= 3:
             ipath = sum_dir_L4 / f'{bn}_{rgi_reg}.{suffix}'
         else:
-            ipath = file_downloader(os.path.join(
-                get_prepro_base_url(base_url=start_base_url,
-                                    rgi_version=rgi_version, border=border,
-                                    prepro_level=start_level), 'summary',
-                f'{bn}_{rgi_reg}.{suffix}'))
+            ipath = _forward_summary_path(
+                f'{bn}_{rgi_reg}.{suffix}', start_level,
+                start_from_dir, start_base_url, rgi_version, border)
         opath = sum_dir / f'{bn}_{rgi_reg}.{suffix}'
         shutil.copyfile(ipath, opath)
 
@@ -1266,27 +1609,21 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                               setup='run/spinup')
 
     # L5 OK - compress all in output directory
-    log.workflow('L5 done. Writing to tar...')
     for gdir in mini_gdirs:
         # The mini run bundle is self-sufficient, so shipped as standalone
         utils.write_level_manifest(
             gdir_or_dir=gdir,
             level=5,
             prev_state={},
-            dataset_id=dataset_id,
-            dataset_tag=dataset_tag,
+            artefact_id=artefact_id,
+            artefact_tag=artefact_tag,
             requires=[],
             includes_levels=[5],
             kind="standalone",
             border=border,
             rgi_version=rgi_version,
-            format_version=2,
         )
-    level_base_dir = Path(output_base_dir) / 'L5'
-    workflow.execute_entity_task(
-        utils.gdir_to_archive, mini_gdirs, delete=False, base_dir=level_base_dir
-    )
-    utils.base_dir_to_bundles(level_base_dir)
+    _write_level_tars(5, mini_gdirs, deltas=False)
 
     _time_log()
 
@@ -1307,21 +1644,63 @@ def parse_args(args):
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
-    parser.add_argument('--start-level', type=int, default=0,
+    parser.add_argument('--start-level', type=str, default='0',
+                        choices=PREPRO_LEVELS[:-1],
                         help='the pre-processed level to start from (default '
                              'is to start from 0). If set, you will need to '
-                             'indicate --start-base-url as well.')
+                             'indicate --start-base-url or --start-from-dir '
+                             'as well. See --max-level for the half levels.')
     parser.add_argument('--start-base-url', type=str,
                         help='the pre-processed base-url to fetch the data '
                              'from when starting from level > 0.')
-    parser.add_argument('--max-level', type=int, default=5,
+    parser.add_argument('--start-from-dir', type=str,
+                        help='like --start-base-url, but for glacier '
+                             'directory tar files which are already on disk. '
+                             'This is what chains the stages of a chunked '
+                             'run together. Point it at the folder holding '
+                             'the RGI{version}/b_{border}/L{level}/ tree. Can '
+                             'be combined with --start-base-url, which is '
+                             'then used for the summary files which are only '
+                             'carried forward.')
+    parser.add_argument('--max-level', type=str, default='5',
+                        choices=PREPRO_LEVELS[1:],
                         help='the maximum level you want to run the '
-                             'pre-processing for (1, 2, 3, 4 or 5).')
-    parser.add_argument('--dataset-tag', type=str,
-                        help='explicit label identifying this dataset '
-                             'generation, hashed into the per-level '
-                             'manifests. Defaults to the output folder '
-                             'name.')
+                             'pre-processing for. Besides 1 to 5, the two '
+                             'half levels 3a and 4a stop where the work stops '
+                             'being per-glacier and starts needing the whole '
+                             'RGI region: 3a is L3 without the inversion and '
+                             'the summary files, 4a is L4 without the summary '
+                             'files. A chunked cluster run is 2 -> 3a '
+                             '(chunks), 3a -> 3 (region), 3 -> 4a (chunks), '
+                             '4a -> 5 (region).')
+    parser.add_argument("--dataset-tag", type=str,
+                        help="explicit label identifying this dataset "
+                        "generation, hashed into the per-level "
+                        "manifests. Defaults to the output folder "
+                        "name.")
+    parser.add_argument('--chunk-idx', type=int, default=None,
+                        help='process only the glaciers of this chunk. Chunks '
+                             'are blocks of the RGI id space, so that several '
+                             'chunk jobs writing into the same output folder '
+                             'produce disjoint, complete tar files. Meant to '
+                             'be set to $SLURM_ARRAY_TASK_ID. Use the '
+                             'oggm_prepro_chunks command to know how many '
+                             'chunks a region has.')
+    parser.add_argument('--chunk-size', type=int, default=1000,
+                        choices=[100, 1000],
+                        help='the number of glaciers per chunk (default '
+                             '1000). Only 100 and 1000 are allowed: they are '
+                             'the bundle sizes the glacier directory tars are '
+                             'written and read with.')
+    parser.add_argument('--inversion-glen-a-factor', type=float, default=None,
+                        help='skip the Glen A calibration and invert with '
+                             'this factor instead. The value of a previous '
+                             'calibration is written to the L3 summary folder '
+                             'as inversion_glen_a_{rgi_reg}.json.')
+    parser.add_argument('--inversion-fs', type=float, default=0,
+                        help='the sliding parameter for the inversion. Mostly '
+                             'useful together with --inversion-glen-a-factor, '
+                             'to reproduce a calibration which needed it.')
     parser.add_argument('--working-dir', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
@@ -1336,13 +1715,13 @@ def parse_args(args):
     parser.add_argument('--logging-level', type=str, default='WORKFLOW',
                         help='the logging level to use (DEBUG, INFO, WARNING, '
                              'WORKFLOW).')
-    parser.add_argument('--elev-bands', nargs='?', const=True, default=False,
+    parser.add_argument('--elev-bands', action='store_true',
                         help='compute the flowlines based on the Huss & Farinotti '
                              '2012 method.')
-    parser.add_argument('--centerlines', nargs='?', const=True, default=False,
+    parser.add_argument('--centerlines', action='store_true',
                         help='compute the flowlines based on the OGGM '
                              'centerline(s) method.')
-    parser.add_argument('--skip-inversion', nargs='?', const=True, default=False,
+    parser.add_argument('--skip-inversion', action='store_true',
                         help='do not run the inversion (level 3 files). '
                              'this is a temporary workaround for workflows '
                              'that wont run that far into level 3.')
@@ -1358,11 +1737,11 @@ def parse_args(args):
                              "(Farinotti et al. 2019, RGI62 only).")
     parser.add_argument('--mb-calibration-strategy', type=str,
                         default='informed_threestep',
-                        help='how to calibrate the massbalance. Currently one of '
-                             'informed_threestep (default) , melt_temp '
-                             'or temp_melt. Add the _regional suffix to '
-                             'use regional values instead, for example '
-                             'informed_threestep_regional')
+                        choices=['informed_threestep', 'melt_temp',
+                                 'temp_melt'],
+                        help='how to calibrate the massbalance. Currently one '
+                             'of informed_threestep (default), melt_temp '
+                             'or temp_melt.')
     parser.add_argument('--dem-source', type=str, default='',
                         help='which DEM source to use. Possible options are '
                              'the name of a specific DEM (e.g. RAMP, SRTM...) '
@@ -1379,40 +1758,40 @@ def parse_args(args):
                         'If you set it to "BY_RES" here, COPDEM will be used and '
                         'its resolution chosen based on the gdirs map resolution '
                         '(COPDEM30 for dx < 60 m, COPDEM90 elsewhere).')
-    parser.add_argument('--keep-dem-folders', nargs='?', const=True, default=False,
+    parser.add_argument('--keep-dem-folders', action='store_true',
                         help='if `select_source_from_dir` is used, wether to keep '
                         'the original DEM folders in or not.')
-    parser.add_argument('--add-consensus-thickness', nargs='?', const=True, default=False,
+    parser.add_argument('--add-consensus-thickness', action='store_true',
                         help='adds (reprojects) the consensus thickness '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-itslive-velocity', nargs='?', const=True, default=False,
+    parser.add_argument('--add-itslive-velocity', action='store_true',
                         help='adds (reprojects) the ITS_LIVE velocity '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-millan-thickness', nargs='?', const=True, default=False,
+    parser.add_argument('--add-millan-thickness', action='store_true',
                         help='adds (reprojects) the millan thickness '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-millan-velocity', nargs='?', const=True, default=False,
+    parser.add_argument('--add-millan-velocity', action='store_true',
                         help='adds (reprojects) the millan velocity '
                              'estimates to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-hugonnet-dhdt', nargs='?', const=True, default=False,
+    parser.add_argument('--add-hugonnet-dhdt', action='store_true',
                         help='adds (reprojects) the hugonnet dhdt '
                              'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-bedmachine', nargs='?', const=True, default=False,
+    parser.add_argument('--add-bedmachine', action='store_true',
                         help='adds (reprojects) the Bedmachine ice thickness '
                              'maps to the glacier directories. '
                              'With --elev-bands, the data will also be '
                              'binned.')
-    parser.add_argument('--add-glathida', nargs='?', const=True, default=False,
+    parser.add_argument('--add-glathida', action='store_true',
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
                              'The data points are stored as csv.')
@@ -1421,18 +1800,18 @@ def parse_args(args):
                             'If provided, it replaces the default process_climate_data.')
     parser.add_argument('--custom-climate-task-kwargs', type=json.loads, default=None,
                         help='JSON dict of kwargs passed to the custom climate task.')
-    parser.add_argument('--add-distributed-thickness', nargs='?', const=True, default=False,
+    parser.add_argument('--add-distributed-thickness', action='store_true',
                         help='adds a thickness field to gridded_data using '
                              'distribute_thickness_per_altitude.')
-    parser.add_argument('--add-export-thickness-geotiff', nargs='?', const=True, default=False,
+    parser.add_argument('--add-export-thickness-geotiff', action='store_true',
                         help='exports the distributed thickness field to '
                              'GeoTIFF files in a subfolder of the L3 summary '
                              'directory. Requires --add-distributed-thickness.')
-    parser.add_argument('--compute-hypsometry', nargs='?', const=True, default=False,
+    parser.add_argument('--compute-hypsometry', action='store_true',
                         help='Compute the hypsometry tables for all glaciers, '
                              'added to the glacier directory and compiled in '
                              'the summary folder')
-    parser.add_argument('--test', nargs='?', const=True, default=False,
+    parser.add_argument('--test', action='store_true',
                         help='if you want to do a test on a couple of '
                              'glaciers first.')
     parser.add_argument('--test-ids', nargs='+',
@@ -1444,7 +1823,7 @@ def parse_args(args):
     parser.add_argument('--intersects-file', type=str, default=None,
                         help='path to an intersects shapefile to use instead '
                              'of the default RGI intersects file.')
-    parser.add_argument('--disable-mp', nargs='?', const=True, default=False,
+    parser.add_argument('--disable-mp', action='store_true',
                         help='if you want to disable multiprocessing.')
     parser.add_argument('--dynamic-spinup', type=str, default='',
                         help="include a dynamic spinup for matching glacier area "
@@ -1461,39 +1840,58 @@ def parse_args(args):
                         help="if --dynamic-spinup is set, define the starting"
                              "year for the simulation. The default is 1979, "
                              "unless the climate data starts later.")
-    parser.add_argument('--dynamic-spinup-periods-to-try', nargs='*',
-                        default=[30, 40, 50, 60, 70, 80, 90, 100],
+    parser.add_argument('--dynamic-spinup-extra-years-to-try', nargs='*',
+                        default=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                         help="if --dynamic-spinup is set, define additional "
-                             "spinup periods to try, if the spinup starting "
-                             "from --dynamic-spinup-year is not successful. If"
-                             "you do not want to use set"
-                             "'--dynamic-spinup-periods-to-try none' in the"
-                             "terminal.")
+                             "years to start the spinup BEFORE "
+                             "--dynamic-spinup-start-year, tried as a last "
+                             "resort if all other spinup periods failed (e.g. "
+                             "'10 20' first tries to start 10 years before "
+                             "--dynamic-spinup-start-year, and then 20 years "
+                             "before, so the longest spinup is tried last). "
+                             "Start years before the start of the climate data "
+                             "are clipped to it. If you do not want to use it "
+                             "set '--dynamic-spinup-extra-years-to-try none' "
+                             "in the terminal.")
+    parser.add_argument('--dynamic-spinup-no-shorter-periods',
+                        action='store_true',
+                        help="if --dynamic-spinup is set, prevent the dynamic "
+                             "spinup from starting AFTER "
+                             "--dynamic-spinup-start-year. Per default, if the "
+                             "spinup at --dynamic-spinup-start-year failed, "
+                             "shorter spinup periods are tried first (down to "
+                             "the start year of the geodetic mass balance "
+                             "period).")
     parser.add_argument('--geodetic-mb-file-path', type=str, default=None,
                         help='optional path or URL to a custom geodetic MB '
                              'file passed to MB calibration.')
     parser.add_argument('--temp-bias-file-path', type=str, default=None,
-                        help='optional path or URL to a custom temperature-bias '
-                             'file passed to MB calibration (informed_threestep '
-                             'only). Use together with --custom-climate-task.')
-    parser.add_argument('--temp-bias-run', nargs='?', const=True, default=False,
+                        help='path or URL to the temperature-bias prior file '
+                             'passed to MB calibration. Required by the '
+                             'informed_threestep strategy (and unused '
+                             'otherwise): there is no default, the file has to '
+                             'match the setup it is used with. It is created '
+                             'with --temp-bias-run and the `oggm_temp_bias` '
+                             'command.')
+    parser.add_argument('--temp-bias-run', action='store_true',
                         help='run the preprocessing needed to create the '
                              'temperature bias prior file. This forces '
                              '--max-level 3 and --skip-inversion, and writes '
                              'nothing but the L3 glacier statistics file. '
-                             'Requires --mb-calibration-strategy temp_melt '
-                             '(or temp_melt_regional). Feed the result to the '
-                             '`oggm_temp_bias` command (together with the '
-                             'other regions) to create the file.')
-    parser.add_argument('--store-fl-diagnostics', nargs='?', const=True, default=False,
+                             'Requires --mb-calibration-strategy temp_melt. '
+                             'Feed the result to the `oggm_temp_bias` command '
+                             '(together with the other regions) to create the '
+                             'file.')
+    parser.add_argument('--store-fl-diagnostics', action='store_true',
                         help="Also compute and store flowline diagnostics during "
                              "preprocessing. This can increase data usage quite "
                              "a bit.")
-    parser.add_argument('--store-hydro-output', nargs='?', const=True, default=False,
+    parser.add_argument('--store-hydro-output', action='store_true',
                         help='Add optional hydrological model output')
-    parser.add_argument('--store-monthly-hydro', nargs='?', const=True, default=True,
-                        help='If store-hydro-output is True, also store the '
-                             'hydrological model output in monthly resolution.')
+    parser.add_argument('--store-monthly-hydro', action='store_true',
+                        help='Requires --store-hydro-output. Also store the '
+                             'hydrological model output at monthly resolution. '
+                             'This increases data usage quite a bit.')
     parser.add_argument('--ref-area-yr', type=int, default=None,
                         help='Force the reference area used for the hydrological '
                              'output to the glacier state of the given simulation '
@@ -1536,8 +1934,22 @@ def parse_args(args):
 
     dynamic_spinup = False if args.dynamic_spinup == '' else args.dynamic_spinup
 
-    if args.dynamic_spinup_periods_to_try == ['none']:
-        args.dynamic_spinup_periods_to_try = None
+    extra_years_to_try = args.dynamic_spinup_extra_years_to_try
+    if extra_years_to_try in [['none'], []]:
+        extra_years_to_try = None
+    else:
+        # argparse gives us strings if the user provided them in the terminal
+        try:
+            extra_years_to_try = [int(yr) for yr in extra_years_to_try]
+        except (TypeError, ValueError):
+            raise InvalidParamsError(
+                '--dynamic-spinup-extra-years-to-try takes years to start the '
+                'spinup before --dynamic-spinup-start-year, or the single '
+                f'value "none", but got {extra_years_to_try}!')
+        if any(yr <= 0 for yr in extra_years_to_try):
+            raise InvalidParamsError(
+                '--dynamic-spinup-extra-years-to-try must be positive (they '
+                'are counted backwards from --dynamic-spinup-start-year)!')
 
     # All good
     return dict(rgi_version=rgi_version, rgi_reg=rgi_reg,
@@ -1548,8 +1960,14 @@ def parse_args(args):
                 intersects_file=args.intersects_file,
                 dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
-                max_level=args.max_level, dataset_tag=args.dataset_tag,
+                start_from_dir=args.start_from_dir,
+                max_level=args.max_level,
+                artefact_tag=args.artefact_tag,
                 disable_mp=args.disable_mp,
+                chunk_idx=args.chunk_idx,
+                chunk_size=args.chunk_size,
+                glen_a_factor=args.inversion_glen_a_factor,
+                inversion_fs=args.inversion_fs,
                 logging_level=args.logging_level,
                 elev_bands=args.elev_bands,
                 skip_inversion=args.skip_inversion,
@@ -1572,7 +1990,9 @@ def parse_args(args):
                 dynamic_spinup=dynamic_spinup,
                 ref_mb_err_scaling_factor=args.ref_mb_err_scaling_factor,
                 dynamic_spinup_start_year=args.dynamic_spinup_start_year,
-                dynamic_spinup_periods_to_try=args.dynamic_spinup_periods_to_try,
+                dynamic_spinup_extra_years_to_try=extra_years_to_try,
+                dynamic_spinup_allow_shorter=(
+                    not args.dynamic_spinup_no_shorter_periods),
                 mb_model_class=args.mb_model_class,
                 mb_calibration_strategy=args.mb_calibration_strategy,
                 geodetic_mb_file_path=args.geodetic_mb_file_path,

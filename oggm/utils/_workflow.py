@@ -34,7 +34,6 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 import xarray as xr
-import zarr
 import shapely.geometry as shpg
 import shapely.affinity as shpa
 from shapely.ops import transform as shp_trafo
@@ -77,7 +76,7 @@ from oggm.utils._funcs import (calendardate_to_hydrodate, date_to_floatyear,
                                weighted_quantile_1d)
 from oggm.utils._downloads import (get_demo_file, get_wgms_files,
                                    get_rgi_glacier_entities)
-import oggm.utils.geozarr as geozarr
+import oggm.utils.transcoder as transcoder
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
@@ -116,15 +115,15 @@ log = logging.getLogger('.'.join(__name__.split('.')[:-1]))
 
 
 @lru_cache(maxsize=1)
-def _warn_zarr_fallback():
+def _warn_store_fallback():
     """Warn once per process that read_store fell back to a pickle.
 
-    During the zarr migration many stores are still pickles, so this
-    fallback is expected and floods the logs. Cached so it only fires
-    once, tests can reset it via ``cache_clear()``.
+    Many stores are still pickles, so this fallback is expected and
+    floods the logs. Cached so it only fires once, tests can reset it
+    via ``cache_clear()``.
     """
     warnings.warn(
-        "Zarr data not found, attempting to read pickle file instead."
+        "Store data not found, attempting to read pickle file instead."
     )
 
 
@@ -1150,6 +1149,11 @@ def merge_consecutive_run_outputs(gdir,
 
     # Merge by removing the last step of file 1 and delete the files if asked
     out_ds = xr.concat([ds1.isel(time=slice(0, -1)), ds2], dim='time')
+    # xr.concat keeps the attrs of the first file only, which silently loses
+    # the ones set by the second run alone - e.g. the `partial_output` and
+    # `error_during_run` flags of a truncated run. Keep both, the first file
+    # winning on the keys they share (as before).
+    out_ds.attrs = {**ds2.attrs, **ds1.attrs}
     if delete_input:
         os.remove(fp1)
         os.remove(fp2)
@@ -1228,7 +1232,10 @@ def compile_run_output(gdirs, path=True, input_filesuffix='',
                   'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
                   'snowfall_off_glacier', 'snowfall_on_glacier',
                   'melt_residual_off_glacier', 'melt_residual_on_glacier',
-                  'snow_bucket', 'residual_mb']
+                  'snow_bucket', 'residual_mb',
+                  # These two are per glacier means, i.e. a regional average
+                  # has to be area-weighted by the user
+                  'temp_on_glacier', 'temp_ref_area']
     for v in hydro_vars:
         allowed_data_vars += [v]
         allowed_data_vars += [v + '_monthly']
@@ -2485,6 +2492,7 @@ TEMP_BIAS_FILE_COLUMNS = [
     'median_temp_bias', 'median_temp_bias_w_area', 'median_temp_bias_w_err',
     'n_glaciers_grouped', 'search_radius', 'median_temp_bias_grouped',
     'median_temp_bias_w_area_grouped', 'median_temp_bias_w_err_grouped',
+    'rgi_version', 'baseline_climate_source',
 ]
 
 
@@ -2500,11 +2508,11 @@ def _read_glacier_statistics_files(glacier_statistics):
 
     Returns
     -------
-    a DataFrame with one row per glacier
+    (DataFrame with one row per glacier, list of the files which were read)
     """
 
     if isinstance(glacier_statistics, pd.DataFrame):
-        return glacier_statistics.copy()
+        return glacier_statistics.copy(), ['<DataFrame>']
 
     files = []
     for item in tolist(glacier_statistics):
@@ -2534,7 +2542,36 @@ def _read_glacier_statistics_files(glacier_statistics):
         if len(df) != n_before:
             log.warning(f'{n_before - len(df)} duplicated glaciers were found '
                         'in the input files and were removed.')
-    return df
+    return df, files
+
+
+def _failed_tasks_hint(df):
+    """What the error columns of a glacier statistics file have to say.
+
+    `glacier_statistics` writes only the data it could gather, i.e. a task
+    which failed for all the glaciers takes its columns down with it. When
+    that happens, the `error_task` / `error_msg` columns are the ones telling
+    us why, so we add them to the error messages below.
+
+    Returns an empty string if the statistics have nothing to say about it.
+    """
+
+    if 'error_task' not in df or len(df) == 0:
+        return ''
+
+    errs = df['error_task'].value_counts()
+    if len(errs) == 0:
+        # No glacier errored - the reason is somewhere else
+        return ''
+
+    task = errs.index[0]
+    out = (f' Note that the `{task}` task failed for {errs.iloc[0]} of the '
+           f'{len(df)} glaciers')
+    if 'error_msg' in df:
+        msgs = df.loc[df['error_task'] == task, 'error_msg'].value_counts()
+        if len(msgs) > 0:
+            out += f' (most frequent error: "{msgs.index[0]}")'
+    return out + ' - this is the more likely problem.'
 
 
 def _infer_grid_spacing(values, name):
@@ -2556,7 +2593,7 @@ def _infer_grid_spacing(values, name):
 def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
                                 max_radius=10, err_fill_quantile=0.9,
                                 rgi_region=None, rgi_subregion=None,
-                                path=None, plot_path=None):
+                                path=None, plot_path=None, summary_path=None):
     """Computes the temperature bias prior file out of a `temp_melt` run.
 
     This is the counterpart of :py:func:`utils.get_temp_bias_dataframe`: it
@@ -2604,13 +2641,22 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     plot_path : str or Path, optional
         base path for the diagnostic plots (without extension). Two files are
         written: `{plot_path}_map.png` and `{plot_path}_hist.png`.
+    summary_path : str or Path, optional
+        where to write the diagnostic summary (a text file). The same content
+        is sent to the log, but the file is what you will still have after the
+        fact. Recommended!
 
     Returns
     -------
     a DataFrame with one row per climate grid point.
     """
 
-    df = _read_glacier_statistics_files(glacier_statistics)
+    # Everything worth reporting is collected in here as we go along
+    diag = {'min_glaciers': min_glaciers, 'max_radius': max_radius,
+            'err_fill_quantile': err_fill_quantile,
+            'rgi_region': rgi_region, 'rgi_subregion': rgi_subregion}
+
+    df, diag['files'] = _read_glacier_statistics_files(glacier_statistics)
 
     if rgi_region is not None:
         regs = ['{:02d}'.format(int(r)) for r in tolist(rgi_region)]
@@ -2626,24 +2672,36 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         raise InvalidWorkflowError(
             f'The glacier statistics file(s) are missing the {missing} '
             'column(s). Are you sure they come from a level 3 run with the '
-            '`temp_melt` mass balance calibration strategy?')
+            '`temp_melt` mass balance calibration strategy?' +
+            _failed_tasks_hint(df))
 
-    n_tot = len(df)
-    area_tot = df['rgi_area_km2'].sum()
+    diag['n_input'] = len(df)
+    diag['area_input'] = df['rgi_area_km2'].sum()
 
     # Sanitize: glaciers without a calibrated temp bias are of no use here
-    odf = df.loc[df['temp_bias'].notnull() &
-                 df['baseline_climate_ref_pix_lon'].notnull() &
-                 df['baseline_climate_ref_pix_lat'].notnull()].copy()
+    no_bias = df['temp_bias'].isnull()
+    no_pix = (df['baseline_climate_ref_pix_lon'].isnull() |
+              df['baseline_climate_ref_pix_lat'].isnull())
+    odf = df.loc[~(no_bias | no_pix)].copy()
     if len(odf) == 0:
         raise InvalidWorkflowError('No glacier with a valid temperature bias '
-                                   'found in the glacier statistics file(s).')
+                                   'found in the glacier statistics file(s).' +
+                                   _failed_tasks_hint(df))
+
+    diag['n_used'] = len(odf)
+    diag['area_used'] = odf['rgi_area_km2'].sum()
+    diag['n_no_bias'] = int(no_bias.sum())
+    diag['n_no_pix'] = int((no_pix & ~no_bias).sum())
+    # Why did the discarded ones fail? The stats file tells us
+    if 'error_task' in df:
+        errs = df.loc[no_bias | no_pix, 'error_task'].value_counts()
+        diag['error_tasks'] = errs.head(5)
 
     log.workflow('compute_temp_bias_dataframe: using {} glaciers out of {} '
                  '({:.1f}% of the area was discarded because the calibration '
-                 'failed).'.format(len(odf), n_tot,
-                                   (1 - odf['rgi_area_km2'].sum() /
-                                    area_tot) * 100))
+                 'failed).'.format(len(odf), diag['n_input'],
+                                   (1 - diag['area_used'] /
+                                    diag['area_input']) * 100))
 
     # The MB error is used as a weight - fill the missing ones
     err = odf['reference_mb_err'].copy()
@@ -2654,6 +2712,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         err = pd.Series(1., index=err.index)
         invalid = pd.Series(False, index=err.index)
     err_fill = err.loc[~invalid].quantile(err_fill_quantile)
+    diag['n_err_filled'] = int(invalid.sum())
+    diag['err_fill'] = err_fill
     if invalid.sum() > 0:
         log.workflow('compute_temp_bias_dataframe: {} glaciers have no valid '
                      'reference MB error - using the {} quantile instead '
@@ -2662,6 +2722,16 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
                                                     err_fill))
         err.loc[invalid] = err_fill
     odf['reference_mb_err'] = err
+
+    # Per region accounting - useful to spot a region which went wrong
+    if 'rgi_region' in df:
+        reg = df['rgi_region'].astype(str).str.zfill(2)
+        diag['per_region'] = pd.DataFrame({
+            'n_input': reg.groupby(reg).size(),
+            'n_used': reg.loc[odf.index].groupby(reg.loc[odf.index]).size(),
+            'area_input': df['rgi_area_km2'].groupby(reg).sum(),
+            'area_used': odf['rgi_area_km2'].groupby(reg.loc[odf.index]).sum(),
+        }).fillna(0)
 
     # The climate grid, inferred from the coordinates the calibration uses
     lon = odf['baseline_climate_ref_pix_lon'].values.astype(float)
@@ -2700,6 +2770,8 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
     # Positional indices of the glaciers in each grid point
     groups = odf.groupby('unique_id').indices
 
+    diag['dlon'], diag['dlat'] = dlon, dlat
+    diag['n_grid_points'] = len(groups)
     log.workflow('compute_temp_bias_dataframe: inferred a {} x {} deg '
                  'lon-lat climate grid, with {} grid points containing '
                  'glaciers.'.format(dlon, dlat, len(groups)))
@@ -2759,28 +2831,169 @@ def compute_temp_bias_dataframe(glacier_statistics, min_glaciers=12,
         rows.append(d)
 
     mdf = pd.DataFrame(rows).set_index('unique_id')
+
+    # Which RGI version was this file made for? The calibration checks it,
+    # since prior files are not interchangeable between RGI versions.
+    # RGI2000-v7.0-G-02-00003 -> 70G, RGI60-01.00001 -> 60
+    ids = odf['rgi_id'] if 'rgi_id' in odf else odf.index
+    versions = {'70' + str(i).split('-')[2] if str(i).startswith('RGI2000-')
+                else str(i).split('-')[0][-2:] for i in ids}
+    version = versions.pop() if len(versions) == 1 else None
+    valid = ['50', '60', '70G', '70C']
+    mdf['rgi_version'] = version if version in valid else None
+
+    # Same for the climate data it was calibrated on
+    sources = (odf['baseline_climate_source'].dropna().unique()
+               if 'baseline_climate_source' in odf else [])
+    mdf['baseline_climate_source'] = sources[0] if len(sources) == 1 else None
+
     mdf = mdf[TEMP_BIAS_FILE_COLUMNS]
     for c in ['lon_id', 'lat_id', 'n_glaciers', 'n_glaciers_grouped',
               'search_radius']:
         mdf[c] = mdf[c].astype(int)
 
-    # Log a summary - this is the sanity check in the job log
-    counts = mdf['search_radius'].value_counts().sort_index()
-    log.workflow('compute_temp_bias_dataframe: number of grid points per '
-                 'search radius: {}'.format(counts.to_dict()))
-    qs = mdf['median_temp_bias_w_err_grouped'].quantile([0.1, 0.5, 0.9])
-    log.workflow('compute_temp_bias_dataframe: quantiles [0.1, 0.5, 0.9] of '
-                 'the final temperature bias: {}'
-                 ''.format(np.round(qs.values, 3).tolist()))
-
     if path is not None:
         mdf.to_csv(path)
+
+    # The summary: to the log, and to a file so that it survives the terminal
+    summary = _temp_bias_summary(mdf, diag, path=path)
+    log.workflow('compute_temp_bias_dataframe summary:\n' + summary)
+    if summary_path is not None:
+        with open(summary_path, 'w') as f:
+            f.write(summary)
 
     if plot_path is not None:
         _plot_temp_bias_dataframe(mdf, odf, plot_path,
                                   dlon=dlon, dlat=dlat, lon0=lon0, lat0=lat0)
 
     return mdf
+
+
+def _temp_bias_summary(mdf, diag, path=None):
+    """The diagnostic summary of `compute_temp_bias_dataframe`, as text."""
+
+    min_glaciers = diag['min_glaciers']
+    lines = []
+    add = lines.append
+
+    def title(t):
+        add('')
+        add(t)
+        add('-' * len(t))
+
+    add('OGGM temperature bias file - diagnostic summary')
+    add('=' * 47)
+    add('Created on {} with OGGM {}'
+        ''.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                  __version__))
+    if path is not None:
+        add(f'Output file: {path}')
+    add('')
+    add('Input files ({}):'.format(len(diag['files'])))
+    for f in diag['files']:
+        add(f'    {f}')
+    add('Parameters:')
+    for k in ['min_glaciers', 'max_radius', 'err_fill_quantile',
+              'rgi_region', 'rgi_subregion']:
+        add('    {:<18s}: {}'.format(k, diag[k]))
+
+    title('Input glaciers')
+    n_in, a_in = diag['n_input'], diag['area_input']
+    n_us, a_us = diag['n_used'], diag['area_used']
+    add('    in the input file(s)     : {:>8d}  ({:>12.1f} km2)'
+        ''.format(n_in, a_in))
+    add('    used for this file       : {:>8d}  ({:>12.1f} km2, {:.2f}% of '
+        'the area)'.format(n_us, a_us, a_us / a_in * 100))
+    add('    MISSING from this file   : {:>8d}  ({:>12.1f} km2, {:.2f}% of '
+        'the area)'.format(n_in - n_us, a_in - a_us,
+                           (1 - a_us / a_in) * 100))
+    add('        no calibrated temp_bias  : {:>8d}'.format(diag['n_no_bias']))
+    add('        no climate ref pixel     : {:>8d}'.format(diag['n_no_pix']))
+    if diag.get('error_tasks') is not None and len(diag['error_tasks']):
+        add('    tasks the missing glaciers failed on:')
+        for k, v in diag['error_tasks'].items():
+            add('        {:>8d}  {}'.format(v, k))
+    add('    with no valid reference MB error (weight set to the {} '
+        'quantile,'.format(diag['err_fill_quantile']))
+    add('        i.e. {:.1f} kg m-2 yr-1) : {:>8d}'
+        ''.format(diag['err_fill'], diag['n_err_filled']))
+
+    if diag.get('per_region') is not None:
+        title('Per RGI region')
+        add('    {:>4s} {:>9s} {:>9s} {:>9s} {:>14s} {:>12s}'
+            ''.format('reg', 'n_input', 'n_used', 'n_missing',
+                      'area_used_km2', 'area_miss_%'))
+        for r, s in diag['per_region'].iterrows():
+            add('    {:>4s} {:>9d} {:>9d} {:>9d} {:>14.1f} {:>12.2f}'
+                ''.format(r, int(s.n_input), int(s.n_used),
+                          int(s.n_input - s.n_used), s.area_used,
+                          (1 - s.area_used / s.area_input) * 100
+                          if s.area_input else 0))
+
+    title('Climate grid')
+    add('    inferred grid spacing    : {} x {} deg'
+        ''.format(diag['dlon'], diag['dlat']))
+    add('    grid points with glaciers: {:>8d}'.format(diag['n_grid_points']))
+    n = mdf['n_glaciers']
+    add('    glaciers per grid point  : min {}, median {:.0f}, mean {:.1f}, '
+        'max {}'.format(n.min(), n.median(), n.mean(), n.max()))
+
+    title('Grouping of the sparse grid points (min_glaciers = {})'
+          ''.format(min_glaciers))
+    grouped = mdf['search_radius'] > 0
+    add('    grid points used as is (radius 0) : {:>8d}  ({:.1f}%)'
+        ''.format(int((~grouped).sum()), (~grouped).mean() * 100))
+    add('    grid points grouped               : {:>8d}  ({:.1f}%)'
+        ''.format(int(grouped.sum()), grouped.mean() * 100))
+    add('    glaciers whose own grid point had to be grouped, i.e. which have')
+    add('        no bias of their own pixel    : {:>8d}  ({:.1f}% of the used '
+        'glaciers)'.format(int(mdf.loc[grouped, 'n_glaciers'].sum()),
+                           mdf.loc[grouped, 'n_glaciers'].sum() / n_us * 100))
+    add('    grid points per search radius:')
+    for k, v in mdf['search_radius'].value_counts().sort_index().items():
+        add('        radius {:>2d} : {:>8d}'.format(k, v))
+    failed = mdf['n_glaciers_grouped'] < min_glaciers
+    add('    grid points STILL below min_glaciers after radius {}: {}'
+        ''.format(diag['max_radius'], int(failed.sum())))
+    if failed.sum():
+        fdf = mdf.loc[failed]
+        add('        they hold {} glaciers, {:.1f} km2 ({:.2f}% of the used '
+            'area); their bias'.format(int(fdf['n_glaciers'].sum()),
+                                       fdf['rgi_area_km2'].sum(),
+                                       fdf['rgi_area_km2'].sum() /
+                                       diag['area_used'] * 100))
+        add('        rests on as few as {} glacier(s) - check the largest '
+            'ones below!'.format(int(fdf['n_glaciers_grouped'].min())))
+        add('        {:>9s} {:>9s} {:>6s} {:>8s} {:>12s} {:>9s}'
+            ''.format('lon', 'lat', 'n_gla', 'n_grpd', 'area_km2', 'bias_K'))
+        top = fdf.sort_values('rgi_area_km2', ascending=False).head(10)
+        for _, s in top.iterrows():
+            add('        {:>9.2f} {:>9.2f} {:>6d} {:>8d} {:>12.1f} {:>9.3f}'
+                ''.format(s.lon_val, s.lat_val, int(s.n_glaciers),
+                          int(s.n_glaciers_grouped), s.rgi_area_km2,
+                          s.median_temp_bias_w_err_grouped))
+
+    title('Final bias values (K)')
+    add('    {:<32s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} {:>7s} '
+        '{:>7s} {:>9s}'.format('column', 'mean', 'std', 'min', '5%', '25%',
+                               '50%', '75%', '95%', 'max', 'w_area*'))
+    for c in ['median_temp_bias', 'median_temp_bias_w_area',
+              'median_temp_bias_w_err', 'median_temp_bias_grouped',
+              'median_temp_bias_w_area_grouped',
+              'median_temp_bias_w_err_grouped']:
+        s = mdf[c]
+        q = s.quantile([0.05, 0.25, 0.5, 0.75, 0.95])
+        add('    {:<32s} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} {:>7.3f} '
+            '{:>7.3f} {:>7.3f} {:>7.3f} {:>9.3f}'
+            ''.format(c, s.mean(), s.std(), s.min(), *q.values, s.max(),
+                      np.average(s, weights=mdf['rgi_area_km2'])))
+    add('    * w_area: mean weighted by the glacier area of the grid point.')
+    add('    The two columns OGGM reads are `median_temp_bias_w_err_grouped`')
+    add('    (per-glacier calibration) and `median_temp_bias_w_area_grouped`')
+    add('    (regional calibration, use_regional_avg=True).')
+    add('')
+
+    return '\n'.join(lines)
 
 
 def _plot_temp_bias_dataframe(mdf, odf, plot_path, dlon=None, dlat=None,
@@ -2891,7 +3104,7 @@ def extend_past_climate_run(past_run_file=None,
 
         # Output data
         years = np.arange(y0_clim, y1_run+1)
-        ods = past_ds.reindex({'time': years})
+        ods = past_ds.reindex({'time': years}).load()
 
         # Time
         ods['hydro_year'].data[:] = years
@@ -2914,11 +3127,53 @@ def extend_past_climate_run(past_run_file=None,
         ods[vn].attrs['description'] += ' (replaced with fixed geom data)'
 
         rho = cfg.PARAMS['ice_density']
+
+        # Everything the loop below needs is materialized here. The frames
+        # returned by `read_csv` have one block per column, which makes
+        # `DataFrame.values` O(n_glaciers) per call - repeating it once per
+        # glacier made this loop quadratic. The xarray attribute lookups are
+        # cheaper but add up as well.
+        rgi_ids = ods.rgi_id.data
+        mb_vals = df.to_numpy()
+
+        def _calving_from_stats(cn):
+            # Same semantics as the previous per-glacier `stats_df.loc`
+            # lookup: a missing column, a missing glacier or a non-finite
+            # value all mean "no calving".
+            if cn not in stats_df.columns:
+                return np.zeros(len(rgi_ids))
+            out = stats_df[cn].reindex(rgi_ids).to_numpy(dtype=float)
+            return np.where(np.isfinite(out), out, 0)
+
+        calv_flux_all = _calving_from_stats('calving_flux') * 1e9
+        calv_rate_all = _calving_from_stats('calving_rate_myr')
+
+        # The `_ext` arrays are written to in place below - `.data` on a
+        # loaded variable returns the underlying array, not a copy.
+        vol_data = ods['volume'].data
+        vol_ext = ods['volume_ext'].data
+        area_ext = ods['area_ext'].data
+        vol_fg_ext = ods['volume_fixed_geom_ext'].data
+        length_ext = ods['length_ext'].data if 'length' in ods.data_vars else None
+        calv_ext = ods['calving_ext'].data if 'calving' in ods.data_vars else None
+        calv_rate_ext = (ods['calving_rate_ext'].data
+                         if 'calving_rate' in ods.data_vars else None)
+        vol_ice_ext = (ods['volume_ice_ext'].data
+                       if 'volume_ice' in ods.data_vars else None)
+        vol_firn_ext = (ods['volume_firn_ext'].data
+                        if 'volume_firn' in ods.data_vars else None)
+        has_bsl = 'volume_bsl' in ods.data_vars
+        has_bwl = 'volume_bwl' in ods.data_vars
+        bsl_data = ods['volume_bsl'].data if has_bsl else None
+        bsl_ext = ods['volume_bsl_ext'].data if has_bsl else None
+        bwl_data = ods['volume_bwl'].data if has_bwl else None
+        bwl_ext = ods['volume_bwl_ext'].data if has_bwl else None
+
         # Loop over the ids
-        for i, rid in enumerate(ods.rgi_id.data):
+        for i in range(len(rgi_ids)):
             # Both do not need to be same length but they need to start same
-            mb_ts = df.values[:, i]
-            orig_vol_ts = ods.volume_ext.data[:, i]
+            mb_ts = mb_vals[:, i]
+            orig_vol_ts = vol_ext[:, i]
             if not (np.isfinite(mb_ts[-1]) and np.isfinite(orig_vol_ts[-1])):
                 # Not a valid glacier
                 continue
@@ -2930,19 +3185,11 @@ def extend_past_climate_run(past_run_file=None,
             fid = np.argmax(np.isfinite(orig_vol_ts))
 
             # Add calving to the mix
-            try:
-                calv_flux = stats_df.loc[rid, 'calving_flux'] * 1e9
-                calv_rate = stats_df.loc[rid, 'calving_rate_myr']
-            except KeyError:
-                calv_flux = 0
-                calv_rate = 0
-            if not np.isfinite(calv_flux):
-                calv_flux = 0
-            if not np.isfinite(calv_rate):
-                calv_rate = 0
+            calv_flux = calv_flux_all[i]
+            calv_rate = calv_rate_all[i]
 
             # Fill area and length which stays constant before date
-            orig_area_ts = ods.area_ext.data[:, i]
+            orig_area_ts = area_ext[:, i]
             orig_area_ts[:fid] = orig_area_ts[fid]
 
             # We convert SMB to volume
@@ -2953,47 +3200,43 @@ def extend_past_climate_run(past_run_file=None,
             mb_vol_ts = mb_vol_ts + orig_vol_ts[fid] - mb_vol_ts[fid-1]
 
             # Now back to netcdf
-            ods.volume_fixed_geom_ext.data[1:, i] = mb_vol_ts
-            ods.volume_ext.data[1:fid, i] = mb_vol_ts[0:fid-1]
-            ods.area_ext.data[:, i] = orig_area_ts
+            vol_fg_ext[1:, i] = mb_vol_ts
+            vol_ext[1:fid, i] = mb_vol_ts[0:fid-1]
+            area_ext[:, i] = orig_area_ts
 
             # Optional variables
-            if 'length' in ods.data_vars:
-                orig_length_ts = ods.length_ext.data[:, i]
+            if length_ext is not None:
+                orig_length_ts = length_ext[:, i]
                 orig_length_ts[:fid] = orig_length_ts[fid]
-                ods.length_ext.data[:, i] = orig_length_ts
+                length_ext[:, i] = orig_length_ts
 
-            if 'calving' in ods.data_vars:
-                orig_calv_ts = ods.calving_ext.data[:, i]
+            if calv_ext is not None:
+                orig_calv_ts = calv_ext[:, i]
                 # The -1 is because the volume change is known at end of year
                 calv_ts = calv_ts + orig_calv_ts[fid] - calv_ts[fid-1]
-                ods.calving_ext.data[1:fid, i] = calv_ts[0:fid-1]
+                calv_ext[1:fid, i] = calv_ts[0:fid-1]
 
-            if 'calving_rate' in ods.data_vars:
-                orig_calv_rate_ts = ods.calving_rate_ext.data[:, i]
+            if calv_rate_ext is not None:
+                orig_calv_rate_ts = calv_rate_ext[:, i]
                 # +1 because calving rate at year 0 is unknown from the dyns model
                 orig_calv_rate_ts[:fid+1] = calv_rate
-                ods.calving_rate_ext.data[:, i] = orig_calv_rate_ts
+                calv_rate_ext[:, i] = orig_calv_rate_ts
 
-            if 'volume_ice' in ods.data_vars:
+            if vol_ice_ext is not None:
                 # we can not calculate a ice volume for the fixed geometry
-                orig_volume_ice_ts = ods.volume_ice_ext.data[:, i]
-                orig_volume_ice_ts[:fid] = np.nan
-                ods.volume_ice_ext.data[:, i] = orig_volume_ice_ts
+                vol_ice_ext[:fid, i] = np.nan
 
-            if 'volume_firn' in ods.data_vars:
+            if vol_firn_ext is not None:
                 # we can not calculate a ice volume for the fixed geometry
-                orig_volume_firn_ts = ods.volume_firn_ext.data[:, i]
-                orig_volume_firn_ts[:fid] = np.nan
-                ods.volume_firn_ext.data[:, i] = orig_volume_firn_ts
+                vol_firn_ext[:fid, i] = np.nan
 
             # Extend vol bsl by assuming that % stays constant
-            if 'volume_bsl' in ods.data_vars:
-                bsl = ods.volume_bsl.data[fid, i] / ods.volume.data[fid, i]
-                ods.volume_bsl_ext.data[:fid, i] = bsl * ods.volume_ext.data[:fid, i]
-            if 'volume_bwl' in ods.data_vars:
-                bwl = ods.volume_bwl.data[fid, i] / ods.volume.data[fid, i]
-                ods.volume_bwl_ext.data[:fid, i] = bwl * ods.volume_ext.data[:fid, i]
+            if has_bsl:
+                bsl = bsl_data[fid, i] / vol_data[fid, i]
+                bsl_ext[:fid, i] = bsl * vol_ext[:fid, i]
+            if has_bwl:
+                bwl = bwl_data[fid, i] / vol_data[fid, i]
+                bwl_ext[:fid, i] = bwl * vol_ext[:fid, i]
 
         # Remove old vars
         for vn in list(ods.data_vars):
@@ -3241,9 +3484,9 @@ def _extract_tars(
 
     Lists are extracted in order (ascending level: materialisation
     first, then deltas), later members overwriting earlier ones, after
-    which the merged directory is finalised by reconsolidating zarr and
-    checking the level manifests. Pass ``finalize=True`` to force
-    finalisation for a single tar layered onto an existing directory.
+    which the merged directory is finalised by checking the level
+    manifests. Pass ``finalize=True`` to force finalisation for a single
+    tar layered onto an existing directory.
 
     Parameters
     ----------
@@ -3490,13 +3733,19 @@ class GlacierDirectory(object):
                                 self.rgi_id[:-3], self.rgi_id)
 
         # Do we have to extract the files first?
-        if (reset or from_tar) and os.path.exists(self.dir):
+        # This has to happen before the settings are read below.
+        if (reset or from_tar) and os.path.exists(self.dir) and not append:
             shutil.rmtree(self.dir)
 
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            _extract_tars(
+                from_tar,
+                self.dir,
+                delete_tar=delete_tar,
+                finalize=True if append else None,
+            )
             write_shp = False
         else:
             mkdir(self.dir)
@@ -3674,30 +3923,6 @@ class GlacierDirectory(object):
                         'to 2019 for workflow reasons.')
             rgi_date = 2019
         self.rgi_date = rgi_date
-        # Root directory
-        self.base_dir = os.path.normpath(base_dir)
-        self.dir = os.path.join(self.base_dir, self.rgi_id[:-6],
-                                self.rgi_id[:-3], self.rgi_id)
-
-        # Do we have to extract the files first?
-        if (reset or from_tar) and os.path.exists(self.dir) and not append:
-            shutil.rmtree(self.dir)
-
-        if from_tar:
-            if from_tar is True:
-                from_tar = self.dir + '.tar.gz'
-            _extract_tars(
-                from_tar,
-                self.dir,
-                delete_tar=delete_tar,
-                finalize=True if append else None,
-            )
-            write_shp = False
-        else:
-            mkdir(self.dir)
-
-        if not os.path.isdir(self.dir):
-            raise RuntimeError('GlacierDirectory %s does not exist!' % self.dir)
 
         # logging file
         self.logfile = os.path.join(self.dir, 'log.txt')
@@ -3815,7 +4040,7 @@ class GlacierDirectory(object):
         self.write_shapefile(towrite, 'outlines')
 
         # Also transform the intersects if necessary
-        gdf = cfg.PARAMS['intersects_gdf']
+        gdf = cfg.INTERSECTS_GDF
         if len(gdf) > 0:
             try:
                 gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
@@ -3976,12 +4201,11 @@ class GlacierDirectory(object):
                     fp += '.gz'
         if os.path.exists(fp):
             return True
-        # check if data exists as a group in zarr store
-        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
-        group = f"{filename}{filesuffix}"
-        if os.path.exists(os.path.join(zarr_fp, group)):
-            return True
-        return False
+
+        # check if data exists as a group in the npz store
+        return os.path.exists(
+            self.get_store_filepath(filename, filesuffix=filesuffix)
+        )
 
     def add_to_diagnostics(self, key, value):
         """Write a key, value pair to the gdir's runtime diagnostics.
@@ -4016,7 +4240,7 @@ class GlacierDirectory(object):
             out = json.load(f)
         return out
 
-    def read_pickle(self, filename, use_compression=None, filesuffix=''):
+    def _read_pickle(self, filename, use_compression=None, filesuffix=''):
         """Reads a pickle located in the directory.
 
         Parameters
@@ -4062,48 +4286,51 @@ class GlacierDirectory(object):
 
         return out
 
-    def read_zarr(
-        self, filename: str, filesuffix: str = "", chunks:dict=None,engine:str="zarr", consolidated:bool=True, decode_cf:bool=True, *kwargs
-    ) -> xr.DataTree:
-        """Reads a zarr file located in the glacier directory.
+    def get_store_filepath(self, filename: str, filesuffix: str = "") -> str:
+        """Absolute path to a group of the npz data store.
 
-        The location of the zarr store for a given RGI-ID is invariant.
-        The zarr store is expected to have a group named `filename`
-        (without suffix).
+        Each group of the store is one npz file, named after the
+        filename and its suffix, so that a group can be written or
+        replaced without touching the rest of the store.
 
         Parameters
         ----------
-        filename : str or None
-            File name (must be listed in cfg.BASENAMES). If `None`, the
-            entire zarr store is read.
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
         filesuffix : str, optional
             Append a suffix to the filename (useful for experiments).
-        **kwargs
-            Additional keyword arguments to pass to xarray.open_zarr().
 
         Returns
         -------
-        xr.DataTree
-            An xarray.DataTree read from the zarr store.
+        str
+            The absolute path to the group's npz file.
         """
-        if chunks is None:
-            chunks = {}
-        filesuffix = filesuffix or ''
-        fp = self.get_filepath("data_store")
-        if filename == "data_store":
-            group = None
-        else:
-            group = f"{filename}{filesuffix}"
-        out = xr.open_datatree(
-            fp.replace(".pkl", ".zarr"),
-            group=group,
-            chunks=chunks,
-            engine=engine,
-            consolidated=consolidated,
-            decode_cf=decode_cf,
-            *kwargs)
+        return os.path.join(
+            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
+        )
 
-        return out
+    def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
+        """Reads an npz file located in the directory.
+
+        Parameters
+        ----------
+        filename : str
+            file name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to numpy.load().
+
+        Returns
+        -------
+        An object read from the npz file
+        """
+        fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+        with np.load(fp, allow_pickle=False, **kwargs) as data:
+            meta = json.loads(str(data["__meta__"]))
+            arrays = {k: data[k] for k in data.files if k != "__meta__"}
+
+        return transcoder.decode_npz(arrays, meta, filename)
 
     def open_group(
         self, filename: str, filesuffix: str = "", **xr_kwargs
@@ -4220,193 +4447,47 @@ class GlacierDirectory(object):
             os.remove(fp)
 
     def read_store(
-        self, filename: str, filesuffix: str = "", *kwargs
+        self, filename: str, filesuffix: str = "", **kwargs
     ) -> dict | list:
         """Reads a data store located in the glacier directory.
 
-        Supports pickle and zarr. The location of a zarr store for a
-        given RGI-ID is invariant. A zarr store is expected to have a
-        group named `filename` (without suffix). If the zarr store is
-        not found, automatically falls back to reading a pickle file
-        with the same name (and suffix).
-
-        For backwards compatibility reasons, the output of this method
-        is coerced imto the data structures expected from older pickle
-        files, e.g. all datatrees are converted to flattened
-        dictionaries.
+        Supports npz and pickle. Each group of the npz store is one file
+        under ``data_store``, named after the filename and its suffix.
+        If the group is not found, falls back to reading a pickle file
+        with the same name and suffix.
 
         Parameters
         ----------
-        filename : str or None
-            File name (must be listed in cfg.BASENAMES). If `None`, the
-            entire zarr store is read.
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
         filesuffix : str, optional
             Append a suffix to the filename (useful for experiments).
         **kwargs
-            Additional keyword arguments to pass to xarray.open_zarr().
+            Additional keyword arguments to pass to ``read_npz()``.
 
         Returns
         -------
         list or dict
-            A list or dictionary of data read from the zarr store.
+            The data read from the store, in the structures the older
+            pickle files held.
         """
 
         try:
-            out = self.read_zarr(
-                filename=filename, filesuffix=filesuffix, *kwargs
+            return self.read_npz(
+                filename=filename, filesuffix=filesuffix, **kwargs
             )
-            out: list | dict = self._validate_store(
-                data_tree=out, group=filename
-            )
-        except (
-            FileNotFoundError,
-            KeyError,
-            ValueError,
-        ):  # fallback to pickle if zarr not found
+        except FileNotFoundError:  # fall back to pickle if npz not found
             fp = self.get_filepath(filename, filesuffix=filesuffix)
             if os.path.exists(fp):
-                _warn_zarr_fallback()
+                _warn_store_fallback()
             else:
-                raise FileNotFoundError(
-                    f"No zarr or pickle found for {fp}"
-                )
+                raise FileNotFoundError(f"No npz or pickle found for {fp}")
 
-            out: list | dict = self.read_pickle(
+            return self._read_pickle(
                 filename=filename, use_compression=None, filesuffix=filesuffix
             )
 
-        return out
-
-    def _validate_store(self, data_tree: xr.DataTree, group: str = "") -> dict:
-        """Ensure data structures in a data tree are OGGM-compatible.
-
-        Some data structures used by the old pickle infrastructure
-        cannot be directly written to zarr via xarray. This method
-        ensures data structures within a data tree are compatible with
-        the types expected from older pickle files.
-
-        Parameters
-        ----------
-        data_tree : xarray.DataTree
-            The DataTree to reconstruct into a pickle-compatible
-            dictionary.
-        group : str, optional
-            The group within the zarr store that was read. This may be
-            necessary because the `name` attribute can be missing
-            depending on how the zarr store was read.
-
-        Returns
-        -------
-        dict | list
-            Either coerces a datatree into the dictionary, or
-            returns a list of OGGM objects to match the structures
-            expected from older pickle files.
-        """
-
-        if group:
-            name = group
-        elif data_tree.name:
-            name = data_tree.name
-        else:
-            name = ""
-
-        if "downstream_line" in name:
-            # CAUTION: the downstream_line datatree contains a variable
-            # named downstream_line. Don't mix these up!
-            data_tree = geozarr.get_dict_from_datatree(data_tree)
-            if "downstream_line" in data_tree.keys():
-                data_tree["downstream_line"] = geozarr._validate_linestring(
-                    data_tree["downstream_line"]
-            )
-            if "full_line" in data_tree.keys():
-                data_tree["full_line"] = geozarr._validate_linestring(
-                    data_tree["full_line"]
-                )
-            else:
-                # avoid KeyError when storing as empty child which gets
-                # skipped
-                data_tree["full_line"] = None
-            return data_tree
-        elif "geometries" in name:
-            return geozarr.get_geometries_from_datatree(data_tree)
-        elif "model_flowline" in name:
-            child_keys = list(data_tree.children.keys())
-            if child_keys and all(k.isdigit() for k in child_keys):
-                sorted_keys = sorted(child_keys, key=int)
-                fls = [
-                    geozarr.get_flowline_from_datatree(data_tree[k])
-                    for k in sorted_keys
-                ]
-                # Restore flows_to connections
-                for i, k in enumerate(sorted_keys):
-                    idx_da = geozarr.get_datatree_value(
-                        data_tree[k], "_flows_to_list_idx"
-                    )
-                    if idx_da is not None:
-                        idx = int(idx_da)
-                        if 0 <= idx < len(fls):
-                            fls[i].set_flows_to(fls[idx])
-                return fls
-            # Legacy single-flowline flat structure
-            flowline = geozarr.get_flowline_from_datatree(data_tree=data_tree)
-            return [flowline]
-        elif "centerlines" in name and "inversion" not in name:
-            child_keys = list(data_tree.children.keys())
-            if child_keys and all(k.isdigit() for k in child_keys):
-                sorted_keys = sorted(child_keys, key=int)
-                fls = [
-                    geozarr.get_centerline_from_datatree(data_tree[k])
-                    for k in sorted_keys
-                ]
-                for i, k in enumerate(sorted_keys):
-                    idx_da = geozarr.get_datatree_value(
-                        data_tree[k], "_flows_to_list_idx"
-                    )
-                    if idx_da is not None:
-                        idx = int(idx_da)
-                        if 0 <= idx < len(fls):
-                            fls[i].set_flows_to(fls[idx])
-                return fls
-            # Single centerline (legacy flat)
-            return [geozarr.get_centerline_from_datatree(data_tree=data_tree)]
-        elif "inversion_flowlines" in name:
-            child_keys = list(data_tree.children.keys())
-            if child_keys and all(k.isdigit() for k in child_keys):
-                sorted_keys = sorted(child_keys, key=int)
-                fls = [
-                    geozarr.get_centerline_from_datatree(data_tree[k])
-                    for k in sorted_keys
-                ]
-                # Restore flows_to connections
-                for i, k in enumerate(sorted_keys):
-                    idx_da = geozarr.get_datatree_value(
-                        data_tree[k], "_flows_to_list_idx"
-                    )
-                    if idx_da is not None:
-                        idx = int(idx_da)
-                        if 0 <= idx < len(fls):
-                            fls[i].set_flows_to(fls[idx])
-                return fls
-            # Legacy single-flowline flat structure
-            centerline = geozarr.get_centerline_from_datatree(
-                data_tree=data_tree
-            )
-            return [centerline]
-        elif "inversion_" in name:
-            child_keys = list(data_tree.children.keys())
-            if child_keys and all(k.isdigit() for k in child_keys):
-                # Multi-flowline format w. numbered children, one per flowline
-                return [
-                    geozarr.get_dict_from_datatree(data_tree[k])
-                    for k in sorted(child_keys, key=int)
-                ]
-            # single flowline
-            data_tree = geozarr.get_dict_from_datatree(data_tree)
-            return [data_tree]
-
-        return geozarr.get_dict_from_datatree(data_tree)
-
-    def write_pickle(self, var, filename, use_compression=None, filesuffix=''):
+    def _write_pickle(self, var, filename, use_compression=None, filesuffix=''):
         """ Writes a variable to a pickle on disk.
 
         Parameters
@@ -4416,19 +4497,11 @@ class GlacierDirectory(object):
         filename : str
             file name (must be listed in cfg.BASENAME)
         use_compression : bool
-            whether or not the file ws compressed. Default is to use
+            whether or not the file is compressed. Default is to use
             cfg.PARAMS['use_compression'] for this (recommended)
         filesuffix : str
             append a suffix to the filename (useful for experiments).
         """
-
-        # TODO: disable warning as it tanks performance
-        # warnings.warn(
-        #     "gdir.write_pickle is deprecated and will be replaced "
-        #     "by gdir.write_store in a future OGGM release.",
-        #     PendingDeprecationWarning,
-        #     stacklevel=2,
-        # )
 
         filesuffix = filesuffix or ''  # avoid issues with None
         use_comp = (use_compression if use_compression is not None
@@ -4436,100 +4509,51 @@ class GlacierDirectory(object):
         _open = gzip.open if use_comp else open
         fp = self.get_filepath(filename, filesuffix=filesuffix)
 
-        # avoid serving stale data from a zarr if a user fell back to
+        # avoid serving stale data from the store if a user fell back to
         # using a pickle.
-        group = f"{filename}{filesuffix}"
-        zarr_fp = os.path.join(os.path.dirname(fp), "data_store.zarr")
-        group_dir = os.path.join(zarr_fp, group)
-        if os.path.exists(group_dir):
-            shutil.rmtree(group_dir)
-            try:
-                zarr.consolidate_metadata(zarr_fp)
-            except Exception:
-                pass
+        store_fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+        if os.path.exists(store_fp):
+            os.remove(store_fp)
 
         with _open(fp, "wb") as f:
             pickle.dump(var, f, protocol=4)
 
-    def write_zarr(
-        self,
-        data_tree: xr.DataTree,
-        filename: str = "",
-        filesuffix: str = "",
-        overwrite: bool = False,
-        zarr_format: int = 2,
-        encoding: dict = None,
+    def write_npz(
+        self, var: object, filename: str, filesuffix: str = "", **kwargs
     ) -> None:
-        """Write a datatree to Zarr file on disk.
-
-        `read_store()` is set up to use the default filename of
-        `data_store` and an empty suffix. Data written to a different
-        location, may not be accessible.
+        """Writes a variable to an npz file on disk.
 
         Parameters
         ----------
-        data_tree : xarray.DataTree
-            The datatree to write to Zarr. This must be Zarr-compatible,
-            so it cannot contain arbitrary Python objects. Use a helper
-            function or `write_store` instead.
-        filename : str, default empty
-            Name of a data store, which must be in cfg.BASENAMES. Note
-            that OGGM will expect data to be stored in `data_store`.
-        filesuffix : str, optional
-            Append a suffix to the filename.
-        overwrite : bool, default True
-            Whether to overwrite existing Zarr contents in the target
-            location.
-        zarr_format : int, default 2
-            Zarr format version to use (2 or 3).
-        encoding : dict, optional
-            A dictionary specifying encoding options for the Zarr output.
+        var : object
+            The variable to write to disk
+        filename : str
+            File name (must be listed in cfg.BASENAME)
+        filesuffix : str
+            Append a suffix to the filename (useful for experiments).
+        **kwargs
+            Additional keyword arguments to pass to numpy.savez().
         """
-
-        fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
-
-        if not fp.endswith(".zarr"):
-            fp = f"{fp}.zarr"
-
-        if cfg.PARAMS["zarr_format"] == 3 and zarr_format == 2:
-            zarr_format = 3
-        elif zarr_format != 2:
-            raise ValueError(
-                f"Invalid zarr_format {zarr_format}. Must be 2 or 3. "
-                "Can be set in params.cfg under `zarr_format`."
-            )
-
-        if overwrite:
-            data_tree.to_zarr(
-                fp,
-                mode="w",
-                consolidated=True,
-                zarr_format=zarr_format,
-                encoding=encoding,
-            )
-        else:
-            """
-            This writes each node's dataset independently to avoid
-            xarray's cross-group alignment validation (different groups
-            with the same dimension names but different sizes).
-            """
-
-            for node in data_tree.subtree:
-                node_ds = node.ds
-                if node_ds is None:
-                    continue
-                if len(node_ds.data_vars) == 0 and len(node_ds.coords) == 0:
-                    continue
-                node_path = node.path.lstrip("/") or None
-                node_ds.to_zarr(
-                    fp,
-                    group=node_path,
-                    mode="a",
-                    zarr_format=zarr_format,
-                    encoding=encoding,
-                    consolidated=False,
+        group = f"{filename}{filesuffix}"
+        arrays, meta = transcoder.encode_npz(var, group)
+        fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+        mkdir(os.path.dirname(fp))
+        # Write beside the target and move it into place, so that an
+        # interrupted write cannot leave a half-written group behind.
+        tmp_fp = f"{fp}.tmp{os.getpid()}"
+        try:
+            with open(tmp_fp, "wb") as f:
+                np.savez(
+                    f,
+                    **arrays,
+                    __meta__=json.dumps(meta),
+                    allow_pickle=False,
+                    **kwargs,
                 )
-            zarr.consolidate_metadata(fp)
+            os.replace(tmp_fp, fp)
+        finally:
+            if os.path.exists(tmp_fp):
+                os.remove(tmp_fp)
 
     def write_store(
         self,
@@ -4543,95 +4567,44 @@ class GlacierDirectory(object):
 
         Parameters
         ----------
-        data : xr.DataTree | object
+        data : object
             Data or variable to write to disk
         filename : str
             File name (must be listed in cfg.BASENAME)
         filesuffix : str
             Append a suffix to the filename (useful for experiments).
-        use_pickle : bool, default True
+        use_pickle : bool, default False
             Whether to use pickle for storage. If False, attempts to
-            write to zarr, and falls back to pickle if this fails.
+            write to npz, and falls back to pickle if this fails.
         **kwargs
             Additional keyword arguments to pass either to
-            ``write_zarr()`` or ``write_pickle()``.
+            ``write_npz()`` or ``write_pickle()``.
         """
 
         filesuffix = filesuffix or ''
         if not use_pickle:
             try:
-                group = f"{filename}{filesuffix}"
-                # Save original data in case of fallback to pickle
-                original_data = data
-                if not isinstance(data, xr.DataTree):
-                    # Distinguish between supported and unsupported list types
-                    if (
-                        isinstance(data, list)
-                        and data
-                        and not isinstance(data[0], dict)
-                    ):
-                        from oggm import Centerline
-                        from oggm.core.flowline import Flowline
-                        _supported = (Centerline, Flowline)
-                        _supported_groups = (
-                            "inversion_flowlines",
-                            "model_flowlines",
-                            "centerlines",
-                        )
-                        is_supported_flowline_list = all(
-                            isinstance(item, _supported) for item in data
-                        ) and any(kw in group for kw in _supported_groups)
-                        if not is_supported_flowline_list:
-                            raise NotImplementedError(
-                                f"Cannot auto-convert list of "
-                                f"{type(data[0]).__name__} to zarr. "
-                                "Falling back to pickle."
-                            )
-                    data = geozarr.convert_pickles_to_datatree(
-                        {f"{group}": data}
-                    )
-
-                zarr_fp = self.get_filepath("data_store").replace(
-                    ".pkl", ".zarr"
-                )
-                group_dir = os.path.join(zarr_fp, group)
-                """Use shutil to avoid creating mixed-format metadata.
-                (zarr.open_group defaults to v3 which adds a zarr.json
-                alongside the v2 .zgroup file).
-                """
-                if os.path.exists(group_dir):
-                    shutil.rmtree(group_dir)
-                self.write_zarr(
-                    data_tree=data,
+                self.write_npz(
+                    var=data,
                     filename=filename,
                     filesuffix=filesuffix,
-                    overwrite=False,
                     **kwargs,
                 )
             except Exception as e:
-                """Deal with failed writes.
-                Clean up interrupted group creation and prevent
-                corruption from subsequent writes.
-                """
-                if "group_dir" in locals() and os.path.exists(group_dir):
-                    shutil.rmtree(group_dir)
-                # Re-consolidate metadata so valid groups already in
-                # store stay readable after failed write.
-                if "zarr_fp" in locals() and os.path.exists(zarr_fp):
-                    try:
-                        zarr.consolidate_metadata(zarr_fp)
-                    except Exception:
-                        pass
+                # Data that cannot be represented still belongs on disk,
+                # so keep the pickle as a fallback.
+                fp = self.get_store_filepath(filename, filesuffix=filesuffix)
+                if os.path.exists(fp):
+                    os.remove(fp)
                 warnings.warn(
-                    f"{e} Failed to write zarr store, falling back to pickle.",
+                    f"{e} Failed to write npz store, falling back to pickle.",
                     RuntimeWarning,
                 )
-                # Use original_data so pickle doesn't contain a DataTree
-                self.write_pickle(
-                    var=original_data, filename=filename, filesuffix=filesuffix
+                self._write_pickle(
+                    var=data, filename=filename, filesuffix=filesuffix
                 )
         else:
-            self.write_pickle(
+            self._write_pickle(
                 var=data, filename=filename, filesuffix=filesuffix, **kwargs
             )
 
@@ -5697,17 +5670,11 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log']
+        paths = ('*' + p + '*' for p in paths)
+        # One npz per store group, each named after its BASENAME, so the
+        # patterns select the store's files along with the rest.
         shutil.copytree(gdir.dir, new_dir,
-                        ignore=include_patterns(*('*' + p + '*'
-                                                  for p in paths)))
-        """
-        include_patterns never ignores directories, so data_store.zarr
-        is copied without internal files, resulting in empty store.
-        Here we replace it with the full store, then keep only the groups
-        matching `paths` (the zarr equivalent of the patterns above).
-        """
-        _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
-        _keep_zarr_groups(new_dir, "data_store.zarr", groups_to_keep=paths)
+                        ignore=include_patterns(*paths))
     elif setup == 'inversion':
         paths = ['inversion_params', 'downstream_line', 'outlines',
                  'inversion_flowlines', 'glacier_grid', 'diagnostics',
@@ -5716,109 +5683,19 @@ def copy_to_basedir(gdir, base_dir=None, setup='run'):
         paths = ('*' + p + '*' for p in paths)
         shutil.copytree(gdir.dir, new_dir,
                         ignore=include_patterns(*paths))
-        _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
     elif setup == 'run/spinup':
         paths = ['model_flowlines', 'inversion_params', 'outlines',
                  'settings', 'climate_historical', 'glacier_grid',
                  'gcm_data', 'diagnostics', 'log', 'model_run',
                  'model_diagnostics', 'model_geometry']
-        shutil.copytree(
-            gdir.dir,
-            new_dir,
-            ignore=include_patterns(*("*" + p + "*" for p in paths)),
-        )
-        _replace_zarr_store(gdir.dir, new_dir, "data_store.zarr")
-        _keep_zarr_groups(new_dir, "data_store.zarr", groups_to_keep=paths)
+        paths = ('*' + p + '*' for p in paths)
+        shutil.copytree(gdir.dir, new_dir,
+                        ignore=include_patterns(*paths))
     elif setup == 'all':
         shutil.copytree(gdir.dir, new_dir)
     else:
         raise ValueError('setup not understood: {}'.format(setup))
     return GlacierDirectory(gdir.rgi_id, base_dir=base_dir)
-
-
-def _remove_zarr_store(new_dir: str, store: str = "data_store.zarr") -> str:
-    """Remove a zarr store if it exists.
-
-    Parameters
-    ----------
-    new_dir : str
-        The directory where the zarr store is located.
-    store : str, default data_store.zarr
-        The name of the zarr store to remove.
-
-    Returns
-    -------
-    str
-        The path to the zarr store used for new writes.
-    """
-    zarr_store = os.path.join(new_dir, store)
-    if os.path.exists(zarr_store):
-        shutil.rmtree(zarr_store)
-    return zarr_store
-
-
-def _replace_zarr_store(src_dir: str, new_dir: str,
-                        store: str = "data_store.zarr") -> None:
-    """Replace an incomplete zarr store copy with a full copy from source.
-
-    ``include_patterns`` in ``copy_to_basedir`` copies the zarr store
-    directory hierarchy but not the data chunk files inside it (because
-    chunk files don't match the include patterns).  This function removes
-    that empty shell and copies the full store from *src_dir*.
-
-    Parameters
-    ----------
-    src_dir : str
-        The source glacier directory containing the zarr store.
-    new_dir : str
-        The destination glacier directory where the zarr store was copied.
-    store : str, default "data_store.zarr"
-        Name of the zarr store subdirectory.
-    """
-    dst_zarr = _remove_zarr_store(new_dir, store)
-    src_zarr = os.path.join(src_dir, store)
-    if os.path.exists(src_zarr):
-        shutil.copytree(src_zarr, dst_zarr)
-
-
-def _keep_zarr_groups(
-    new_dir: str, store: str = "data_store.zarr", groups_to_keep: list = None
-) -> None:
-    """Remove zarr groups from a store that are not in groups_to_keep.
-
-    A group name matches a keep pattern if it equals the pattern or starts
-    with ``pattern + '_'`` (to handle filesuffix variants).
-
-    Parameters
-    ----------
-    new_dir : str
-        The directory containing the zarr store.
-    store : str, default "data_store.zarr"
-        Name of the zarr store subdirectory.
-    groups_to_keep : list of str, optional
-        Group name prefixes to retain. All other groups are removed.
-        If None or empty, nothing is removed.
-    """
-    if not groups_to_keep:
-        return
-    zarr_store = os.path.join(new_dir, store)
-    if not os.path.exists(zarr_store):
-        return
-    removed = False
-    for name in list(os.listdir(zarr_store)):
-        group_path = os.path.join(zarr_store, name)
-        if not os.path.isdir(group_path):
-            continue
-        if not any(
-            name == kw or name.startswith(kw + "_") for kw in groups_to_keep
-        ):
-            shutil.rmtree(group_path)
-            removed = True
-    if removed:
-        try:
-            zarr.consolidate_metadata(zarr_store)
-        except Exception:
-            pass
 
 
 def initialize_merged_gdir(main, tribs=[], glcdf=None,
@@ -5964,18 +5841,18 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
-def dataset_id_from_tag(dataset_tag: str, border: int, rgi_version: str) -> str:
-    """The dataset_id shared by all levels of one logical dataset.
+def artefact_id_from_tag(artefact_tag: str, border: int, rgi_version: str) -> str:
+    """The artefact_id shared by all levels of one logical artefact.
 
     Derived from an explicit tag, never from a source URL. One logical
-    dataset can be served from several URLs (e.g. the reference v1.6
-    L0-L2 and L3-L5 trees). This is used for identifying datasets
+    artefact can be served from several URLs (e.g. the reference v1.6
+    L0-L2 and L3-L5 trees). This is used for identifying artefacts
     internally and is not meant to be human-readable.
 
     Parameters
     ----------
-    dataset_tag : str
-        A short string identifying the dataset. This is usually
+    artefact_tag : str
+        A short string identifying the artefact. This is usually
         generated from the base URL e.g. "oggm_v1.6_2025.6_elev_bands_w5e5".
     border : int
         Map border number.
@@ -5985,9 +5862,9 @@ def dataset_id_from_tag(dataset_tag: str, border: int, rgi_version: str) -> str:
     Returns
     -------
     str
-        A sha1 hex digest of the dataset tag, border, and RGI version.
+        A sha1 hex digest of the artefact tag, border, and RGI version.
     """
-    key = f"{dataset_tag}|{border}|{rgi_version}"
+    key = f"{artefact_tag}|{border}|{rgi_version}"
     return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
@@ -5999,11 +5876,11 @@ def _check_level_compat(manifests: list):
     not contiguous.
     """
 
-    dataset_ids = {m["dataset_id"] for m in manifests}
-    if len(dataset_ids) > 1:
+    artefact_ids = {m["artefact_id"] for m in manifests}
+    if len(artefact_ids) > 1:
         raise InvalidWorkflowError(
-            "Layered prepro levels come from different datasets: "
-            f"{sorted(dataset_ids)}"
+            "Layered prepro levels come from different artefacts: "
+            f"{sorted(artefact_ids)}"
         )
     format_versions = {m.get("format_version", 1) for m in manifests}
     if len(format_versions) > 1:
@@ -6032,21 +5909,8 @@ def _check_level_compat(manifests: list):
 def _finalize_merged_dir(dirpath: str):
     """Make a directory whole again after layering level tars into it.
 
-    Re-consolidates the zarr store metadata as deltas never ship the
-    root consolidated metadata, which would be stale. Checks that the
-    applied level manifests are compatible.
+    Checks that the applied level manifests are compatible.
     """
-    store = os.path.join(dirpath, os.path.basename(cfg.BASENAMES["data_store"]))
-    if os.path.isdir(store):
-        # A store assembled purely from delta group subtrees has no root metadata
-        # since deltas never ship it
-        if not (
-            os.path.isfile(os.path.join(store, ".zgroup"))
-            or os.path.isfile(os.path.join(store, "zarr.json"))
-        ):
-            fmt = 3 if glob.glob(os.path.join(store, "*", "zarr.json")) else 2
-            zarr.open_group(store, mode="a", zarr_format=fmt)
-        zarr.consolidate_metadata(store)
     manifests = []
     for fp in sorted(glob.glob(os.path.join(dirpath, "L*.manifest.json"))):
         with open(fp) as f:
@@ -6058,13 +5922,10 @@ def _finalize_merged_dir(dirpath: str):
 def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     """Content hashes of a glacier directory, for computing level deltas.
 
-    Maps each file path (relative to the directory, posix separators) to
-    a sha256 hex digest of its content. The ``data_store.zarr`` store is
-    hashed per top-level group (one key ``data_store.zarr/<group>`` per
-    group) so a group added or rewritten by a prepro level is detected
-    as a single unit. The store's root-level metadata files (e.g. the
-    consolidated ``.zmetadata``) are ignored: they are regenerated after
-    delta layering and would otherwise churn in every snapshot diff.
+    Maps each relative file path to a sha256 hex digest of its content.
+    Each group of the data store is one npz file, so a group added or
+    rewritten by a prepro level shows up as its own key, e.g.
+    ``data_store/inversion_flowlines.npz``.
 
     Parameters
     ----------
@@ -6074,36 +5935,19 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     Returns
     -------
     dict
-        Mapping of relative path (or ``data_store.zarr/<group>``) to
-        sha256 hex digest.
+        Mapping of relative file path to sha256 hex digest.
     """
+
     root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
-    store_name = os.path.basename(cfg.BASENAMES["data_store"])
     state = {}
-    group_hashes = {}
-    for cur, dirs, files in os.walk(root):
-        # deterministic traversal so per-group digests are stable
-        dirs.sort()
-        for fname in sorted(files):
+    for cur, _, files in os.walk(root):
+        for fname in files:
+            if regexp.search(r"\.tmp\d+$", fname):
+                continue  # remove partial write_npz outputs
             fpath = os.path.join(cur, fname)
             rel = os.path.relpath(fpath, root).replace(os.sep, "/")
-            parts = rel.split("/")
-            if parts[0] == store_name:
-                if len(parts) == 2:
-                    # root store metadata (.zmetadata, .zgroup, zarr.json)
-                    continue
-                hasher = group_hashes.setdefault(parts[1], hashlib.sha256())
-                # include the in-store path so renames are detected
-                hasher.update(rel.encode("utf-8"))
-            else:
-                hasher = hashlib.sha256()
             with open(fpath, "rb") as f:
-                for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                    hasher.update(chunk)
-            if parts[0] != store_name:
-                state[rel] = hasher.hexdigest()
-    for group, hasher in group_hashes.items():
-        state[f"{store_name}/{group}"] = hasher.hexdigest()
+                state[rel] = hashlib.file_digest(f, "sha256").hexdigest()
     return state
 
 
@@ -6112,8 +5956,8 @@ def write_level_manifest(
     level: int,
     prev_state: dict,
     requires: list[int],
-    dataset_tag: str,
-    dataset_id: str = "",
+    artefact_tag: str,
+    artefact_id: str = "",
     includes_levels: list[int] | None = None,
     kind: str = "delta",
     border: int | None = None,
@@ -6140,21 +5984,24 @@ def write_level_manifest(
     requires : list[int]
         Levels that must be present below this one. Empty for materialisations
         and standalone bundles.
-    dataset_tag : str
-        Tag identifying the dataset, e.g.
+    artefact_tag : str
+        Tag identifying the artefact, e.g.
         "oggm_v1.6_2025.6_elev_bands_w5e5".
-    dataset_id : str
-        Identifier shared by all levels of one logical dataset. Must not
-        be derived from a source URL: one dataset can be served from
+    artefact_id : str
+        Identifier shared by all levels of one logical artefact. Must not
+        be derived from a source URL: one artefact can be served from
         several URLs.
     includes_levels : list[int] | None, optional
         Levels whose data this artifact contains. Defaults to
         ``[level]`` (a plain delta). A materialisation lists all
         included levels.
     kind : str, default ``'delta'``
-        The kind of manifest. Must be either ``'delta'`` (incremental
-        changes only) or ``'standalone'`` (self-sufficient subset, e.g.
-        the L5 run bundle).
+        The kind of manifest: ``'delta'`` (incremental changes only),
+        ``'materialisation'`` (cumulative artefact holding every level in
+        ``includes_levels``, e.g. L3) or ``'standalone'`` (self-sufficient
+        subset, e.g. the L5 run bundle). A ``'delta'`` whose
+        ``includes_levels`` spans several levels and whose ``requires`` is
+        empty is written as a ``'materialisation'``.
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
@@ -6173,15 +6020,29 @@ def write_level_manifest(
         paths, including the manifest itself, passed to
         ``gdir_to_tar(include=...)``.
     """
-    if not dataset_id:
-        dataset_id = dataset_id_from_tag(
-            dataset_tag,
+    if not artefact_id:
+        artefact_id = artefact_id_from_tag(
+            artefact_tag,
             border or cfg.PARAMS["border"],
             rgi_version or cfg.PARAMS["rgi_version"],
         )
-    if kind not in ("delta", "standalone"):
+    kinds = ("delta", "materialisation", "standalone")
+    if kind not in kinds:
         raise ValueError(
-            f"Invalid manifest kind: {kind!r}. Must be 'delta' or 'standalone'."
+            f"Invalid manifest kind: {kind!r}. Must be one of {kinds}."
+        )
+    includes_levels = sorted(
+        int(l)
+        for l in (includes_levels if includes_levels is not None else [level])
+    )
+    # A cumulative artefact spanning several levels needs nothing below it
+    is_materialisation = not requires and len(includes_levels) > 1
+    if kind == "delta" and is_materialisation:
+        kind = "materialisation"
+    elif kind == "materialisation" and not is_materialisation:
+        raise ValueError(
+            "A materialisation must include several levels and require none, "
+            f"got includes_levels={includes_levels}, requires={list(requires)}."
         )
     root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
     rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
@@ -6192,7 +6053,7 @@ def write_level_manifest(
 
     store_name = os.path.basename(cfg.BASENAMES["data_store"])
     state = snapshot_gdir_state(root)
-    added, updated, zarr_groups = [], [], []
+    added, updated, data_store = [], [], []
     for rel, digest in sorted(state.items()):
         if regexp.match(r"^L\d+\.manifest\.json$", rel):
             continue
@@ -6204,7 +6065,7 @@ def write_level_manifest(
         if changed_kind is None:
             continue
         if rel.startswith(store_name + "/"):
-            zarr_groups.append(rel[len(store_name) + 1 :])
+            data_store.append(rel[len(store_name) + 1 :])
         elif changed_kind == "added":
             added.append(rel)
         else:
@@ -6218,20 +6079,15 @@ def write_level_manifest(
         "rgi_id": rgi_id,
         "level": int(level),
         "requires": sorted(int(l) for l in requires),
-        "includes_levels": sorted(
-            int(l)
-            for l in (
-                includes_levels if includes_levels is not None else [level]
-            )
-        ),
-        "dataset_tag": dataset_tag,
-        "dataset_id": dataset_id,
+        "includes_levels": includes_levels,
+        "artefact_tag": artefact_tag,
+        "artefact_id": artefact_id,
         "border": int(border),
         "rgi_version": str(rgi_version),
         "oggm_version": __version__,
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "files": {"added": added, "updated": updated},
-        "zarr_groups": zarr_groups,
+        "data_store": data_store,
     }
     manifest_path = os.path.join(root, manifest_name)
     with open(manifest_path, "w") as f:
@@ -6240,7 +6096,7 @@ def write_level_manifest(
     changed_paths = (
         added
         + updated
-        + [f"{store_name}/{g}" for g in zarr_groups]
+        + [f"{store_name}/{g}" for g in data_store]
         + [manifest_name]
     )
     return manifest_path, changed_paths
@@ -6271,9 +6127,9 @@ def gdir_to_archive(
     include : list of str, optional
         Only add these paths (relative to the glacier directory) to the
         archive, e.g. the changed paths from ``write_level_manifest``
-        when building a per-level delta. Directories (such as
-        ``data_store.zarr/<group>``) are added recursively. The default
-        adds the whole directory.
+        when building a per-level delta, such as
+        ``data_store/<group>.npz``. Directories are added recursively.
+        The default adds the whole directory.
     fmt : str, default 'zip'
         ``zip`` writes ``<rgi_id>.zip`` with stored uncompressed
         members so bundles can be streamed via HTTP-range requests.

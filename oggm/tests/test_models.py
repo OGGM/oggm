@@ -42,13 +42,15 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 flowline_from_dataset, FileModel,
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
-                                run_with_hydro, SemiImplicitModel)
+                                run_with_hydro, SemiImplicitModel,
+                                stabilize_trapezoid_section)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_melt_f_calibration,
     dynamic_melt_f_run_with_dynamic_spinup,
     dynamic_melt_f_run_with_dynamic_spinup_fallback,
     dynamic_melt_f_run,
-    dynamic_melt_f_run_fallback)
+    dynamic_melt_f_run_fallback,
+    _get_spinup_periods_to_run)
 
 FluxBasedModel = partial(FluxBasedModel, inplace=True)
 FlowlineModel = partial(FlowlineModel, inplace=True)
@@ -66,7 +68,7 @@ ALL_DIAGS = ['volume', 'volume_bsl', 'volume_bwl', 'area', 'length', 'mass',
              'melt_on_glacier', 'snow_melt_on_glacier', 'firn_melt_on_glacier',
              'ice_melt_on_glacier', 'liq_prcp_off_glacier', 'liq_prcp_on_glacier',
              'snowfall_off_glacier', 'snowfall_on_glacier', 'model_mb',
-             'residual_mb', 'snow_bucket']
+             'residual_mb', 'snow_bucket', 'temp_on_glacier', 'temp_ref_area']
 
 has_shapely2 = False
 try:
@@ -572,11 +574,11 @@ class TestMassBalanceModels:
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
-            - settings_filesuffix: 
+            - settings_filesuffix:\x20
             - ice_density: 900.0
             - use_leap_years: False
             - filename: climate_historical
-            - input_filesuffix: 
+            - input_filesuffix:\x20
             - temp_all_solid: 0.0
             - temp_all_liq: 2.0
             - temp_melt: -1.0
@@ -639,7 +641,7 @@ class TestMassBalanceModels:
             - use_leap_years: True
             - mb_model_class: MonthlyTIModel
             - filename: climate_historical
-            - input_filesuffix: 
+            - input_filesuffix:\x20
             - bias: 0.0
             - ye: 2002
             - aging_frequency: monthly
@@ -659,6 +661,44 @@ class TestMassBalanceModels:
                                             settings_filesuffix='_daily',
                                             check_calib_params=False)
         assert mb_mod.__repr__() == expected
+
+    def test_check_calib_params_climate_source(self, hef_gdir):
+        # The baseline climate source check should fire when the baseline
+        # climate of the gdir was swapped after calibration, but not when
+        # deliberately running with another climate file (e.g. a GCM).
+        from oggm.utils import ncDataset
+
+        gdir = hef_gdir
+
+        # The default run is fine
+        massbalance.MonthlyTIModel(gdir)
+
+        # Fake a GCM file: same data, but another climate source
+        fpath = gdir.get_filepath('climate_historical')
+        gcm_path = gdir.get_filepath('gcm_data', filesuffix='_fake_gcm')
+        shutil.copyfile(fpath, gcm_path)
+        with ncDataset(gcm_path, 'a') as nc:
+            nc.climate_source = 'FAKE-GCM_ssp585'
+
+        try:
+            # A GCM run never matches the calibration climate source by
+            # construction - this should not raise
+            massbalance.MonthlyTIModel(gdir, filename='gcm_data',
+                                       input_filesuffix='_fake_gcm')
+
+            # But a swapped baseline climate still has to raise
+            with ncDataset(fpath, 'a') as nc:
+                source = nc.climate_source
+                nc.climate_source = 'FAKE-BASELINE'
+            try:
+                with pytest.raises(InvalidWorkflowError,
+                                   match='FAKE-BASELINE'):
+                    massbalance.MonthlyTIModel(gdir)
+            finally:
+                with ncDataset(fpath, 'a') as nc:
+                    nc.climate_source = source
+        finally:
+            os.remove(gcm_path)
 
     @pytest.mark.parametrize("cl", [massbalance.MonthlyTIModel,
                                     massbalance.DailyTIModel,],)
@@ -1035,34 +1075,6 @@ class TestMassBalanceModels:
 
         # plot for looking at how mb gradient is changing
         if do_plot:
-            # for checking how much has changed to OGGM v1.6 here a hard coded
-            mb_annual_oggm_v16 = [
-                -1.42297448e-07, -1.41160282e-07, -1.39199219e-07, -1.36113197e-07,
-                -1.31840437e-07, -1.26940610e-07, -1.21949801e-07, -1.17948533e-07,
-                -1.14388734e-07, -1.11166865e-07, -1.08178550e-07, -1.05308084e-07,
-                -1.02515762e-07, -9.96907271e-08, -9.67172896e-08, -9.36011930e-08,
-                -9.03592687e-08, -8.69923123e-08, -8.29093380e-08, -7.90813507e-08,
-                -7.55444959e-08, -7.24727279e-08, -6.93747120e-08, -6.63505138e-08,
-                -6.35754355e-08, -6.11641273e-08, -5.89809293e-08, -5.67949353e-08,
-                -5.44956761e-08, -5.20240215e-08, -4.93213255e-08, -4.63693337e-08,
-                -4.31273607e-08, -3.95146795e-08, -3.55167024e-08, -3.16922755e-08,
-                -2.85680526e-08, -2.60397302e-08, -2.37143703e-08, -2.13926889e-08,
-                -1.90271618e-08, -1.73486999e-08, -1.65511508e-08, -1.39938251e-08,
-                -1.14532445e-08, -8.95108401e-09, -8.90165026e-09, -6.43941025e-09,
-                -3.79873736e-09, -8.85807717e-10,  2.50943975e-09,  4.80588815e-09,
-                6.39301260e-09,  1.01207768e-08,  1.35185100e-08,  1.59884941e-08,
-                1.70314225e-08,  2.04225150e-08,  2.35563242e-08,  2.53007150e-08,
-                2.65123374e-08,  2.91862845e-08,  3.14872294e-08,  3.31400347e-08,
-                3.39361834e-08,  3.73918160e-08,  3.92227052e-08,  4.10314532e-08,
-                4.13874876e-08,  4.39342346e-08,  4.43393872e-08,  4.58317424e-08,
-                4.86526460e-08,  4.93663560e-08,  5.36643971e-08,  5.41680453e-08,
-                5.84341486e-08,  6.00092412e-08,  6.30844863e-08,  6.58271495e-08,
-                6.76431998e-08,  7.15019273e-08,  7.21872267e-08,  7.61114775e-08,
-                7.71056592e-08,  7.76305573e-08,  8.12629938e-08,  8.45592440e-08,
-                8.70176740e-08,  8.83996244e-08]
-            np.testing.assert_allclose(mb_annual_oggm_v16, mb_annual_m,
-                                       atol=1.3e-9)
-
             plt.plot(prcpsol_d, h, label='daily')
             plt.plot(prcpsol_m, h, label='monthly')
             plt.title(f'annual solid prcp for {yr}')
@@ -1101,33 +1113,6 @@ class TestMassBalanceModels:
 
         # plot for looking at how mb gradient is changing
         if do_plot:
-            mb_monthly_oggm_v16 = [
-                -5.13190966e-07, -5.11211812e-07, -5.07798727e-07, -5.02498359e-07,
-                -4.95374449e-07, -4.87205038e-07, -4.78881443e-07, -4.71262960e-07,
-                -4.64485043e-07, -4.58350551e-07, -4.52660749e-07, -4.47195333e-07,
-                -4.41878705e-07, -4.36499791e-07, -4.30838316e-07, -4.24905215e-07,
-                -4.18732537e-07, -4.12321795e-07, -4.05990839e-07, -4.00175269e-07,
-                -3.94790126e-07, -3.89446968e-07, -3.84058153e-07, -3.78797739e-07,
-                -3.73970655e-07, -3.69776327e-07, -3.65978784e-07, -3.62176377e-07,
-                -3.58176952e-07, -3.53877655e-07, -3.49176475e-07, -3.44041660e-07,
-                -3.38402440e-07, -3.31937059e-07, -3.24663937e-07, -3.17706537e-07,
-                -3.12022949e-07, -3.07423423e-07, -3.03193127e-07, -2.98969523e-07,
-                -2.94666154e-07, -2.91612695e-07, -2.90161794e-07, -2.85509505e-07,
-                -2.80887679e-07, -2.76335747e-07, -2.76245818e-07, -2.71766509e-07,
-                -2.66962595e-07, -2.61663392e-07, -2.55486755e-07, -2.50892238e-07,
-                -2.46389327e-07, -2.34266499e-07, -2.21147635e-07, -2.11610869e-07,
-                -2.07584057e-07, -1.94490833e-07, -1.82390996e-07, -1.75655792e-07,
-                -1.70977641e-07, -1.60653361e-07, -1.51769266e-07, -1.45387680e-07,
-                -1.42313699e-07, -1.28971282e-07, -1.21902102e-07, -1.10290002e-07,
-                -1.07780730e-07, -8.98316793e-08, -8.69762307e-08, -7.64583579e-08,
-                -6.02983722e-08, -5.64291333e-08, -3.31281440e-08, -3.03977137e-08,
-                -8.33160424e-09, -1.40054651e-09,  1.21318019e-08,  2.42006525e-08,
-                3.21920240e-08,  4.91720184e-08,  5.21876188e-08,  6.94559431e-08,
-                7.11095569e-08,  7.11095569e-08,  7.11095569e-08,  7.11095569e-08,
-                7.11095569e-08,  7.11095569e-08]
-            np.testing.assert_allclose(mb_monthly_oggm_v16, mb_monthly_m,
-                                       atol=1.3e-9)
-
             plt.plot(prcpsol_d, h, label='daily')
             plt.plot(prcpsol_m, h, label='monthly')
             plt.title(f'monthly solid prcp for {m:02d}.{yr}')
@@ -1789,15 +1774,20 @@ class TestMassBalanceModels:
                                        mb_model_class=massbalance.DailyTIModel,
                                        ys=1800, check_calib_params=False,)
 
-        with pytest.raises(InvalidWorkflowError,
-                           match='The current buckets are valid for *'):
-            mb_mod = massbalance.SfcTypeTIModel(
-                gdir, settings_filesuffix='_daily',
-                mb_model_class=massbalance.DailyTIModel, ys=2000,
-                use_previous_mbs=False, check_calib_params=False, )
-            mb_mod.get_annual_mb(heights=h, year=2000)
-            # calling the same year a second time with use_previous_mbs=False
-            # should raise
+        mb_mod = massbalance.SfcTypeTIModel(
+            gdir,
+            settings_filesuffix="_daily",
+            mb_model_class=massbalance.DailyTIModel,
+            ys=2000,
+            use_previous_mbs=False,
+            check_calib_params=False,
+        )
+        mb_mod.get_annual_mb(heights=h, year=2000)
+        # calling the same year a second time with use_previous_mbs=False
+        # should raise
+        with pytest.raises(
+            InvalidWorkflowError, match="The current buckets are valid for"
+        ):
             mb_mod.get_annual_mb(heights=h, year=2000)
 
         # Look at different options of defining the melt_f per bucket
@@ -3633,6 +3623,90 @@ class TestModelFlowlines():
         assert 0 < rec.volume_bwl_km3 < rec.volume_km3
         assert rec.volume_bsl_km3 == 0
 
+    def test_trapezoid_at_min_section(self):
+        # A trapezoid whose section sits exactly at its physical minimum
+        # (lambda * thick**2 / 2) is the degenerate, triangular case with
+        # w0 = 0. It is not constructible, but a section a hair above the
+        # minimum must be - in particular the origin width must not be eaten
+        # by the surface_h -> bed_h -> thick round trip.
+        map_dx = 100.
+        dx = 1.
+        nx = 5
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        lambdas = np.zeros(nx) + 2.
+        is_trap = np.ones(nx, dtype=bool)
+
+        # chosen so that surface_h - bed_h is not bit-identical to thick
+        surface_h = np.zeros(nx) + 2035.4648741007702
+        bed_h = surface_h - 381.1762046038554
+        assert np.any((surface_h - bed_h) != 381.1762046038554)
+
+        min_section = lambdas * (surface_h - bed_h) ** 2 / 2
+        section = min_section * (1 + 64 * np.finfo(np.float64).eps)
+
+        fl = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                              surface_h=surface_h, bed_h=bed_h,
+                              section=section, bed_shape=np.zeros(nx),
+                              is_trapezoid=is_trap, lambdas=lambdas)
+        assert np.all(fl._w0_m > 0)
+        assert_allclose(fl.section, section)
+
+        with pytest.raises(ValueError, match='origin widths'):
+            MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                             surface_h=surface_h, bed_h=bed_h,
+                             section=min_section, bed_shape=np.zeros(nx),
+                             is_trapezoid=is_trap, lambdas=lambdas)
+
+    def test_stabilize_trapezoid_section(self):
+        # A section sitting exactly on the physical minimum of a trapezoid
+        # (w0 = 0) has to be nudged back to a constructible flowline. The
+        # surface_h -> bed_h -> thick round trip is not exact, so this is
+        # checked over many elevation / thickness combinations.
+        rng = np.random.default_rng(42)
+        nx = 2000
+        lam = 2.
+
+        surface_h = rng.uniform(-50, 4000, nx)
+        inv_thick = rng.uniform(1, 900, nx)
+        bed_h = surface_h - inv_thick
+        lambdas = np.zeros(nx) + lam
+
+        # the boundary as the inversion computes it, i.e. from its own
+        # thickness - which is not what MixedBedFlowline will recompute
+        assert np.any((surface_h - bed_h) != inv_thick)
+        section = lam * inv_thick ** 2 / 2
+
+        section = stabilize_trapezoid_section(section, surface_h, bed_h,
+                                              lambdas)
+
+        map_dx = 100.
+        dx = 1.
+        coords = np.arange(0, nx - 0.5, 1)
+        line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
+
+        fl = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                              surface_h=surface_h, bed_h=bed_h,
+                              section=section, bed_shape=np.zeros(nx),
+                              is_trapezoid=np.ones(nx, dtype=bool),
+                              lambdas=lambdas)
+        assert np.all(fl._w0_m > 0)
+        # the correction is numerical noise only
+        assert_allclose(section, lam * inv_thick ** 2 / 2, rtol=1e-12)
+
+        # parabolic (nan) and rectangular (zero) grid points are left alone,
+        # they have no such constraint
+        no_slope = np.where(np.arange(nx) % 2, 0., np.nan)
+        out = stabilize_trapezoid_section(section * 0.5, surface_h, bed_h,
+                                          no_slope)
+        assert_allclose(out, section * 0.5)
+
+        # a section materially below the minimum is a real error
+        with pytest.raises(ValueError, match='physical minimum'):
+            stabilize_trapezoid_section(section * 0.5, surface_h, bed_h,
+                                        lambdas)
+
     def test_length_methods(self):
 
         cfg.initialize()
@@ -3662,16 +3736,16 @@ class TestModelFlowlines():
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        rec.settings['glacier_length_method'] = 'consecutive'
+        rec.glacier_length_method = 'consecutive'
         assert rec.length_m == full_l
         assert rec.terminus_index == nx - 1
 
-        rec.settings['min_ice_thick_for_length'] = 1
+        rec.min_ice_thick_for_length = 1
         rec.thick = rec.thick * 0 + 0.5
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
-        rec.settings['glacier_length_method'] = 'naive'
+        rec.glacier_length_method = 'naive'
         assert rec.length_m == 0
         assert rec.terminus_index == -1
 
@@ -3681,7 +3755,7 @@ class TestModelFlowlines():
         assert rec.length_m == full_l - map_dx
         assert rec.terminus_index == nx - 1
 
-        rec.settings['glacier_length_method'] = 'consecutive'
+        rec.glacier_length_method = 'consecutive'
         assert rec.length_m == 1000
         assert rec.terminus_index == 9
 
@@ -3689,6 +3763,54 @@ class TestModelFlowlines():
 @pytest.fixture(scope='class')
 def io_init_gdir(hef_gdir):
     init_present_time_glacier(hef_gdir)
+
+
+@pytest.mark.test_env("models_dynamics")
+class TestTrapezoidBoundary():
+    """The inversion brackets the trapezoid thickness at width / lambda,
+    i.e. exactly where the origin width of the trapezoid is zero. Check that
+    ``init_present_time_glacier`` can cope with sections landing on (or a few
+    ulp below) that physical boundary."""
+
+    def _put_on_boundary(self, gdir, fac):
+        """Sets one trapezoid grid point to a section of ``fac * minimum``."""
+        lam = gdir.settings['trapezoid_lambdas']
+        map_dx = gdir.grid.dx
+
+        invs = gdir.read_store('inversion_output')
+        cls = gdir.read_store('inversion_flowlines')
+        cl, inv = cls[-1], invs[-1]
+
+        pok = np.flatnonzero(inv['is_trapezoid'] & (inv['thick'] > 0))
+        assert len(pok) > 0
+        i = pok[len(pok) // 2]
+
+        # the minimum section, using the thickness as it is recomputed
+        # downstream (surface_h - bed_h)
+        thick = cl.surface_h[i] - (cl.surface_h[i] - inv['thick'][i])
+        inv['volume'][i] = lam * thick ** 2 / 2 * fac * cl.dx * map_dx
+
+        gdir.write_store(invs, 'inversion_output')
+        return i
+
+    def test_section_at_boundary(self, hef_gdir):
+        gdir = hef_gdir
+        # a few ulp below the minimum: this is numerical noise, we correct it
+        i = self._put_on_boundary(gdir, 1 - 8 * np.finfo(np.float64).eps)
+
+        init_present_time_glacier(gdir)
+
+        fl = gdir.read_store('model_flowlines')[-1]
+        assert np.all(fl._w0_m[fl.is_trapezoid] > 0)
+        assert fl._w0_m[i] > 0
+
+    def test_section_below_boundary(self, hef_gdir):
+        gdir = hef_gdir
+        # materially below the minimum: this is a real error, we raise
+        self._put_on_boundary(gdir, 0.5)
+
+        with pytest.raises(ValueError, match='physical minimum'):
+            init_present_time_glacier(gdir)
 
 
 @pytest.mark.usefixtures('io_init_gdir')
@@ -4207,7 +4329,7 @@ class TestLeapYears:
         # 1981 is not (365 d)
         assert model._yr_to_seconds(1982.0) == (366 + 365) * SEC
         # 1980–1984 spans two leap years (1980, 1984) and three normal ones
-        assert model._yr_to_seconds(1985.0) == (366 + 365 + 365 + 365 + 366) * SEC
+        assert model._yr_to_seconds(1985) == (366 + 365 + 365 + 365 + 366) * SEC
         # Fractional year: 0.5 through a 365-day year
         assert model._yr_to_seconds(1981.5) == (366 + 0.5 * 365) * SEC
 
@@ -5402,9 +5524,20 @@ class TestHEF:
                              bias=0, output_filesuffix='_def')
         run_constant_climate(gdir_calving, nyears=10, y0=1985,
                              bias=0, output_filesuffix='_def')
-        utils.compile_run_output([gdir_calving, hef_gdir],
-                                 input_filesuffix='_def',
-                                 tmp_file_size=1)
+        # tmp_file_size=1 means compiled output is written to disk and
+        # not returned
+        assert (
+            utils.compile_run_output(
+                [gdir_calving, hef_gdir], input_filesuffix="_def", tmp_file_size=1
+            )
+            is None
+        )
+        fp = os.path.join(cfg.PATHS["working_dir"], "run_output_def.nc")
+        with xr.open_dataset(fp) as ds:
+            ds = ds.load()
+        assert sorted(ds.rgi_id.data) == sorted([gdir_calving.rgi_id, hef_gdir.rgi_id])
+        assert np.all(np.isfinite(ds.volume.data))
+        assert np.all(ds.volume.data > 0)
 
         # This should work although one calves the other not
         cfg.PARAMS['use_kcalving_for_run'] = True
@@ -5417,6 +5550,18 @@ class TestHEF:
         utils.compile_run_output([gdir_calving, hef_gdir],
                                  input_filesuffix='_def',
                                  tmp_file_size=1)
+        with xr.open_dataset(fp) as ds:
+            ds = ds.load()
+        # gdir_calving is copy of HEF flagged tidewater, but no calving
+        # actually occurs, so test finite, non-negative and non-decreasing.
+        assert 'calving' in ds
+        for i in range(2):
+            calving = ds.calving.isel(rgi_id=i).data
+            assert np.all(np.isfinite(calving))
+            assert np.all(calving >= 0)
+            assert np.all(np.diff(calving) >= 0)
+        assert np.all(np.isfinite(ds.volume.data))
+        assert np.all(ds.volume.data > 0)
 
     def test_start_from_spinup(self, hef_gdir):
 
@@ -5546,8 +5691,7 @@ class TestHEF:
 
         # Mass balance models
         mb_cru = massbalance.MonthlyTIModel(gdir)
-        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data',
-                                             check_calib_params=False)
+        mb_cesm = massbalance.MonthlyTIModel(gdir, filename='gcm_data')
 
         # Average over 1961-1990
         h, w = gdir.get_inversion_flowline_hw()
@@ -5586,10 +5730,6 @@ class TestHEF:
         run_from_climate_data(gdir, ys=1961, ye=1990,
                               output_filesuffix='_hist')
         run_from_climate_data(gdir, ys=1961, ye=1990,
-                              mb_model_class=partial(
-                                  massbalance.MonthlyTIModel,
-                                  check_calib_params=False,
-                              ),
                               climate_filename='gcm_data',
                               output_filesuffix='_cesm')
 
@@ -5709,8 +5849,7 @@ class TestHEF:
             with xr.open_dataset(fp, group=f'fl_{fl_id}') as ds:
                 ds_iqr = ds.load()
 
-            # the median flowline should never be the smallest or largest
-            # value, compared to the values of the runs (as we have three runs)
+            # computed quantiles should match run quantiles
             variables_to_check = ['volume_m3', 'area_m2', 'thickness_m']
             for var in variables_to_check:
                 var_das = []
@@ -5722,21 +5861,132 @@ class TestHEF:
                 var_max = var_stack.max(dim='runs')
 
                 var_median = ds_median[var]
-                is_median_equal_to_min = (var_median == var_min).any()
-                is_median_equal_to_max = (var_median == var_max).any()
+                np.testing.assert_allclose(var_median, var_stack.median(dim="runs"))
+                assert (var_min <= var_median).all()
+                assert (var_median <= var_max).all()
 
-                assert is_median_equal_to_min
-                assert is_median_equal_to_max
+                var_5th = ds_iqr.loc[{"quantile": 0.05}][var]
+                var_95th = ds_iqr.loc[{"quantile": 0.95}][var]
+                np.testing.assert_allclose(
+                    var_5th, var_stack.quantile(0.05, dim="runs")
+                )
+                np.testing.assert_allclose(
+                    var_95th, var_stack.quantile(0.95, dim="runs")
+                )
 
                 # median should be larger/smaller than 5th/95th quantile
-                var_5th = ds_iqr.loc[{'quantile': 0.05}][var]
-                var_95th = ds_iqr.loc[{'quantile': 0.95}][var]
+                assert (var_median >= var_5th).all()
+                assert (var_median <= var_95th).all()
 
-                is_median_larger_than_5th_q = (var_median >= var_5th).all()
-                is_median_smaller_than_95th_q = (var_median <= var_95th).all()
 
-                assert is_median_larger_than_5th_q
-                assert is_median_smaller_than_95th_q
+class TestDynamicSpinupPeriods:
+    """Tests for the order in which the spinup periods are tried.
+
+    These are pure unit tests of _get_spinup_periods_to_run, no glacier
+    involved. We express everything in start years, as this is easier to read
+    (start year = target_yr - spinup_period).
+    """
+
+    @staticmethod
+    def start_years(target_yr, ys, yr_min=1901, min_spinup_period=10,
+                    spinup_start_yr_max=None, **kwargs):
+        # mimic what run_dynamic_spinup does with spinup_start_yr and
+        # spinup_start_yr_max before defining the periods
+        if (spinup_start_yr_max is not None and
+                target_yr - spinup_start_yr_max > min_spinup_period):
+            min_spinup_period = target_yr - spinup_start_yr_max
+        periods = _get_spinup_periods_to_run(
+            target_yr=target_yr,
+            spinup_period_initial=min(target_yr - ys, target_yr - yr_min),
+            min_spinup_period=min_spinup_period,
+            yr_min=yr_min,
+            **kwargs)
+        return [target_yr - period for period in periods]
+
+    def test_default_behaviour(self):
+        # without extra years we get the 'old' behaviour: the requested start
+        # year, then two shorter spinups (down to spinup_start_yr_max). The
+        # intermediate period is rounded up, so we always start at a whole year
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000) == \
+            [1975, 1987, 2000]  # intermediate period (36 + 11) / 2 -> 24
+
+        # if the requested start year is later than spinup_start_yr_max the
+        # spinup starts earlier than requested (and there is nothing to shorten)
+        assert self.start_years(target_yr=2011, ys=2005,
+                                spinup_start_yr_max=2000) == [2000]
+
+    def test_extra_years_are_tried_last(self):
+        # extra years always start before the requested start year, shortest
+        # extension first, and only after all shorter spinups were tried
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[20, 10]) == \
+            [1975, 1987, 2000, 1965, 1955]
+
+        # no shorter spinup periods if not allowed
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20],
+                                allow_shorter_spinup=False) == \
+            [1975, 1965, 1955]
+
+        # extra years which do not result in an earlier start year are ignored
+        # (here the spinup must start at spinup_start_yr_max = 2000 anyway)
+        assert self.start_years(target_yr=2011, ys=2005,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20]) == \
+            [2000, 1995, 1985]
+
+    def test_clipping_to_climate_data(self):
+        # start years before the start of the climate data are clipped to it,
+        # and we do not try the same start year twice
+        assert self.start_years(target_yr=2011, ys=1975, yr_min=1950,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20, 30, 40]) == \
+            [1975, 1987, 2000, 1965, 1955, 1950]
+
+        # the requested start year itself is clipped as well, and then there is
+        # no room left for the extra years to try
+        assert self.start_years(target_yr=2011, ys=1975, yr_min=1979,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10, 20]) == \
+            [1979, 1989, 2000]
+
+    def test_target_year_before_start_year(self):
+        # if the outline is older than the requested start year the spinup
+        # starts before the requested start year (min_spinup_period is used)
+        assert self.start_years(target_yr=1971, ys=1975,
+                                spinup_extra_years_to_try=[10, 20, 30]) == \
+            [1961, 1955, 1945]
+
+        # ... and this is not affected by allow_shorter_spinup
+        assert self.start_years(target_yr=1971, ys=1975,
+                                spinup_extra_years_to_try=[10, 20, 30],
+                                allow_shorter_spinup=False) == \
+            [1961, 1955, 1945]
+
+    def test_period_first_try(self):
+        # the period which was successful in the previous melt_f iteration is
+        # tried after the shorter periods (as before), and not tried twice
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10],
+                                spinup_period_first_try=2011 - 1990) == \
+            [1975, 1987, 2000, 1990, 1965]
+
+        # if it is already tried anyway it does not show up twice
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                spinup_extra_years_to_try=[10],
+                                spinup_period_first_try=2011 - 1965) == \
+            [1975, 1987, 2000, 1965]
+
+        # but a shorter one is ignored if shorter spinups are not allowed
+        assert self.start_years(target_yr=2011, ys=1975,
+                                spinup_start_yr_max=2000,
+                                allow_shorter_spinup=False,
+                                spinup_period_first_try=2011 - 2000) == [1975]
 
 
 @pytest.mark.usefixtures('with_class_wd')
@@ -6100,9 +6350,46 @@ class TestDynamicSpinup:
                     run_with_fixed_spinup.time.values[0])
             assert run_with_fixed_spinup.time.values[0] == 1979
 
-    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
     @pytest.mark.slow
-    @pytest.mark.skip
+    @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
+    def test_run_dynamic_spinup_start_yr_after_target_yr(self, hef_gdir):
+        # if the requested start year is after the target year (e.g. an outline
+        # which is older than the start year of the simulation) the spinup
+        # starts before the requested start year, using min_spinup_period
+        fls = hef_gdir.read_store('model_flowlines')
+        yr_rgi = 2002  # the test climate dataset ends in 2003
+        hef_gdir.observations['ref_area_m2'] = {
+            'value': np.sum([fl.area_m2 for fl in fls]),
+            'year': yr_rgi,
+        }
+
+        min_spinup_period = 10
+        model = run_dynamic_spinup(
+            hef_gdir,
+            minimise_for='area',
+            precision_percent=10,
+            precision_absolute=0.1,
+            min_ice_thickness=10,
+            spinup_start_yr=yr_rgi + 5,
+            min_spinup_period=min_spinup_period,
+            add_fixed_geometry_spinup=True,
+            output_filesuffix='_spinup_start_after_target')
+
+        assert model.yr == yr_rgi
+        assert (hef_gdir.get_diagnostics()['dynamic_spinup_period'] ==
+                min_spinup_period)
+        # no fixed geometry spinup is added after the start of the dynamic run
+        ds = utils.compile_run_output(
+            hef_gdir, input_filesuffix='_spinup_start_after_target', path=False)
+        assert ds.time.values[0] == yr_rgi - min_spinup_period
+
+    @pytest.mark.parametrize("minimise_for", ["area", "volume"])
+    @pytest.mark.slow
+    @pytest.mark.skip(
+        reason="Disabled since the new MB calibration "
+        "(PR #1527). Needs a rewrite for the new "
+        "architecture before it can run again"
+    )
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_spinup_special_cases(self, hef_gdir, minimise_for):
 
@@ -6397,10 +6684,14 @@ class TestDynamicSpinup:
             # smaller after calibration
             assert gdir.settings['melt_f'] < melt_f_before
 
-    @pytest.mark.parametrize('do_inversion', [True, False])
-    @pytest.mark.parametrize('minimise_for', ['area', 'volume'])
+    @pytest.mark.parametrize("do_inversion", [True, False])
+    @pytest.mark.parametrize("minimise_for", ["area", "volume"])
     @pytest.mark.slow
-    @pytest.mark.skip
+    @pytest.mark.skip(
+        reason="Disabled since the new MB calibration "
+        "(PR #1527). Needs a rewrite for the new "
+        "architecture before it can run again"
+    )
     @pytest.mark.skipif(not has_shapely2, reason="requires shapely2")
     def test_run_dynamic_melt_f_calibration_with_dynamic_spinup_special_cases(
             self, minimise_for, do_inversion):
@@ -7309,9 +7600,33 @@ class TestHydro:
         # In the spinup run the residual is zero for the spinup part
         assert_allclose(odf_spin['residual_mb'].loc[:1990], 0)
 
+        # Area-weighted temperatures
+        for vn in ['temp_on_glacier', 'temp_ref_area']:
+            assert np.all(np.isfinite(odf[vn]))
+            assert np.all((odf[vn] > -20) & (odf[vn] < 5))
+        # The fixed geometry one is a pure climate diagnostic: recompute it
+        # here from the reference geometry the task used (default: max area
+        # over the run, surface elevation of the first year)
+        fmod = FileModel(gdir.get_filepath('model_geometry', filesuffix='_hist'))
+        ref_elevs = [fl.surface_h.copy() for fl in fmod.fls]
+        ref_areas = [fl.bin_area_m2 * 0 for fl in fmod.fls]
+        for yr in fmod.years[:-1]:
+            fmod.run_until(yr)
+            for ref_area, fl in zip(ref_areas, fmod.fls):
+                ref_area[:] = np.maximum(ref_area, fl.bin_area_m2)
+        mbmod = massbalance.MonthlyTIModel(gdir)
+        for yr in [odf.index[0], odf.index[-1]]:
+            num, den = 0, 0
+            for ref_area, ref_elev in zip(ref_areas, ref_elevs):
+                t = mbmod.get_annual_climate(ref_elev, year=yr)[0]
+                num += np.sum(t * ref_area)
+                den += np.sum(ref_area)
+            assert_allclose(odf['temp_ref_area'].loc[yr], num / den)
+
         # Also check output stuff
         nds = utils.compile_run_output([gdir], input_filesuffix='_hist')
         assert nds.residual_mb.attrs['unit'] == 'kg yr-1'
+        assert nds.temp_ref_area.attrs['unit'] == 'degC'
         assert_allclose(nds['snowfall_on_glacier'].squeeze()[:-1],
                         odf['snowfall_on_glacier'])
         if 'month_2d' in nds:
@@ -7321,6 +7636,11 @@ class TestHydro:
             odf_ma.columns = [c.replace('_monthly', '') for c in odf_ma.columns]
             # Runoff peak should follow a temperature curve
             assert_allclose(odf_ma['melt_on_glacier'].idxmax(), 8)
+            # Temperature peaks in summer as well
+            assert_allclose(odf_ma['temp_ref_area'].idxmax(), 8)
+            # The annual value is the average of the monthly ones
+            assert_allclose(nds['temp_ref_area_monthly'].mean(dim='month_2d'),
+                            nds['temp_ref_area'])
 
         # check if melt on glacier is always above or equal zero
         assert np.all(odf['melt_on_glacier'] >= 0)
@@ -7969,7 +8289,10 @@ def merged_hef_cfg(class_case_dir):
 class TestMergedHEF:
 
     @pytest.mark.slow
-    @pytest.mark.skip
+    @pytest.mark.skip(
+        reason="Merged simulations currently crash: "
+        "FlowlineModel rejects the merged flowlines"
+    )
     def test_merged_simulation(self):
         import geopandas as gpd
 

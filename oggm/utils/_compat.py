@@ -1,5 +1,5 @@
-"""Compatibility and conversion wrappers between cumulative and
-incremental prepro systems.
+"""Compatibility and conversion wrappers between legacy and new glacier
+directory formats.
 
 The main entry point is :func:`convert_prepro_to_deltas`, which converts
 the previous cumulative per-level tar artifacts (each level tar
@@ -18,6 +18,7 @@ than a URL.
 import glob
 import logging
 import os
+from pathlib import Path
 import shutil
 import tempfile
 
@@ -29,13 +30,12 @@ from oggm.utils._workflow import (
     _finalize_merged_dir,
     base_dir_to_bundles,
     base_dir_to_tar,
-    dataset_id_from_tag,
+    artefact_id_from_tag,
     gdir_to_archive,
     gdir_to_tar,
     robust_archive_extract,
     snapshot_gdir_state,
-    write_level_manifest,
-)
+    write_level_manifest)
 
 log = logging.getLogger(__name__)
 
@@ -47,38 +47,47 @@ _TREE_INVARIANTS = ("dem.tif", "glacier_grid.json", "dem_source.txt")
 _NC_STORE_BASENAMES = ("gridded_data", "climate_historical", "gcm_data")
 
 
-def _convert_pickles_to_zarr(gdir):
-    """Rewrite a glacier directory's pickles into the zarr data store.
+def convert_pickles_to_npz(gdir, delete: bool = True):
+    """Rewrite a glacier directory's pickles into npz.
 
-    One-way (not reversible): every ``.pkl`` that ``write_store`` can turn
-    into a ``data_store.zarr/<group>`` is deleted afterwards, so the
-    directory holds the same information in zarr form only. Suffixed
-    variants (e.g. ``model_flowlines_dyn_melt_f_calib.pkl``) are handled by
-    globbing each pickle BASENAME stem. Any pickle that ``write_store``
-    cannot convert (it falls back to pickle) keeps its ``.pkl``, so no data
-    is ever lost.
+    One-way (not reversible): every pickle that ``write_store`` can turn
+    into a ``data_store/<data>.npz`` is deleted afterwards, so the
+    directory holds the same information in npz form only.
+    Suffixed variants (e.g. ``model_flowlines_dyn_melt_f_calib.pkl``)
+    are handled by globbing each pickle BASENAME stem. Any pickle that
+    ``write_store`` cannot convert (it falls back to pickle) keeps its
+    ``.pkl``, so no data is ever lost.
 
     Parameters
     ----------
     gdir : GlacierDirectory
         The glacier directory to convert in place.
+    delete : bool, default True
+        If True (recommended), delete the original pickles after
+        conversion. If False, keep them around for comparison. This is
+        irreversible, the directory will hold the same information in
+        npz form only.
     """
     pkl_basenames = [
         k
         for k, v in cfg.BASENAMES.items()
         if isinstance(v, str) and v.endswith(".pkl")
     ]
-    store_dir = os.path.join(gdir.dir, "data_store.zarr")
+
+    store_dir = Path(gdir.dir) / "data_store"
     for base in pkl_basenames:
         stem = cfg.BASENAMES[base][:-4]
-        for fp in glob.glob(os.path.join(gdir.dir, f"{stem}*.pkl")):
+        # we want all possible pickles
+        for fp in glob.glob(os.path.join(Path(gdir.dir), f"{stem}*.pkl")):
             suffix = os.path.basename(fp)[len(stem) : -4]
-            data = gdir.read_pickle(base, filesuffix=suffix)
+            data = gdir._read_pickle(base, filesuffix=suffix)
             gdir.write_store(data, base, filesuffix=suffix)
-            if os.path.isdir(os.path.join(store_dir, f"{base}{suffix}")):
-                # zarr write succeeded; drop the now-redundant pickle
+            npz_fp = store_dir / f"{base}{suffix}.npz"
+            if npz_fp.is_file() and delete:
+                # npz write succeeded, drop the now-redundant pickle
                 os.remove(fp)
-            # else write_store fell back to pickle: leave the .pkl in place
+            else:
+                pass  # fell back to pickle so leave .pkl in place
 
 
 def _as_gdir(gdir_or_dir):
@@ -117,7 +126,7 @@ def convert_gdir_to_v2(gdir_or_dir, delete_originals: bool = True):
         The converted v2 glacier directory.
     """
     gdir = _as_gdir(gdir_or_dir)
-    _convert_pickles_to_zarr(gdir)
+    convert_pickles_to_npz(gdir)
 
     for base in _NC_STORE_BASENAMES:
         stem = cfg.BASENAMES[base][:-3]  # strip .nc
@@ -280,7 +289,7 @@ def convert_prepro_to_v2_artifacts(
     own_workdir = workdir is None
     if own_workdir:
         workdir = tempfile.mkdtemp(prefix="oggm_v2_convert_")
-    dataset_id = dataset_id_from_tag(dataset_tag, border, rgi_version)
+    dataset_id = artefact_id_from_tag(dataset_tag, border, rgi_version)
 
     try:
         for rid in rgi_ids:
@@ -369,9 +378,9 @@ def convert_prepro_to_deltas(
     rgi_version: str,
     workdir: str,
     output_dir: str,
-    dataset_tag: str,
+    artefact_tag: str,
     max_level: int = 5,
-    convert_to_zarr: bool = False,
+    convert_to_npz: bool = False,
 ):
     """Convert cumulative prepro artifacts into per-level delta bundles.
 
@@ -403,18 +412,18 @@ def convert_prepro_to_deltas(
         Scratch directory for the per-level downloads.
     output_dir : str
         Root of the delta-format output tree.
-    dataset_tag : str
-        Explicit label identifying the logical dataset. This is hashed
-        with border and RGI version into the manifest's ``dataset_id``.
+    artefact_tag : str
+        Explicit label identifying the logical artefact. This is hashed
+        with border and RGI version into the manifest's ``artefact_id``.
         Must **not** be a source URL.
     max_level : int, default=5
         Convert levels up to and including this one.
-    convert_to_zarr : bool, default=False
+    convert_to_npz : bool, default=False
         If True, rewrite each glacier's pickle files into its
-        ``data_store.zarr`` store (and delete the pickles) before
-        tarring, so the output tree ships zarr instead of pickles.
-        This is a one-way process, but the output holds the same
-        information as the input pickles.
+        ``data_store`` store (and delete the pickles) before tarring, so
+        the output tree ships npz instead of pickles. This is a one-way
+        process, but the output holds the same information as the input
+        pickles.
 
     Returns
     -------
@@ -429,7 +438,7 @@ def convert_prepro_to_deltas(
     if not levels:
         raise InvalidParamsError("base_urls contains no level <= max_level")
     lowest = levels[0]
-    dataset_id = dataset_id_from_tag(dataset_tag, border, rgi_version)
+    artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
     out_root = os.path.join(
         output_dir, f"RGI{rgi_version}", f"b_{int(border):03d}"
     )
@@ -451,15 +460,15 @@ def convert_prepro_to_deltas(
 
             stage_dir = os.path.join(out_root, f"L{lvl}")
             for gdir in gdirs:
-                if convert_to_zarr:
-                    _convert_pickles_to_zarr(gdir)
+                if convert_to_npz:
+                    convert_pickles_to_npz(gdir)
                 include = _write_artifact_manifest(
                     gdir=gdir,
                     level=lvl,
                     lowest=lowest,
                     prev_state=prev_states.get(gdir.rgi_id),
-                    dataset_tag=dataset_tag,
-                    dataset_id=dataset_id,
+                    artefact_tag=artefact_tag,
+                    artefact_id=artefact_id,
                     border=border,
                     rgi_version=rgi_version,
                 )
@@ -481,8 +490,8 @@ def _write_artifact_manifest(
     prev_state: dict,
     border: int,
     rgi_version: str,
-    dataset_tag: str,
-    dataset_id: str = "",
+    artefact_tag: str,
+    artefact_id: str = "",
 ):
     """Write the level manifest and return the tar include list.
 
@@ -504,11 +513,11 @@ def _write_artifact_manifest(
     prev_state : dict or None
         The previous level's snapshot of the glacier directory, or None
         if this is the lowest level.
-    dataset_id : str
-        The dataset identity, hashed from the dataset tag, border, and
+    artefact_id : str
+        The artefact identity, hashed from the artefact tag, border, and
         RGI version.
-    dataset_tag : str
-        The dataset tag, identifying the logical dataset.
+    artefact_tag : str
+        The artefact tag, identifying the logical artefact.
     border : int
         The map border of the source dataset.
     rgi_version : str
@@ -521,12 +530,12 @@ def _write_artifact_manifest(
         bundle, or a list of changed paths for delta levels.
     """
 
-    if not dataset_id:
-        dataset_id = dataset_id_from_tag(dataset_tag, border, rgi_version)
+    if not artefact_id:
+        artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
 
     common = dict(
-        dataset_id=dataset_id,
-        dataset_tag=dataset_tag,
+        artefact_id=artefact_id,
+        artefact_tag=artefact_tag,
         border=border,
         rgi_version=rgi_version,
     )
