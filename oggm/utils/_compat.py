@@ -83,7 +83,7 @@ def convert_prepro_to_deltas(
     rgi_version: str,
     workdir: str,
     output_dir: str,
-    dataset_tag: str,
+    artefact_tag: str,
     max_level: int = 5,
     convert_to_npz: bool = False,
 ):

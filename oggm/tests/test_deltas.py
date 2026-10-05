@@ -169,7 +169,7 @@ def test_write_level_manifest_schema(tmp_path):
         gdir_dir,
         level=3,
         prev_state=prev_state,
-        dataset_tag="abc123",
+        artefact_tag="abc123",
         requires=[0, 1, 2],
         border=80,
         rgi_version="62",
@@ -185,7 +185,7 @@ def test_write_level_manifest_schema(tmp_path):
     assert manifest["level"] == 3
     assert manifest["requires"] == [0, 1, 2]
     assert manifest["includes_levels"] == [3]
-    assert manifest["dataset_tag"] == "abc123"
+    assert manifest["artefact_tag"] == "abc123"
     assert manifest["border"] == 80
     assert manifest["rgi_version"] == "62"
     assert manifest["oggm_version"]
@@ -225,7 +225,7 @@ def _simulate_level(gdir_dir, level=3):
         gdir_dir,
         level=level,
         prev_state=prev_state,
-        dataset_tag="abc123",
+        artefact_tag="abc123",
         requires=list(range(level)),
         border=80,
         rgi_version="62",
@@ -348,7 +348,7 @@ class TestLayeredGdir:
             workdir,
             level=3,
             prev_state={},
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[],
             includes_levels=[0, 1, 2, 3],
             border=80,
@@ -371,7 +371,7 @@ class TestLayeredGdir:
             workdir,
             level=4,
             prev_state=prev,
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[0, 1, 2, 3],
             border=80,
             rgi_version="62",
@@ -462,7 +462,7 @@ class TestDeltaServer:
             workdir,
             level=3,
             prev_state={},
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[],
             includes_levels=[0, 1, 2, 3],
             border=80,
@@ -485,7 +485,7 @@ class TestDeltaServer:
             workdir,
             level=4,
             prev_state=prev,
-            dataset_tag="ds1",
+            artefact_tag="ds1",
             requires=[0, 1, 2, 3],
             border=80,
             rgi_version="62",
@@ -507,7 +507,7 @@ class TestDeltaServer:
             kind="standalone",
             border=80,
             rgi_version="62",
-            dataset_tag="ds1",
+            artefact_tag="ds1",
         )
         publish(
             5,
@@ -716,7 +716,7 @@ def test_convert_prepro_to_deltas(tmp_path):
         rgi_version="62",
         workdir=str(tmp_path / "conv"),
         output_dir=output_dir,
-        dataset_tag="oggm_v1.6_2025.6_elev_bands_w5e5",
+        artefact_tag="oggm_v1.6_2025.6_elev_bands_w5e5",
     )
 
     expected = {
