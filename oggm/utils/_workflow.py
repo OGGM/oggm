@@ -5660,7 +5660,6 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
-
 def artefact_id_from_tag(artefact_tag: str, border: int, rgi_version: str) -> str:
     """The artefact_id shared by all levels of one logical artefact.
 
@@ -5808,9 +5807,12 @@ def write_level_manifest(
         ``[level]`` (a plain delta). A materialisation lists all
         included levels.
     kind : str, default ``'delta'``
-        The kind of manifest. Must be either ``'delta'`` (incremental
-        changes only) or ``'standalone'`` (self-sufficient subset, e.g.
-        the L5 run bundle).
+        The kind of manifest: ``'delta'`` (incremental changes only),
+        ``'materialisation'`` (cumulative artefact holding every level in
+        ``includes_levels``, e.g. L3) or ``'standalone'`` (self-sufficient
+        subset, e.g. the L5 run bundle). A ``'delta'`` whose
+        ``includes_levels`` spans several levels and whose ``requires`` is
+        empty is written as a ``'materialisation'``.
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
@@ -5830,9 +5832,23 @@ def write_level_manifest(
             border or cfg.PARAMS["border"],
             rgi_version or cfg.PARAMS["rgi_version"],
         )
-    if kind not in ("delta", "standalone"):
+    kinds = ("delta", "materialisation", "standalone")
+    if kind not in kinds:
         raise ValueError(
-            f"Invalid manifest kind: {kind!r}. Must be 'delta' or 'standalone'."
+            f"Invalid manifest kind: {kind!r}. Must be one of {kinds}."
+        )
+    includes_levels = sorted(
+        int(l)
+        for l in (includes_levels if includes_levels is not None else [level])
+    )
+    # A cumulative artefact spanning several levels needs nothing below it
+    is_materialisation = not requires and len(includes_levels) > 1
+    if kind == "delta" and is_materialisation:
+        kind = "materialisation"
+    elif kind == "materialisation" and not is_materialisation:
+        raise ValueError(
+            "A materialisation must include several levels and require none, "
+            f"got includes_levels={includes_levels}, requires={list(requires)}."
         )
     root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
     rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
@@ -5868,12 +5884,7 @@ def write_level_manifest(
         "rgi_id": rgi_id,
         "level": int(level),
         "requires": sorted(int(l) for l in requires),
-        "includes_levels": sorted(
-            int(l)
-            for l in (
-                includes_levels if includes_levels is not None else [level]
-            )
-        ),
+        "includes_levels": includes_levels,
         "artefact_tag": artefact_tag,
         "artefact_id": artefact_id,
         "border": int(border),

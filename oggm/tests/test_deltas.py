@@ -204,6 +204,59 @@ def test_write_level_manifest_schema(tmp_path):
     }
 
 
+@pytest.mark.parametrize(
+    "level, requires, includes, kind, expected",
+    [
+        (3, [], [0, 1, 2, 3], "delta", "materialisation"),
+        (3, [], [0, 1, 2, 3], "materialisation", "materialisation"),
+        (0, [], [0], "delta", "delta"),
+        (4, [0, 1, 2, 3], None, "delta", "delta"),
+        (5, [], [5], "standalone", "standalone"),
+    ],
+)
+def test_write_level_manifest_kind(
+    tmp_path, level, requires, includes, kind, expected
+):
+    gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+    manifest_path, _ = utils.write_level_manifest(
+        gdir_dir,
+        level=level,
+        prev_state={},
+        artefact_tag="abc123",
+        requires=requires,
+        includes_levels=includes,
+        kind=kind,
+        border=80,
+        rgi_version="62",
+    )
+    with open(manifest_path) as f:
+        assert json.load(f)["kind"] == expected
+
+
+@pytest.mark.parametrize(
+    "requires, includes, kind",
+    [
+        ([0, 1, 2], [0, 1, 2, 3], "materialisation"),
+        ([], [3], "materialisation"),
+        ([], [3], "delta"),
+    ],
+)
+def test_write_level_manifest_invalid_kind(tmp_path, requires, includes, kind):
+    gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+    with pytest.raises(ValueError, match="materialisation"):
+        utils.write_level_manifest(
+            gdir_dir,
+            level=3,
+            prev_state={},
+            artefact_tag="abc123",
+            requires=requires,
+            includes_levels=includes,
+            kind=kind,
+            border=80,
+            rgi_version="62",
+        )
+
+
 class _FakeGdir:
     def __init__(self, path, base_dir):
         self.dir = path
@@ -601,7 +654,7 @@ class TestDeltaServer:
 
     def test_init_from_local_delta_tree(self, delta_server, served_calls):
         """Test initialization from a local delta tree.
-        
+
         Server tree is read from disk, so the L4 delta is missing the
         the grid from the L3 tar.
         """
@@ -661,7 +714,7 @@ class TestStartState:
     def gdir(self, tmp_path):
         return SimpleNamespace(dir=str(tmp_path), rgi_id="RGI60-11.00897")
 
-    def test_missing_l2_state_is_rollup(self, gdir, caplog):
+    def test_missing_l2_state_is_delta(self, gdir, caplog):
         from oggm.cli.prepro_levels import _start_state
 
         with caplog.at_level(logging.WARNING, logger="oggm.cli.prepro_levels"):
@@ -723,7 +776,7 @@ def test_convert_prepro_to_deltas(tmp_path):
         0: dict(kind="delta", includes=[0], requires=[]),
         1: dict(kind="delta", includes=[1], requires=[0]),
         2: dict(kind="delta", includes=[2], requires=[0, 1]),
-        3: dict(kind="delta", includes=[0, 1, 2, 3], requires=[]),
+        3: dict(kind="materialisation", includes=[0, 1, 2, 3], requires=[]),
         4: dict(kind="delta", includes=[4], requires=[0, 1, 2, 3]),
         5: dict(kind="standalone", includes=[5], requires=[]),
     }
@@ -786,7 +839,7 @@ def test_level_consistency_mismatch(tmp_path):
     )
     delta_tar = shutil.move(delta_tar, str(tmp_path / "delta.tar.gz"))
 
-    with pytest.raises(InvalidWorkflowError, match="dataset"):
+    with pytest.raises(InvalidWorkflowError, match="different artefacts"):
         oggm.GlacierDirectory(
             rid,
             base_dir=str(tmp_path / "layered"),
