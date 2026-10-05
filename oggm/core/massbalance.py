@@ -4525,9 +4525,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         # Get the reference data
         ref_mb_err = np.nan
         try:
+            # Double brackets: a DataFrame even with one period per glacier
             ref_mb_df = get_geodetic_mb_dataframe(
                 file_path=file_path,
-                rgi_version=gdir.rgi_version).loc[gdir.rgi_id]
+                rgi_version=gdir.rgi_version).loc[[gdir.rgi_id]]
             ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_mb_period]
             # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
             ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
@@ -4624,9 +4625,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
         if gdir.settings['prcp_fac'] is not None:
-            raise InvalidParamsError('With `informed_threestep` you cannot use '
-                                     'a preset prcp_fac - we need to rely on '
-                                     'decide_winter_precip_factor().')
+            # A preset prcp_fac replaces the winter precipitation heuristic
+            prcp_fac = gdir.settings['prcp_fac']
+        else:
+            prcp_fac = decide_winter_precip_factor(gdir)
 
         # Some magic heuristics - we just decide to calibrate
         # precip -> melt_f -> temp but informed by previous data.
@@ -4636,7 +4638,6 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
         # We use the precip factor but allow it to vary between 0.8, 1.2 of
         # the previous value (uncertainty).
-        prcp_fac = decide_winter_precip_factor(gdir)
         mi, ma = gdir.settings['prcp_fac_min'], gdir.settings['prcp_fac_max']
         prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
         prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
