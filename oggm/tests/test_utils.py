@@ -2413,7 +2413,7 @@ class TestPreproCLI:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_full_run_chunked(self):
+    def test_full_run_chunked(self, monkeypatch):
         # The point of chunking: running the four stages of a chunked run
         # has to give exactly what a single whole-region run gives.
 
@@ -2449,6 +2449,7 @@ class TestPreproCLI:
                       inversion_volume_dataset='consensus',
                       temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                       continue_on_error=False,
+                      dataset_tag='chunked_test',
                       override_params={})
 
         def wd(name):
@@ -2465,6 +2466,20 @@ class TestPreproCLI:
         # And now the four stages. L2 comes from the reference run here; on a
         # cluster it comes from the published L2 base url.
         out_dir = os.path.join(self.testdir, 'chunked_out')
+
+        # L0 to L2 aren't in out_dir, so must come from the base url
+        # served by ref_dir.
+        base_url = 'https://fake.oggm/chunked/'
+        real_downloader = _downloads.file_downloader
+
+        def fake_downloader(www_path, **kwargs):
+            if not www_path.startswith(base_url):
+                return real_downloader(www_path, **kwargs)
+            local = os.path.join(ref_dir, www_path[len(base_url) :])
+            return local if os.path.isfile(local) else None
+
+        monkeypatch.setattr(_downloads, 'file_downloader', fake_downloader)
+        monkeypatch.setattr(_downloads, '_prepro_bundle_format', {})
         scratch = os.path.join(self.testdir, 'scratch')
 
         # 1 - the chunkable part of L3
@@ -2485,13 +2500,14 @@ class TestPreproCLI:
             run_prepro_levels(output_folder=out_dir,
                               working_dir=wd(f'wd_s3_{i}'),
                               start_level='3', start_from_dir=out_dir,
-                              max_level='4a',
+                              start_base_url=base_url, max_level='4a',
                               chunk_idx=i, chunk_size=chunk_size, **common)
 
         # 4 - the L4 summaries and L5, whole region
         run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s4'),
                           start_level='4a', start_from_dir=out_dir,
-                          max_level='5', **common)
+                          start_base_url=base_url, max_level='5',
+                          **common)
 
         def summary(root, lev, name):
             return os.path.join(root, 'RGI61', 'b_020', lev, 'summary', name)
@@ -2523,6 +2539,32 @@ class TestPreproCLI:
                                                  lev, 'RGI60-11')))
             assert ref == new
             assert len(new) > 1
+
+        # same deltas, not materialisations of all levels below
+        def manifest(root, lev, rgi_id):
+            bundle = glob.glob(
+                os.path.join(
+                    root, 'RGI61', 'b_020', f'L{lev}', 'RGI60-11', '*.tar'
+                )
+            )
+            for tar_base in bundle:
+                m = workflow._peek_level_manifest(tar_base, rgi_id, lev)
+                if m is not None:
+                    return m
+            raise AssertionError(f'No L{lev} manifest for {rgi_id} in {root}')
+
+        for lev in [3, 4]:
+            for rgi_id in test_ids:
+                ref = manifest(ref_dir, lev, rgi_id)
+                new = manifest(out_dir, lev, rgi_id)
+                for key in ['kind', 'requires', 'includes_levels']:
+                    assert ref[key] == new[key], (lev, rgi_id, key)
+                for key in ['added', 'updated']:
+                    assert sorted(ref['files'][key]) == sorted(
+                        new['files'][key]
+                    ), (lev, rgi_id, key)
+                assert sorted(ref['data_store']) == sorted(new['data_store'])
+                assert ref['requires'] == list(range(lev))
 
         # An empty chunk is a normal thing (the RGI ids have gaps) and has
         # to return quietly: on a cluster it is one task of an array job, and

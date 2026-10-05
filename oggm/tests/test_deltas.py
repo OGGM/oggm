@@ -2,9 +2,11 @@
 
 import io
 import json
+import logging
 import os
 from pathlib import Path
 import tarfile
+from types import SimpleNamespace
 
 import shutil
 
@@ -615,6 +617,64 @@ class TestDeltaServer:
         assert gdir.grid.nx > 0
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
+
+    @pytest.fixture
+    def local_l4_only(self, delta_server, tmp_path):
+        """A local tree with the L4 delta but none of the levels it requires."""
+        server, _ = delta_server
+        local = tmp_path / "local" / "RGI62" / "b_080" / "L4"
+        shutil.copytree(Path(server, "RGI62", "b_080", "L4"), local)
+        return str(local)
+
+    def test_init_from_local_tree_fetches_missing_level(
+        self, served_calls, local_l4_only
+    ):
+        calls, rid = served_calls
+        gdirs = workflow.init_glacier_directories(
+            [rid],
+            from_tar=local_l4_only,
+            prepro_base_url=self.BASE_URL,
+            prepro_border=80,
+        )
+        gdir = gdirs[0]
+        assert len(calls) == 1
+        assert "/L3/" in calls[0]
+        assert Path(gdir.dir, "L3.manifest.json").is_file()
+        assert Path(gdir.dir, "L4.manifest.json").is_file()
+        assert gdir.grid.nx > 0
+        mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
+        assert mb_calib["melt_f"] == 6.0
+
+    def test_local_tree_missing_level_without_base_url(
+        self, served_calls, local_l4_only
+    ):
+        calls, rid = served_calls
+        with pytest.raises(FileNotFoundError):
+            workflow.gdir_from_tar(rid, local_l4_only)
+        assert calls == []
+
+
+class TestStartState:
+    """`_start_state` at a `3a` resume, with and without the L2 state."""
+
+    @pytest.fixture
+    def gdir(self, tmp_path):
+        return SimpleNamespace(dir=str(tmp_path), rgi_id="RGI60-11.00897")
+
+    def test_missing_l2_state_is_rollup(self, gdir, caplog):
+        from oggm.cli.prepro_levels import _start_state
+
+        with caplog.at_level(logging.WARNING, logger="oggm.cli.prepro_levels"):
+            assert _start_state(gdir, True) is None
+        assert "L2.state.json" in caplog.text
+
+    def test_l2_state_is_loaded_and_removed(self, gdir):
+        from oggm.cli.prepro_levels import _start_state
+
+        fp = Path(gdir.dir, "L2.state.json")
+        fp.write_text(json.dumps({"a.txt": "abc"}))
+        assert _start_state(gdir, True) == {"a.txt": "abc"}
+        assert not fp.exists()
 
 
 L12_BASE_URL = (

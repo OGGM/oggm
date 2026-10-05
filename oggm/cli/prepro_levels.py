@@ -250,6 +250,37 @@ def _move_hypsometry_to_dem_folder(gdir, source=''):
     os.rename(hypso_f, os.path.join(out, os.path.basename(hypso_f)))
 
 
+# The L3a directories already hold L3 files, so a run resuming at `3a`
+# can't diff against what it loaded. The `3a` stage leaves the L2 state
+# in this file.
+_L2_STATE = 'L2.state.json'
+
+
+def _start_state(gdir, resume_at_inversion):
+    """The state the first level written by this run is a delta against.
+
+    Normally this is the current initialised directory, except at `3a`,
+    where it is the L2 state left by the `3a` stage. Returns None if
+    that state is missing (e.g. an L3a written before it was added), so
+    the level is then shipped as a materialisation.
+    """
+    if not resume_at_inversion:
+        return utils.snapshot_gdir_state(gdir.dir)
+    fp = os.path.join(gdir.dir, _L2_STATE)
+    if not os.path.exists(fp):
+        log.warning(
+            "(%s) no %s in the L3a directory: the L3 tar will " "be a materialisation.",
+            gdir.rgi_id,
+            _L2_STATE,
+        )
+        return None
+    with open(fp) as f:
+        state = json.load(f)
+    # Not an L3 file: it must not end up in the L3 tar
+    os.remove(fp)
+    return state
+
+
 def _delta_tar_entries(
     gdirs: list[GlacierDirectory],
     level: int,
@@ -887,7 +918,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             with get_lock():
                 fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
                 dfs = pd.read_csv(fs, index_col=0)
-                rgidf['dem_sourc`e'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+                rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
     # L0 - go
     if start_level == 0:
@@ -931,9 +962,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      f'to start from in {from_tar}')
         log.workflow(f'Reading the L{start_level_name} glacier directories '
                      f'from {from_tar}')
-        gdirs = workflow.init_glacier_directories(rgidf, reset=True,
-                                                  force=True,
-                                                  from_tar=str(from_tar))
+        # The lower levels a delta requires come from start_base_url when
+        # they are not on disk
+        gdirs = workflow.init_glacier_directories(
+            rgidf, reset=True, force=True, from_tar=str(from_tar),
+            prepro_base_url=start_base_url, prepro_border=border,
+            prepro_rgi_version=rgi_version)
     else:
         # The level to fetch is the one the directories are *stored* under,
         # which is not the integer we use for the level logic: resuming at
@@ -945,9 +979,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                   prepro_rgi_version=rgi_version,
                                                   prepro_base_url=start_base_url
                                                   )
-        # The first level produced is a delta against the downloaded state
+
+    if start_level > 0:
+        # The first level produced is a delta against the loaded state
         for gdir in gdirs:
-            manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
+            state = _start_state(gdir, resume_at_inversion)
+            if state is not None:
+                manifest_states[gdir.rgi_id] = state
 
     # L1 - Add dem files
     if start_level == 0:
@@ -1275,6 +1313,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             log.workflow('L3a done (no inversion, no summary). '
                          'Writing to tar...')
             level_base_dir = Path(output_base_dir) / 'L3a'
+            # The L3 delta written after `3a` is against L2, not L3a
+            for gdir in gdirs:
+                if gdir.rgi_id in manifest_states:
+                    with open(os.path.join(gdir.dir, _L2_STATE), 'w') as f:
+                        json.dump(manifest_states[gdir.rgi_id], f)
             workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                          base_dir=level_base_dir)
             utils.base_dir_to_tar(level_base_dir)

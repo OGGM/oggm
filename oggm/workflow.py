@@ -424,7 +424,8 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     return oggm.GlacierDirectory(entity, from_tar=from_tar, append=append)
 
 
-def gdir_from_tar(entity, from_tar):
+def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
+                  prepro_rgi_version=None):
 
     rgi_id = _rgi_id_of(entity)
 
@@ -447,14 +448,27 @@ def gdir_from_tar(entity, from_tar):
 
     tar_base = locate(from_tar)
     # A delta level folder (`L<n>`) takes its required levels from the
-    # sibling folders of the same tree
+    # sibling folders of the same tree, else from `base_url`. A chunked
+    # run writes L3 and L4 to disk, while L0 to L2 are only published.
     root, name = os.path.split(os.path.normpath(from_tar))
+
+    def locate_level(lvl):
+        try:
+            return locate(os.path.join(root, f"L{lvl}"))
+        except FileNotFoundError:
+            if base_url is None:
+                raise
+        return utils.get_prepro_gdir(
+            prepro_rgi_version or cfg.PARAMS["rgi_version"],
+            rgi_id,
+            prepro_border or int(cfg.PARAMS["border"]),
+            lvl,
+            base_url=base_url,
+        )
+
     if re.fullmatch(r"L\d", name):
         tars = _layered_level_tars(
-            tar_base,
-            rgi_id,
-            int(name[1:]),
-            lambda lvl: locate(os.path.join(root, f"L{lvl}")),
+            tar_base, rgi_id, int(name[1:]), locate_level
         )
     else:
         tars = {0: tar_base}
@@ -710,8 +724,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: the preprocessed directory url from
-        which to download the directories (became mandatory in OGGM v1.6)
+        for `from_prepro_level`: the preprocessed directory url from
+        which to download the directories (became mandatory in OGGM v1.6).
+        With a `from_tar` level folder, where to download the levels it
+        requires which are not in the sibling folders.
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -835,8 +851,14 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                         pass
 
             if _isdir(from_tar):
-                gdirs = execute_entity_task(gdir_from_tar, entities,
-                                            from_tar=from_tar)
+                gdirs = execute_entity_task(
+                    gdir_from_tar,
+                    entities,
+                    from_tar=from_tar,
+                    base_url=prepro_base_url,
+                    prepro_border=prepro_border,
+                    prepro_rgi_version=prepro_rgi_version,
+                )
             else:
                 gdirs = execute_entity_task(utils.GlacierDirectory, entities,
                                             reset=reset,
