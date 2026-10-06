@@ -1383,7 +1383,7 @@ class TestWorkflowUtils:
             assert 'melt_on_glacier' in ds.data_vars
             assert 'melt_on_glacier_monthly' in ds.data_vars
             assert ds_1['melt_on_glacier'].unit == 'kg yr-1'
-            assert ds_1['melt_on_glacier_monthly'].unit == 'kg yr-1'
+            assert ds_1['melt_on_glacier_monthly'].unit == 'kg month-1'
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_min_h'].values))
             assert np.all(np.isnan(
