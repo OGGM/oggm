@@ -454,14 +454,15 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
 
     def locate(level_dir):
-        new_path = os.path.join(level_dir, region, new_bundle + ".tar")
-        old_path = os.path.join(level_dir, region, rgi_id[:-3] + ".tar")
-        if os.path.exists(new_path):
-            return new_path
-        if os.path.exists(old_path):
-            return old_path
+        for path in (
+            os.path.join(level_dir, region, new_bundle + ".zip"),
+            os.path.join(level_dir, region, new_bundle + ".tar"),
+            os.path.join(level_dir, region, rgi_id[:-3] + ".tar"),
+        ):
+            if os.path.exists(path):
+                return path
         raise FileNotFoundError(
-            "Cannot find bundle tar for {} in {}".format(rgi_id, level_dir)
+            "Cannot find bundle for {} in {}".format(rgi_id, level_dir)
         )
 
     tar_base = locate(from_tar)
@@ -492,7 +493,9 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
         tars = {0: tar_base}
 
     from_tar = [
-        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz")
+        os.path.join(
+            tb[:-4], rgi_id + (".zip" if tb.endswith(".zip") else ".tar.gz")
+        )
         for _, tb in sorted(tars.items())
     ]
     if len(from_tar) == 1:

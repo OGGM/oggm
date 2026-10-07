@@ -449,6 +449,63 @@ class TestLayeredGdir:
         np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
+    def test_gdir_from_tar_local_zip_tree(self, tmp_path, hef_gdir):
+        """A local tree of zip level bundles, as prepro_levels writes it."""
+        rid = hef_gdir.rgi_id
+        srcbase = str(tmp_path / "src")
+        workdir = os.path.join(srcbase, rid[:-6], rid[:-3], rid)
+        shutil.copytree(hef_gdir.dir, workdir)
+        tree = tmp_path / "tree"
+
+        def publish(level, include=None):
+            level_dir = str(tree / f"L{level}")
+            utils.gdir_to_archive.unwrapped(
+                _FakeGdir(workdir, srcbase),
+                base_dir=level_dir,
+                delete=False,
+                include=include,
+            )
+            utils.base_dir_to_bundles(level_dir)
+
+        # L3 materialisation, then an L4 delta of only the changed files
+        utils.write_level_manifest(
+            workdir,
+            level=3,
+            prev_state={},
+            artefact_tag="ds1",
+            requires=[],
+            includes_levels=[0, 1, 2, 3],
+            border=80,
+            rgi_version="62",
+            format_version=2,
+        )
+        publish(3)
+        prev = utils.snapshot_gdir_state(workdir)
+        with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
+            json.dump({"melt_f": 6.0}, f)
+        _, changed = utils.write_level_manifest(
+            workdir,
+            level=4,
+            prev_state=prev,
+            artefact_tag="ds1",
+            requires=[0, 1, 2, 3],
+            border=80,
+            rgi_version="62",
+            format_version=2,
+        )
+        publish(4, include=changed)
+        bundle = f"{rid[:-6]}.{rid[-5:-2]}.zip"
+        assert (tree / "L4" / rid[:-6] / bundle).is_file()
+
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        gdir = workflow.gdir_from_tar(rid, str(tree / "L4"))
+
+        assert Path(gdir.dir, "L3.manifest.json").is_file()
+        assert Path(gdir.dir, "L4.manifest.json").is_file()
+        assert gdir.grid.nx > 0
+        mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
+        assert mb_calib["melt_f"] == 6.0
+
     @pytest.mark.parametrize("arg_delete", [True, False])
     def test_convert_pickles_to_npz(self, tmp_path, hef_gdir, arg_delete):
         """Pickles are rewritten into the npz store and then removed,

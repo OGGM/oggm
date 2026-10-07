@@ -2534,7 +2534,7 @@ class TestPreproCLI:
                 assert_array_equal(ref.rgi_id, new.rgi_id)
                 assert_allclose(ref.volume, new.volume)
 
-        # The tar files of the chunks add up to what one job would write
+        # The bundles of the chunks add up to what one job would write
         for lev in ['L3', 'L4', 'L5']:
             ref = sorted(os.listdir(os.path.join(ref_dir, 'RGI61', 'b_020',
                                                  lev, 'RGI60-11')))
@@ -2547,7 +2547,7 @@ class TestPreproCLI:
         def manifest(root, lev, rgi_id):
             bundle = glob.glob(
                 os.path.join(
-                    root, 'RGI61', 'b_020', f'L{lev}', 'RGI60-11', '*.tar'
+                    root, 'RGI61', 'b_020', f'L{lev}', 'RGI60-11', '*.zip'
                 )
             )
             for tar_base in bundle:
@@ -3257,12 +3257,12 @@ class TestPreproCLI:
             "b_020",
             "L1",
             rid[:8],
-            rid[:8] + f".{rid[-5:-2]}.tar",  # bundle_size=100
+            rid[:8] + f".{rid[-5:-2]}.zip",  # bundle_size=100
         )
         assert os.path.isfile(tarf)
 
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:11], rid + '.tar.gz')
+                            rid[:8], rid[:11], rid + '.zip')
         assert not os.path.isfile(tarf)
 
         entity = rgidf.iloc[0]

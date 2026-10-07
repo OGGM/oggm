@@ -313,10 +313,10 @@ def _delta_tar_entries(
     --------
     list
         A list of ``(gdir, {'include': changed_paths})`` entries for
-        ``execute_entity_task(utils.gdir_to_tar, entries, ...)``, so
-        each level tar ships only what the level changed. Glaciers whose
-        manifest cannot be written (e.g. errored directories) fall back
-        to a full, manifest-less (legacy) tar.
+        ``execute_entity_task(utils.gdir_to_archive, entries, ...)``, so
+        each level bundle ships only what the level changed. Glaciers
+        whose manifest cannot be written (e.g. errored directories) fall
+        back to a full, manifest-less (legacy) archive.
     """
     if not artefact_id:
         artefact_id = utils.artefact_id_from_tag(
@@ -339,6 +339,7 @@ def _delta_tar_entries(
                 artefact_id=artefact_id,
                 border=border,
                 rgi_version=rgi_version,
+                format_version=2,
                 **layers,
             )
             states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
@@ -346,7 +347,7 @@ def _delta_tar_entries(
         except Exception as err:
             log.warning(
                 "(%s) could not write the L%d manifest (%s: %s); "
-                "writing a full tar instead.",
+                "writing a full archive instead.",
                 gdir.rgi_id,
                 level,
                 type(err).__name__,
@@ -711,11 +712,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
     def _write_level_tars(level, gdirs, deltas=True):
-        """Tar the glacier directories of a level into the output folder.
+        """Bundle the glacier directories of a level into the output folder.
 
-        With `deltas`, the per-glacier delta manifests are written first and
-        each tar ships only what the level changed. `deltas=False` tars the
-        directories whole (L0 and L5, whose manifests are written by their
+        Writes v2 zip bundles. With `deltas`, the per-glacier delta manifests
+        are written first and each archive ships only what the level changed.
+        `deltas=False` archives the directories whole (L0 and L5, whose manifests are written by their
         caller, and the multi-DEM L1 branch, which has none).
 
         A `temp_bias_run` ships no glacier directories at all, so this is
@@ -723,7 +724,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         """
         if temp_bias_run:
             return
-        log.workflow(f'L{level} done. Writing to tar...')
+        log.workflow(f'L{level} done. Writing to zip...')
         entries = gdirs
         if deltas:
             entries = _delta_tar_entries(
@@ -737,9 +738,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             )
         level_base_dir = Path(output_base_dir) / f'L{level}'
         workflow.execute_entity_task(
-            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
         )
-        utils.base_dir_to_tar(level_base_dir)
+        utils.base_dir_to_bundles(level_base_dir)
 
     # Local paths
     if override_params is None:
@@ -943,6 +947,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     includes_levels=[0],
                     border=border,
                     rgi_version=rgi_version,
+                    format_version=2,
                 )
                 manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(
                     gdir.dir
@@ -1313,16 +1318,20 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             # that a whole-region job can calibrate Glen A and finish the
             # level: that calibration needs all the glaciers at once.
             log.workflow('L3a done (no inversion, no summary). '
-                         'Writing to tar...')
+                         'Writing to zip...')
             level_base_dir = Path(output_base_dir) / 'L3a'
             # The L3 delta written after `3a` is against L2, not L3a
             for gdir in gdirs:
                 if gdir.rgi_id in manifest_states:
                     with open(os.path.join(gdir.dir, _L2_STATE), 'w') as f:
                         json.dump(manifest_states[gdir.rgi_id], f)
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+            workflow.execute_entity_task(
+                utils.gdir_to_archive,
+                gdirs,
+                delete=False,
+                base_dir=level_base_dir,
+            )
+            utils.base_dir_to_bundles(level_base_dir)
             _time_log()
             return
 
@@ -1622,6 +1631,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             kind="standalone",
             border=border,
             rgi_version=rgi_version,
+            format_version=2,
         )
     _write_level_tars(5, mini_gdirs, deltas=False)
 
