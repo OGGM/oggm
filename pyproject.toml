@@ -33,8 +33,6 @@ dependencies = [
     "shapely",
     "xarray",
     "pyarrow",
-    "fsspec>=2026.6.0",
-    "aiohttp>=3.14.1",
     "h5netcdf>=1.8.1",
     "h5py>=3.16.0",
 ]

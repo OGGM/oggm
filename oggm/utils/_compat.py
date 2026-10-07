@@ -545,7 +545,7 @@ def _write_artifact_manifest(
             level=level,
             prev_state={},
             requires=[],
-            includes_levels=list(range(lowest, level + 1)),
+            includes_levels=list(range(level + 1)),
             **common,
         )
         return None

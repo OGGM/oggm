@@ -6031,6 +6031,12 @@ def write_level_manifest(
             "A materialisation must include several levels and require none, "
             f"got includes_levels={includes_levels}, requires={list(requires)}."
         )
+    elif kind == "delta" and level > 0 and not requires:
+        raise ValueError(
+            f"A delta above L0 must require the levels below it, got "
+            f"level={level}, requires=[]. Pass includes_levels spanning "
+            "0..level to write a materialisation instead."
+        )
     root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
     rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
     if border is None:
