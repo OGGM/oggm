@@ -1673,8 +1673,8 @@ def parse_args(args):
                              'files. A chunked cluster run is 2 -> 3a '
                              '(chunks), 3a -> 3 (region), 3 -> 4a (chunks), '
                              '4a -> 5 (region).')
-    parser.add_argument("--dataset-tag", type=str,
-                        help="explicit label identifying this dataset "
+    parser.add_argument("--artefact-tag", type=str,
+                        help="explicit label identifying this artefact "
                         "generation, hashed into the per-level "
                         "manifests. Defaults to the output folder "
                         "name.")

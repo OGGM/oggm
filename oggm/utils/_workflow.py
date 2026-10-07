@@ -4306,7 +4306,7 @@ class GlacierDirectory(object):
             The absolute path to the group's npz file.
         """
         return os.path.join(
-            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
+            self.get_filepath("data_store"), f"{filename}{filesuffix or ''}.npz"
         )
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
@@ -4335,14 +4335,16 @@ class GlacierDirectory(object):
     def open_group(
         self, filename: str, filesuffix: str = "", **xr_kwargs
     ) -> xr.Dataset:
-        """Open a plain dataset group from the glacier's zarr store.
+        """Open a plain dataset group of the glacier directory.
 
-        Preferred way to read v2 files. Top-level method distinct from
-        ``read_store`` which was designed to reconstruct arbitrary
-        pickle objects. Instead, this returns a group as an
-        ``xarray.Dataset`` and is used for netcdf files etc. When the
-        zarr group does not exist, falls back to the v1 legacy netCDF
-        file of the same basename/filesuffix.
+        Preferred way to read gridded, climate and GCM data. Distinct
+        from ``read_store``, which reconstructs arbitrary objects: this
+        returns the group as an ``xarray.Dataset``. Groups are
+        compressed netCDF files at the v1 path, so v1 directories read
+        unchanged.
+
+        TODO: This can be refactored, and maybe the method name should
+        be something clearer for users.
 
         Parameters
         ----------
@@ -4351,34 +4353,21 @@ class GlacierDirectory(object):
         filesuffix : str, optional
             Append a suffix to the filename (useful for experiments).
         **xr_kwargs
-            Passed to ``xr.open_zarr`` / ``xr.open_dataset``
-            (e.g. decoding options).
+            Passed to ``xr.open_dataset`` (e.g. decoding options).
 
         Returns
         -------
         xr.Dataset
-            The group or legacy file contents.
+            The group contents.
         """
-        group = f"{filename}{filesuffix or ''}"
         # dask fancy indexing/item assignment causes breaks
         xr_kwargs.setdefault("chunks", None)
-        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
-        if os.path.isdir(os.path.join(zarr_fp, group)):
-            try:
-                return xr.open_zarr(
-                    zarr_fp, group=group, consolidated=True, **xr_kwargs
-                )
-            except (KeyError, zarr.errors.GroupNotFoundError):
-                # group on disk but not yet in consolidated metadata
-                return xr.open_zarr(
-                    zarr_fp, group=group, consolidated=False, **xr_kwargs
-                )
-        fp = self.get_filepath(filename, filesuffix=filesuffix)
-        if os.path.exists(fp):
-            return xr.open_dataset(fp, **xr_kwargs)
-        raise FileNotFoundError(
-            f"No zarr group or legacy file for `{group}` in {self.dir}"
-        )
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if not os.path.exists(fp):
+            raise FileNotFoundError(
+                f"No group `{filename}{filesuffix or ''}` in {self.dir}"
+            )
+        return xr.open_dataset(fp, engine="h5netcdf", **xr_kwargs)
 
     def write_group(
         self,
@@ -4388,43 +4377,51 @@ class GlacierDirectory(object):
         mode: str = "a",
         encoding: dict = None,
     ) -> None:
-        """Write a plain ``xarray.Dataset`` as a group of the zarr store.
+        """Write a plain ``xarray.Dataset`` as a group of the directory.
 
-        Preferred way to write v2 files.
+        Preferred way to write gridded, climate and GCM data. Every data
+        variable is compressed (zlib level 4 with shuffle), and the file
+        is written beside the target then moved into place.
 
         Parameters
         ----------
         ds : xr.Dataset
-            The dataset to write. Must be zarr-compatible.
+            The dataset to write.
         filename : str
             File name (must be listed in cfg.BASENAMES).
         filesuffix : str, optional
             Append a suffix to the filename (useful for experiments).
         mode : {'a', 'w'}, default 'a'
-            'w' removes any existing group first, 'a' adds to or
-            overwrites variables in an existing group with matching
-            dimensions.
+            'w' replaces any existing group, 'a' adds to or overwrites
+            variables in an existing group with matching dimensions.
         encoding : dict, optional
-            Passed to ``Dataset.to_zarr``.
+            Per-variable encoding, layered over the compression
+            defaults.
         """
-        group = f"{filename}{filesuffix or ''}"
-        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
-        group_dir = os.path.join(zarr_fp, group)
-        if mode == "w" and os.path.exists(group_dir):
-            # instead of to_zarr(mode='w') so rest of store is untouched
-            shutil.rmtree(group_dir)
-        ds.to_zarr(
-            zarr_fp,
-            group=group,
-            mode="a",
-            zarr_format=cfg.PARAMS["zarr_format"],
-            encoding=encoding,
-            consolidated=False,
-        )
-        zarr.consolidate_metadata(zarr_fp)
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if mode == "a" and os.path.exists(fp):
+            # ponytail: rewrites the whole group, fine at gdir sizes
+            with xr.open_dataset(fp, engine="h5netcdf",
+                                 decode_cf=False) as old:
+                ds = xr.merge([old.load().drop_vars(
+                    [v for v in ds.variables if v in old.variables]
+                ), ds], combine_attrs="override")
+        enc = {
+            v: {"zlib": True, "complevel": 4, "shuffle": True}
+            for v in ds.data_vars
+        }
+        for v, e in (encoding or {}).items():
+            enc[v] = {**enc.get(v, {}), **e}
+        tmp = f"{fp}.tmp{os.getpid()}"
+        try:
+            ds.to_netcdf(tmp, engine="h5netcdf", encoding=enc)
+            os.replace(tmp, fp)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
 
     def delete_group(self, filename: str, filesuffix: str = "") -> None:
-        """Remove a group from the zarr store and any legacy netCDF file.
+        """Remove a plain dataset group from the directory.
 
         Parameters
         ----------
@@ -4433,16 +4430,7 @@ class GlacierDirectory(object):
         filesuffix : str, optional
             Append a suffix to the filename.
         """
-        group = f"{filename}{filesuffix or ''}"
-        zarr_fp = self.get_filepath("data_store").replace(".pkl", ".zarr")
-        group_dir = os.path.join(zarr_fp, group)
-        if os.path.isdir(group_dir):
-            shutil.rmtree(group_dir)
-            try:
-                zarr.consolidate_metadata(zarr_fp)
-            except Exception:
-                pass
-        fp = self.get_filepath(filename, filesuffix=filesuffix)
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
         if os.path.exists(fp):
             os.remove(fp)
 
@@ -4798,8 +4786,8 @@ class GlacierDirectory(object):
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         return self._read_shapefile_from_path(fp)
 
-    def write_shapefile(self, var, filename, filesuffix=''):
-        """ Writes a variable to a shapefile on disk.
+    def write_shapefile(self, var, filename, filesuffix=""):
+        """Writes a variable to a shapefile on disk.
 
         Parameters
         ----------
@@ -4815,7 +4803,12 @@ class GlacierDirectory(object):
         """
         fp = self.get_filepath(filename, filesuffix=filesuffix)
         # index=False mimics shapefiles, which never stored the index
-        var.to_parquet(fp.replace('.shp', '.parquet'), index=False)
+        var.to_parquet(
+            fp.replace(".shp", ".parquet"),
+            engine="pyarrow",
+            compression="zstd", # brotli is smaller but slower writes
+            index=False,
+        )
 
     def write_climate_file(self, time, prcp, temp,
                            ref_pix_hgt, ref_pix_lon, ref_pix_lat, *,
@@ -4869,12 +4862,6 @@ class GlacierDirectory(object):
             temp = temp.values
         if isinstance(temp_std, xr.DataArray):
             temp_std = temp_std.values
-        # remove stale legacy netCDF so v1 fallback of ``open_group``
-        # never serves outdated data
-        fpath = self.get_filepath(file_name, filesuffix=filesuffix)
-        if os.path.exists(fpath):
-            os.remove(fpath)
-
         if source is None:
             raise InvalidParamsError('`source` kwarg is required')
 
@@ -5884,7 +5871,7 @@ def _check_level_compat(manifests: list):
         )
     format_versions = {m.get("format_version", 1) for m in manifests}
     if len(format_versions) > 1:
-        # v1 ships .nc/shapefiles, v2 zarr groups/parquet
+        # v1 ships tar bundles, v2 zip bundles of npz/netCDF/parquet
         raise InvalidWorkflowError(
             "Layered prepro levels have mixed format_versions: "
             f"{sorted(format_versions)}"
@@ -6009,9 +5996,9 @@ def write_level_manifest(
         ``cfg.PARAMS['rgi_version']``.
     format_version : int, default 1
         Payload format of the artifact: 1 for tar bundles of native
-        files (``.nc``, shapefile tars, pickles), 2 for zip bundles of
-        zarr groups + geoparquet. Levels of mixed format_versions
-        cannot be layered.
+        files (``.nc``, shapefile tars, pickles), 2 for STORED zip
+        bundles of npz store groups, compressed netCDF and geoparquet.
+        Levels of mixed format_versions cannot be layered.
 
     Returns
     -------

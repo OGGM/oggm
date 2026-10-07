@@ -34,8 +34,6 @@ import pandas as pd
 import numpy as np
 import shapely.geometry as shpg
 import requests
-from zarr.abc.store import (Store, OffsetByteRequest, RangeByteRequest,
-                            SuffixByteRequest)
 
 # Optional libs
 try:
@@ -1330,125 +1328,6 @@ def _open_inner_zip(bundle_url, rgi_id, block_size=8192):
     return http_file, outer, inner
 
 
-class RemoteBundleStore(Store):
-    """Read-only zarr store over one glacier's remote v2 bundle.
-
-    Serves the zarr keys of the glacier's ``data_store.zarr`` out of a
-    remote bundle (``{bundle}.zip`` -> ``{bundle}/{rgi_id}.zip`` ->
-    ``{rgi_id}/data_store.zarr/**``) via direct HTTP range requests:
-    the remote file is opened once, both zip central directories are
-    resolved once, then each key maps to one exact byte range (all
-    entries are STORED). Replaces the fsspec chain of HANDOFF_1896
-    Phase B, which re-read the outer central directory ~3x per open.
-
-    Parameters
-    ----------
-    bundle_url : str
-        URL of the outer bundle zip.
-    rgi_id : str
-        The glacier's RGI ID.
-    block_size : int, default 8192
-        HTTP range block size.
-    """
-
-    supports_writes = False
-    supports_deletes = False
-    supports_listing = True
-
-    def __init__(self, bundle_url, rgi_id, block_size=8192):
-        super().__init__(read_only=True)
-        self.bundle_url = bundle_url
-        self.rgi_id = rgi_id
-        self._block_size = block_size
-        self._entries = None
-
-    def _ensure_entries(self):
-        if self._entries is None:
-            self._http_file, self._outer, self._inner = _open_inner_zip(
-                self.bundle_url, self.rgi_id, block_size=self._block_size
-            )
-            prefix = f"{self.rgi_id}/data_store.zarr/"
-            self._entries = {
-                info.filename[len(prefix) :]: info
-                for info in self._inner.infolist()
-                if info.filename.startswith(prefix)
-                and not info.filename.endswith("/")
-            }
-        return self._entries
-
-    def __eq__(self, other):
-        return (
-            isinstance(other, RemoteBundleStore)
-            and other.bundle_url == self.bundle_url
-            and other.rgi_id == self.rgi_id
-        )
-
-    async def get(self, key, prototype, byte_range=None):
-        info = self._ensure_entries().get(key)
-        if info is None:
-            return None
-        # ponytail: sync I/O inside async methods - zarr awaits these
-        # directly so reads serialize; revisit if real-network latency
-        # ever makes concurrent chunk fetches matter
-        with self._inner.open(info) as f:
-            if byte_range is None:
-                data = f.read()
-            elif isinstance(byte_range, RangeByteRequest):
-                f.seek(byte_range.start)
-                data = f.read(byte_range.end - byte_range.start)
-            elif isinstance(byte_range, OffsetByteRequest):
-                f.seek(byte_range.offset)
-                data = f.read()
-            elif isinstance(byte_range, SuffixByteRequest):
-                f.seek(max(0, info.file_size - byte_range.suffix))
-                data = f.read()
-            else:
-                raise TypeError(f"Unexpected byte_range: {byte_range!r}")
-        return prototype.buffer.from_bytes(data)
-
-    async def get_partial_values(self, prototype, key_ranges):
-        return [
-            await self.get(key, prototype, byte_range)
-            for key, byte_range in key_ranges
-        ]
-
-    async def exists(self, key):
-        return key in self._ensure_entries()
-
-    async def set(self, key, value):
-        raise NotImplementedError("RemoteBundleStore is read-only")
-
-    async def delete(self, key):
-        raise NotImplementedError("RemoteBundleStore is read-only")
-
-    async def list(self):
-        for key in self._ensure_entries():
-            yield key
-
-    async def list_prefix(self, prefix):
-        for key in self._ensure_entries():
-            if key.startswith(prefix):
-                yield key
-
-    async def list_dir(self, prefix):
-        if prefix and not prefix.endswith("/"):
-            prefix += "/"
-        seen = set()
-        for key in self._ensure_entries():
-            if key.startswith(prefix):
-                child = key[len(prefix) :].split("/")[0]
-                if child not in seen:
-                    seen.add(child)
-                    yield child
-
-    def close(self):
-        if self._entries is not None:
-            self._inner.close()
-            self._outer.close()
-            self._http_file.close()
-        super().close()
-
-
 def peek_remote_manifest(
     bundle_url: str, rgi_id: str, level: int, block_size: int = 8192
 ) -> dict | None:
@@ -1490,11 +1369,11 @@ def open_remote_group(
     filesuffix: str = "",
     block_size: int = 8192,
 ):
-    """Lazily open a zarr group of a glacier inside a remote v2 bundle.
+    """Lazily open a dataset group of a glacier inside a remote v2 bundle.
 
-    Thin wrapper around :class:`RemoteBundleStore`: only the zip central
-    directories, the consolidated zarr metadata and the requested chunks
-    travel over the wire (range requests), never the bundle.
+    The group's netCDF member is read in place through both zip layers
+    with h5netcdf. The client only receives the zip central directories,
+    the HDF5 metadata and the requested chunks, but not the bundle.
 
     Parameters
     ----------
@@ -1517,16 +1396,23 @@ def open_remote_group(
     """
     import xarray as xr
 
-    store = RemoteBundleStore(bundle_url, rgi_id, block_size=block_size)
-    group = f"{filename}{filesuffix or ''}"
-    # zarr 3 cannot probe the store format through a non-directory
-    # store - hint it
-    return xr.open_zarr(
-        store,
-        group=group,
-        consolidated=True,
-        zarr_format=cfg.PARAMS["zarr_format"],
+    http_file, outer, inner = _open_inner_zip(
+        bundle_url, rgi_id, block_size=block_size
     )
+    fobj = inner.open(f"{rgi_id}/{filename}{filesuffix or ''}.nc")
+    ds = xr.open_dataset(fobj, engine="h5netcdf", chunks=None)
+    # the dataset is lazy, so the zip/HTTP handles need to be closed.
+    close_ds = ds._close
+
+    def _close():
+        # TODO: This could also be done in a context manager? Needs benchmarking.
+        if close_ds is not None:
+            close_ds()
+        for f in (fobj, inner, outer, http_file):
+            f.close()
+
+    ds.set_close(_close)
+    return ds
 
 
 def get_dataframe_from_file(file_path: Path | str, **kwargs) -> pd.DataFrame:

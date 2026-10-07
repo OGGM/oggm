@@ -746,7 +746,7 @@ def test_convert_prepro_to_deltas(tmp_path):
     The test-env allowlist only covers test data, so this test downloads
     the real (small) reference gdirs. Reverted by restore_oggm_cfg.
     """
-    from oggm.utils import compat
+    from oggm.utils import _compat as compat
 
     cfg.initialize()
     cfg.PATHS["working_dir"] = str(tmp_path / "wd")

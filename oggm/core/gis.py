@@ -723,23 +723,10 @@ class GriddedNcdfFile(object):
             self.fpath = os.path.join(fpath, basename + '.nc')
             self.grid = grid
 
-        if reset:
-            if os.path.exists(self.fpath):
-                os.remove(self.fpath)
-            if gdir is not None and gdir.has_file(basename):
-                gdir.delete_group(basename)
+        if reset and os.path.exists(self.fpath):
+            os.remove(self.fpath)
 
     def __enter__(self):
-
-        if (
-            self.gdir is not None
-            and not os.path.exists(self.fpath)
-            and self.gdir.has_file(self.basename)
-        ):
-            # v2: materialise the zarr group as the scratch netCDF so
-            # the template/append logic below stays unchanged.
-            with self.gdir.open_group(self.basename) as ds:
-                ds.load().to_netcdf(self.fpath)
 
         if os.path.exists(self.fpath):
             # Already there - just append
@@ -777,12 +764,12 @@ class GriddedNcdfFile(object):
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.nc.close()
         if self.gdir is not None and exc_type is None:
-            # v2: sync the scratch netCDF into the zarr store, use
-            # decode_cf=False so encoded values are identical
+            # rewrite through write_group so every variable gets the
+            # group compression, whichever createVariable was given;
+            # decode_cf=False keeps the encoded values identical
             with xr.open_dataset(self.fpath, decode_cf=False) as ds:
-                self.gdir.write_group(ds.load(), self.basename, mode="w")
-            # the zarr group is now the single source of truth!
-            os.remove(self.fpath)
+                ds = ds.load()
+            self.gdir.write_group(ds, self.basename, mode="w")
 
 
 @entity_task(log, writes=['gridded_data'])
@@ -1937,14 +1924,14 @@ def gridded_data_var_to_geotiff(gdir, varname, fname=None, output_folder=None):
 
     outpath = os.path.join(base_dir, fname)
 
-    # Read the gridded data (zarr group or legacy netCDF)
+    # Read the gridded data
     with gdir.open_group('gridded_data') as ds:
 
         # Prepare the profile dict
         crs = ds.pyproj_srs
         var = ds[varname]
         grid = ds.salem.grid.corner_grid
-        # np.asarray: zarr-backed groups are lazy, rasterio needs values
+        # np.asarray: groups open lazily, rasterio needs values
         data = np.asarray(var.data)
         data_type = data.dtype.name
         height, width = var.data.shape

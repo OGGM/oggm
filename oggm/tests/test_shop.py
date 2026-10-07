@@ -484,7 +484,7 @@ class Test_w5e5:
 
         period = (1901, 2019)
 
-        with gdir.open_group(path_clim) as ds_clim:
+        with gdir.open_group("climate_historical") as ds_clim:
             self.assert_data_bounds(dataset=ds_clim, period=period)
             ds_clim_monthly = ds_clim
             # temp_std

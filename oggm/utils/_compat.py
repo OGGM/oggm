@@ -35,7 +35,8 @@ from oggm.utils._workflow import (
     gdir_to_tar,
     robust_archive_extract,
     snapshot_gdir_state,
-    write_level_manifest)
+    write_level_manifest,
+)
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ log = logging.getLogger(__name__)
 # means the two trees were generated from different inputs.
 _TREE_INVARIANTS = ("dem.tif", "glacier_grid.json", "dem_source.txt")
 
-# basenames whose netCDF payload moves into the zarr store in v2
+# dataset-group basenames, rewritten compressed by write_group in v2
 _NC_STORE_BASENAMES = ("gridded_data", "climate_historical", "gcm_data")
 
 
@@ -106,11 +107,11 @@ def convert_gdir_to_v2(gdir_or_dir, delete_originals: bool = True):
     """Convert a v1 glacier directory to the v2 payload formats in place.
 
     - ``gridded_data*.nc`` / ``climate_historical*.nc`` / ``gcm_data*.nc``
-    become groups of ``data_store.zarr``
-    - Shapefiles become geoparquet
-    - Pickles converted to zarr with :func:`_convert_pickles_to_zarr`.
-    - Model-run NetCDFs (``model_geometry*`` etc.) stay untouched.
+      are rewritten in place through ``write_group`` (compressed).
+    - Pickles become npz store groups with :func:`convert_pickles_to_npz`.
+    - Model-run NetCDFs (``model_geometry*`` etc.) stay untouched. TODO: rewrite these too.
     - Already-converted content is left alone.
+    - Shapefiles become geoparquet.
 
     Parameters
     ----------
@@ -118,7 +119,7 @@ def convert_gdir_to_v2(gdir_or_dir, delete_originals: bool = True):
         The glacier directory or its path, in the usual
         ``<base>/<region>/<subregion>/<rgi_id>`` layout.
     delete_originals : bool, default True
-        If True, remove each ``.nc``/shapefile artifact once converted.
+        If True, remove each shapefile artifact once converted.
 
     Returns
     -------
@@ -133,9 +134,8 @@ def convert_gdir_to_v2(gdir_or_dir, delete_originals: bool = True):
         for fp in sorted(glob.glob(os.path.join(gdir.dir, f"{stem}*.nc"))):
             suffix = os.path.basename(fp)[len(stem) : -3]
             with xr.open_dataset(fp, decode_cf=False) as ds:
-                gdir.write_group(ds.load(), base, filesuffix=suffix, mode="w")
-            if delete_originals:
-                os.remove(fp)
+                ds = ds.load()
+            gdir.write_group(ds, base, filesuffix=suffix, mode="w")
 
     shp_basenames = [
         k
@@ -165,9 +165,9 @@ def convert_gdir_to_v16(gdir_or_dir):
     """Convert a v2 glacier directory in place to the v1.6 format.
 
     The reverse of :func:`convert_gdir_to_v2`.
-    - gridded/climate/gcm zarr groups become ``.nc`` files again
     - geoparquet become tarred shapefiles.
-    - Pickle-era store groups are left in the store as ``read_store``
+    - gridded/climate/gcm groups are already ``.nc`` files and stay.
+    - npz store groups are left in the store as ``read_store``
       reads them either way.
 
     Parameters
@@ -183,17 +183,6 @@ def convert_gdir_to_v16(gdir_or_dir):
     from oggm.utils._workflow import _write_shape_to_disk
 
     gdir = _as_gdir(gdir_or_dir)
-    store_dir = os.path.join(gdir.dir, "data_store.zarr")
-
-    for base in _NC_STORE_BASENAMES:
-        for group_dir in sorted(glob.glob(os.path.join(store_dir, f"{base}*"))):
-            suffix = os.path.basename(group_dir)[len(base) :]
-            with gdir.open_group(
-                base, filesuffix=suffix, decode_cf=False
-            ) as ds:
-                ds = ds.load()
-            gdir.delete_group(base, filesuffix=suffix)
-            ds.to_netcdf(gdir.get_filepath(base, filesuffix=suffix))
 
     shp_basenames = [
         k
@@ -220,7 +209,7 @@ def convert_prepro_to_v2_artifacts(
     delta_tree: str,
     rgi_ids: list[str],
     output_dir: str,
-    dataset_tag: str,
+    artefact_tag: str,
     border: int = 80,
     rgi_version: str = "62",
     workdir: str | None = None,
@@ -248,9 +237,9 @@ def convert_prepro_to_v2_artifacts(
         Glaciers to convert.
     output_dir : str
         Root of the v2 output tree
-    dataset_tag : str
-        Tag of the converted dataset. This is hashed into the new
-        ``dataset_id`` as the v2 artifacts are a distinct logical
+    artefact_tag : str
+        Tag of the converted artefacts. This is hashed into the new
+        ``artefact_id`` as the v2 artifacts are a distinct logical
         dataset from their v1 source.
     border : int, default 80
         Map border of the dataset.
@@ -289,7 +278,7 @@ def convert_prepro_to_v2_artifacts(
     own_workdir = workdir is None
     if own_workdir:
         workdir = tempfile.mkdtemp(prefix="oggm_v2_convert_")
-    dataset_id = artefact_id_from_tag(dataset_tag, border, rgi_version)
+    artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
 
     try:
         for rid in rgi_ids:
@@ -344,8 +333,8 @@ def convert_prepro_to_v2_artifacts(
                     requires=requires,
                     includes_levels=includes,
                     kind=kind,
-                    dataset_tag=dataset_tag,
-                    dataset_id=dataset_id,
+                    artefact_tag=artefact_tag,
+                    artefact_id=artefact_id,
                     border=border,
                     rgi_version=rgi_version,
                     format_version=2,
