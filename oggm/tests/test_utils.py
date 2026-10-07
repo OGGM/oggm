@@ -1808,6 +1808,7 @@ class TestPreproCLI:
         assert not kwargs['store_hydro_output']
         assert not kwargs['store_monthly_hydro']
         assert kwargs['ref_area_yr'] is None
+        assert kwargs['artefact_tag'] is None
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -1815,6 +1816,7 @@ class TestPreproCLI:
                                            '--mb-calibration-strategy', 'temp_melt',
                                            '--start-base-url', 'http://foo',
                                            '--ref-area-yr', '2000',
+                                           '--artefact-tag', 'foo',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -1827,6 +1829,7 @@ class TestPreproCLI:
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
         assert kwargs['ref_area_yr'] == 2000
+        assert kwargs['artefact_tag'] == 'foo'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
