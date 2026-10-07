@@ -2609,10 +2609,10 @@ def run_dynamic_melt_f_calibration(
             # now clip melt_f with limits (to be sure)
             melt_f = np.clip(melt_f, melt_f_limits[0], melt_f_limits[1])
             if melt_f in melt_f_guess:
-                raise RuntimeError('This melt_f was already tried. Probably '
-                                   'we are at one of the max or min limit and '
-                                   'still have no satisfactory mismatch '
-                                   'found!')
+                raise RuntimeError('This melt_f was already tried. Either we '
+                                   'are at one of the max or min limit, or '
+                                   'the mismatch does not get closer to 0 in '
+                                   'the direction we search!')
 
             # if error during dynamic calibration this defines how much
             # melt_f is changed in the upcoming iterations to look for an
@@ -2716,6 +2716,29 @@ def run_dynamic_melt_f_calibration(
 
             return float(tmp_mismatch), float(melt_f)
 
+        def bisect_or_step():
+            # used if the spline proposes a melt_f which was already tried:
+            # bisect the narrowest melt_f interval with a sign change of the
+            # mismatch, or if there is none, take a step away from the best
+            # guess in the direction indicated by its mismatch
+            guesses = np.array(melt_f_guess)
+            mis = np.array(mismatch)
+            brackets = [(abs(guesses[i] - guesses[j]), i, j)
+                        for i in range(len(guesses))
+                        for j in range(i + 1, len(guesses))
+                        if np.sign(mis[i]) != np.sign(mis[j])]
+            if brackets:
+                width, i, j = min(brackets)
+                if width < 0.02:
+                    raise RuntimeError('The mismatch changes sign within '
+                                       f'{width:.4f} melt_f without reaching '
+                                       'the tolerance, probably a jump in '
+                                       'the response of the model!')
+                return (guesses[i] + guesses[j]) / 2
+            best = np.argmin(np.abs(mis))
+            return (guesses[best] +
+                    np.sign(mis[best]) * melt_f_max_step_length)
+
         # first guess
         new_mismatch, new_melt_f = get_mismatch(melt_f_initial)
         melt_f_guess.append(new_melt_f)
@@ -2764,8 +2787,14 @@ def run_dynamic_melt_f_calibration(
                 else:
                     raise RuntimeError('Not able to minimise! Problem is '
                                        'unknown. (nan in splin fit)')
-            new_mismatch, new_melt_f = get_mismatch(
-                float(interpolate.splev(0, tck)))
+            melt_f_next = float(interpolate.splev(0, tck))
+            # the spline only uses the two guesses with the mismatches closest
+            # to 0. If the response is not monotonic, a new guess with a worse
+            # mismatch does not change them and the spline proposes the same
+            # melt_f again, in this case we bisect or step instead
+            if np.isclose(melt_f_next, melt_f_guess).any():
+                melt_f_next = bisect_or_step()
+            new_mismatch, new_melt_f = get_mismatch(melt_f_next)
             melt_f_guess.append(new_melt_f)
             mismatch.append(new_mismatch)
 

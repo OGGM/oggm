@@ -7324,7 +7324,7 @@ class TestDynamicSpinup:
 
         ref_mb = -1000.
         slope = 200.  # kg m-2 yr-1 per unit of melt_f
-        target = {'melt_f': None, 'max_ok': np.inf}
+        target = {'melt_f': None, 'max_ok': np.inf, 'mismatch_fct': None}
 
         def fake_run(gdir, melt_f=None, set_local_variables=False, **kwargs):
             if set_local_variables:
@@ -7332,6 +7332,8 @@ class TestDynamicSpinup:
             if melt_f > target['max_ok']:
                 raise RuntimeError('Fake model error.')
             define_new_melt_f_in_gdir(gdir, melt_f)
+            if target['mismatch_fct'] is not None:
+                return None, ref_mb + target['mismatch_fct'](melt_f)
             return None, ref_mb - slope * (melt_f - target['melt_f'])
 
         def fake_fallback(gdir, **kwargs):
@@ -7374,6 +7376,22 @@ class TestDynamicSpinup:
         assert diag['melt_f_dynamic_calibration'] > 5
         assert 'Could not find mismatch' in \
                diag['run_dynamic_melt_f_calibration_stop_reason']
+
+        # a non-monotonic response (as seen with the dynamic spinup): the
+        # third guess is worse than the second, and the spline proposes the
+        # third guess again. Instead we bisect the narrowest sign change
+        # (between the first and the third guess) and find the root
+        def mismatch_fct(melt_f):
+            if melt_f <= 5.75:
+                return 81 + (melt_f - 5.4) * 30
+            return 91.5 - (melt_f - 5.75) * 826
+        target['mismatch_fct'] = mismatch_fct
+        diag = calib(6)
+        assert diag['used_spinup_option'] == \
+               'dynamic melt_f calibration (full success)'
+        assert np.abs(mismatch_fct(gdir.settings['melt_f'])) < 20
+        assert diag['run_dynamic_melt_f_calibration_iterations'] == 4
+        target['mismatch_fct'] = None
 
         # all runs above the first guess fail: the error recovery searches
         # back towards the first guess, which stays the best guess

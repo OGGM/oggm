@@ -293,7 +293,11 @@ Bug fixes
   the loop condition) and rounded melt_f to one decimal, which got stuck
   for small steps; and the ``used_spinup_option`` labels "part success" and
   "dynamic spinup only" (i.e. the first guess was the best one) were
-  swapped. Why the minimisation stopped is now stored in the new
+  swapped. Further, when the model response is not monotonic in melt_f
+  the spline fit could propose the same melt_f twice, which stopped the
+  calibration: it now bisects the narrowest melt_f interval in which the
+  mismatch changes sign instead (or steps away from the best guess if there
+  is none). Why the minimisation stopped is now stored in the new
   ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
