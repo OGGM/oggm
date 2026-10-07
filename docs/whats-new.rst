@@ -277,6 +277,9 @@ Enhancements
   to the glacier state of a given simulation year, instead of the default
   largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Glacier directories are now streamable, and can be read without downloading
+  the whole region first. (:pull:`1966`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
