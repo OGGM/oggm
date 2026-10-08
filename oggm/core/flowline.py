@@ -5237,6 +5237,9 @@ def run_with_hydro(gdir, settings_filesuffix='',
         for k, v in d.items():
             ods[varname].attrs[k] = v
             if store_monthly_hydro and (varname + '_monthly') in ods:
+                if k == 'unit' and v == 'kg yr-1':
+                    # Monthly fluxes are totals over the month
+                    v = 'kg month-1'
                 ods[varname + '_monthly'].attrs[k] = v
 
     # Append the output to the existing diagnostics
