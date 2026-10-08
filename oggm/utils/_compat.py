@@ -4,15 +4,15 @@ directory formats.
 The main entry point is :func:`convert_prepro_to_deltas`, which converts
 the previous cumulative per-level tar artifacts (each level tar
 contains all lower levels' data) into the new incremental delta format.
-Each level ships only the files it added or changed, plus an
-``L{n}.manifest.json``, so clients can layer levels into one glacier
-directory.
+Each level ships only the files it added, changed, or removed, plus a
+``L{n}.manifest.json`` naming its parent, so clients can layer levels
+into one glacier directory.
 
-In the cumulative system, the default dataset set by DEFAULT_BASE_URL
-spans two source URLs (levels 0-2 under ``L1-L2_files``, levels 3-5
-under the spinup ``L3-L5_files`` tree), which is why per-level base URLs
-are required. The dataset identity comes from an explicit tag rather
-than a URL.
+One call converts one source tree. In the cumulative system, the
+default dataset spans two trees (levels 0-2 under ``L1-L2_files``,
+levels 3-5 under the spinup ``L3-L5_files`` tree), so it takes two
+calls: the second links its first level to the converted, published
+copy of the first tree through ``parent_base_url``.
 """
 
 import glob
@@ -22,9 +22,12 @@ from pathlib import Path
 
 from oggm import cfg
 from oggm.exceptions import InvalidParamsError
-from oggm.utils._workflow import (base_dir_to_tar, artefact_id_from_tag,
-                                  gdir_to_tar, snapshot_gdir_state,
-                                  write_level_manifest)
+from oggm.utils._workflow import (
+    base_dir_to_tar,
+    gdir_to_tar,
+    snapshot_gdir_state,
+    write_level_manifest,
+)
 
 log = logging.getLogger(__name__)
 
@@ -78,37 +81,40 @@ def convert_pickles_to_npz(gdir, delete: bool = True):
 
 def convert_prepro_to_deltas(
     rgi_ids: list[str],
-    base_urls: dict[int, str],
+    src_base_url: str,
+    levels: list[int],
     border: int,
     rgi_version: str,
     workdir: str,
     output_dir: str,
-    artefact_tag: str,
-    max_level: int = 5,
+    parent_base_url: str | None = None,
     convert_to_npz: bool = False,
 ):
-    """Convert cumulative prepro artifacts into per-level delta bundles.
+    """Convert one cumulative prepro tree into per-level delta bundles.
 
     You can use this to convert entire RGI regions ready for upload
     directly to the cluster.
 
-    Downloads each available level of the given glaciers into isolated
-    working directories, diffs successive levels, and writes a
-    delta-format tree under ``output_dir``:
+    Downloads each level of the given glaciers into isolated working
+    directories, diffs successive levels, and writes a delta-format tree
+    under ``output_dir``:
     ``{output_dir}/RGI{rgi_version}/b_{border:03d}/L{n}/{region}/{bundle}.tar``.
 
-    Artifact kinds: L0 and L3 are standalone (self-sufficient,
-    ``requires=[]``), intermediate levels are deltas against the level
-    below, and L5 is a standalone bundle.
+    Artifact kinds: L0 is the root delta, and every other level is a
+    delta on the level converted before it. The first level above L0 is
+    a delta on the level below it in ``parent_base_url`` if given, else a
+    materialisation. L5 is a standalone bundle, with L4 as its
+    provenance parent.
 
     Parameters
     ----------
     rgi_ids : list[str]
         Glaciers to convert.
-    base_urls : dict[int, str]
-        Per-level source base URL. One logical dataset can be served
-        from several URLs, e.g. L0-L2 from the ``L1-L2_files`` tree and
-        L3-L5 from the spinup tree.
+    src_base_url : str
+        Base URL of the cumulative source tree, e.g. the ``L1-L2_files``
+        or the spinup ``L3-L5_files`` tree.
+    levels : list[int]
+        Levels to convert, e.g. ``[0, 1, 2]`` or ``[3, 4, 5]``.
     border : int
         Map border of the source dataset.
     rgi_version : str
@@ -117,12 +123,11 @@ def convert_prepro_to_deltas(
         Scratch directory for the per-level downloads.
     output_dir : str
         Root of the delta-format output tree.
-    artefact_tag : str
-        Explicit label identifying the logical artefact. This is hashed
-        with border and RGI version into the manifest's ``artefact_id``.
-        Must **not** be a source URL.
-    max_level : int, default=5
-        Convert levels up to and including this one.
+    parent_base_url : str | None, optional
+        Base URL of an already converted, published tree holding the
+        level below ``levels[0]``. Its glacier directories are the
+        baseline of the first level, so the output always sits on the
+        converted tree, never on the cumulative one.
     convert_to_npz : bool, default=False
         If True, rewrite each glacier's pickle files into its
         ``data_store`` store (and delete the pickles) before tarring, so
@@ -139,49 +144,61 @@ def convert_prepro_to_deltas(
     # Import here to avoid circular import
     from oggm import workflow
 
-    levels = sorted(lvl for lvl in base_urls if lvl <= max_level)
+    levels = sorted(int(lvl) for lvl in levels)
     if not levels:
-        raise InvalidParamsError("base_urls contains no level <= max_level")
-    lowest = levels[0]
-    artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
+        raise InvalidParamsError("levels is empty")
     out_root = os.path.join(
         output_dir, f"RGI{rgi_version}", f"b_{int(border):03d}"
     )
 
-    prev_working_dir = cfg.PATHS.get("working_dir", "")
-    prev_states = {}
-    try:
-        for lvl in levels:
-            level_wdir = os.path.join(workdir, f"L{lvl}")
-            os.makedirs(level_wdir, exist_ok=True)
-            cfg.PATHS["working_dir"] = level_wdir
-            gdirs = workflow.init_glacier_directories(
-                rgi_ids,
-                from_prepro_level=lvl,
-                prepro_border=border,
-                prepro_rgi_version=rgi_version,
-                prepro_base_url=base_urls[lvl],
-            )
+    def init(level, base_url, name):
+        level_wdir = os.path.join(workdir, name)
+        os.makedirs(level_wdir, exist_ok=True)
+        cfg.PATHS["working_dir"] = level_wdir
+        return workflow.init_glacier_directories(
+            rgi_ids,
+            from_prepro_level=level,
+            prepro_border=border,
+            prepro_rgi_version=rgi_version,
+            prepro_base_url=base_url,
+        )
 
+    prev_working_dir = cfg.PATHS.get("working_dir", "")
+    # Per glacier: the baseline's state, directory, and label
+    prev = {}
+    parent_url = parent_base_url
+    try:
+        if parent_base_url is not None:
+            below = levels[0] - 1
+            for gdir in init(below, parent_base_url, f"parent_L{below}"):
+                prev[gdir.rgi_id] = (
+                    snapshot_gdir_state(gdir.dir),
+                    gdir.dir,
+                    f"L{below}",
+                )
+        for lvl in levels:
             stage_dir = os.path.join(out_root, f"L{lvl}")
-            for gdir in gdirs:
+            for gdir in init(lvl, src_base_url, f"L{lvl}"):
                 if convert_to_npz:
                     convert_pickles_to_npz(gdir)
                 include = _write_artifact_manifest(
-                    gdir=gdir,
-                    level=lvl,
-                    lowest=lowest,
-                    prev_state=prev_states.get(gdir.rgi_id),
-                    artefact_tag=artefact_tag,
-                    artefact_id=artefact_id,
+                    gdir,
+                    f"L{lvl}",
+                    prev.get(gdir.rgi_id),
+                    parent_url,
                     border=border,
                     rgi_version=rgi_version,
                 )
                 gdir_to_tar.unwrapped(
                     gdir, base_dir=stage_dir, delete=False, include=include
                 )
-                prev_states[gdir.rgi_id] = snapshot_gdir_state(gdir.dir)
+                prev[gdir.rgi_id] = (
+                    snapshot_gdir_state(gdir.dir),
+                    gdir.dir,
+                    f"L{lvl}",
+                )
             base_dir_to_tar(stage_dir, delete=True)
+            parent_url = None  # later parents are in this tree
     finally:
         cfg.PATHS["working_dir"] = prev_working_dir
 
@@ -190,39 +207,29 @@ def convert_prepro_to_deltas(
 
 def _write_artifact_manifest(
     gdir,
-    level: int,
-    lowest: int,
-    prev_state: dict,
+    label: str,
+    prev: tuple | None,
+    parent_base_url: str | None,
     border: int,
     rgi_version: str,
-    artefact_tag: str,
-    artefact_id: str = "",
-):
+) -> list[str]:
     """Write the level manifest and return the tar include list.
 
-    L3 is published as a standalone materialisation of L0-L3, as it's
-    the entry point for the spinup tree. This means L3/L4/L5 stay within
-    2-3 requests.
-
-    Also ensures that separately generated source trees agree on shared
+    Also warns when the baseline and this level disagree on the shared
     data files set by _TREE_INVARIANTS.
 
     Parameters
     ----------
     gdir : GlacierDirectory
         The glacier directory to snapshot.
-    level : int
-        The prepro level being written.
-    lowest : int
-        The lowest level being converted.
-    prev_state : dict or None
-        The previous level's snapshot of the glacier directory, or None
-        if this is the lowest level.
-    artefact_id : str
-        The artefact identity, hashed from the artefact tag, border, and
-        RGI version.
-    artefact_tag : str
-        The artefact tag, identifying the logical artefact.
+    label : str
+        The label being written, e.g. ``"L3"``.
+    prev : tuple or None
+        The baseline's ``(state, directory, label)``, or None if there is
+        nothing below this level.
+    parent_base_url : str or None
+        Base URL of the tree holding the baseline, or None if it is this
+        tree.
     border : int
         The map border of the source dataset.
     rgi_version : str
@@ -230,79 +237,42 @@ def _write_artifact_manifest(
 
     Returns
     -------
-    None or list[str]
-        None (full tar) for materialisations and the standalone L5
-        bundle, or a list of changed paths for delta levels.
+    list[str]
+        The changed paths and the manifest, for ``gdir_to_tar(include=...)``.
     """
+    common = dict(border=border, rgi_version=rgi_version)
+    if prev is None:
+        # L0 is the root; anything else with nothing below ships every file
+        kind = "delta" if label == "L0" else "materialisation"
+        if label == "L5":
+            kind = "standalone"
+        _, changed = write_level_manifest(gdir, label, {}, kind=kind, **common)
+        return changed
 
-    if not artefact_id:
-        artefact_id = artefact_id_from_tag(artefact_tag, border, rgi_version)
-
-    common = dict(
-        artefact_id=artefact_id,
-        artefact_tag=artefact_tag,
-        border=border,
-        rgi_version=rgi_version,
-    )
-    if level == 5:
-        write_level_manifest(
-            gdir,
-            level=5,
-            prev_state={},
-            requires=[],
-            includes_levels=[5],
-            kind="standalone",
-            **common,
-        )
-        return None
-    if level == lowest:
-        write_level_manifest(
-            gdir,
-            level=level,
-            prev_state={},
-            requires=[],
-            includes_levels=list(range(level + 1)),
-            **common,
-        )
-        return None
-    if level == 3:
-        # L3 is a materialisation of L0-L3 (see docstring)
-        if prev_state is not None:
-            state = snapshot_gdir_state(gdir)
-            diverged = [
-                f
-                for f in _TREE_INVARIANTS
-                if f in prev_state and f in state and prev_state[f] != state[f]
-            ]
-            if diverged:
-                log.warning(
-                    "(%s) the L%d source tree disagrees with the level "
-                    "below on %s: the L0-L%d artifacts belong to a "
-                    "different dataset generation than the L3 materialisation.",
-                    gdir.rgi_id,
-                    level,
-                    diverged,
-                    level - 1,
-                )
-        write_level_manifest(
-            gdir,
-            level=3,
-            prev_state={},
-            requires=[],
-            includes_levels=[0, 1, 2, 3],
-            **common,
-        )
-        return None
-    if prev_state is None:
-        raise InvalidParamsError(
-            f"Cannot build a delta for level {level} without the level "
-            "below it in base_urls."
+    prev_state, prev_dir, prev_label = prev
+    state = snapshot_gdir_state(gdir)
+    diverged = [
+        f
+        for f in _TREE_INVARIANTS
+        if f in prev_state and f in state and prev_state[f] != state[f]
+    ]
+    if diverged:
+        log.warning(
+            "(%s) the %s source tree disagrees with %s on %s: they belong "
+            "to different dataset generations.",
+            gdir.rgi_id,
+            label,
+            prev_label,
+            diverged,
         )
     _, changed = write_level_manifest(
         gdir,
-        level=level,
-        prev_state=prev_state,
-        requires=list(range(lowest, level)),
+        label,
+        prev_state,
+        parent=prev_label,
+        parent_base_url=parent_base_url,
+        parent_dir=prev_dir,
+        kind="standalone" if label == "L5" else "delta",
         **common,
     )
     return changed

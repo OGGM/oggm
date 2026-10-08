@@ -1,10 +1,8 @@
 """Wrappers for the single tasks, multi processor handling."""
 # Built ins
-import glob
 import json
 import logging
 import os
-import re
 import shutil
 import warnings
 import tarfile
@@ -282,7 +280,7 @@ def execute_parallel_tasks(gdir, tasks):
             task(gd, **kw)
 
 
-def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
+def _peek_level_manifest(tar_base: str, rgi_id: str, label: str) -> dict | None:
     """Read a glacier's level manifest from inside a cached bundle tar.
 
     Parameters
@@ -291,13 +289,13 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
         Path to the cached bundle tar file.
     rgi_id : str
         The glacier's RGI ID.
-    level : int
-        The preprocessinglevel of the manifest to read.
+    label : str
+        The label of the manifest to read, e.g. ``"L3"``.
 
     Returns
     -------
     dict | None
-        The parsed ``L{level}.manifest.json`` of the glacier's member
+        The parsed ``{label}.manifest.json`` of the glacier's member
         tarfile, or None for legacy (pre-manifest) bundles.
     """
     bundle_dir = os.path.basename(tar_base)
@@ -309,7 +307,7 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
             with tf.extractfile(member) as fobj:
                 with tarfile.open(fileobj=fobj, mode="r:gz") as inner:
                     mf = inner.extractfile(
-                        os.path.join(rgi_id, f"L{level}.manifest.json")
+                        os.path.join(rgi_id, f"{label}.manifest.json")
                     )
                     if mf is None:
                         return None
@@ -321,78 +319,61 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, level: int)->dict | None:
         return None
 
 
-def _get_applied_levels(rgi_id:str)->set[int]:
-    """Gets the levels already layered into the glacier's existing
-    directory.
-    
-    Parameters
-    ----------
-    rgi_id : str
-        The glacier's RGI ID.
-
-    Returns
-    -------
-    set[int]
-        Levels already applied to the glacier's directory.
-    """
-    gl_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier',
-                          rgi_id[:-6], rgi_id[:-3], rgi_id)
-    included = set()
-    for fp in glob.glob(os.path.join(gl_dir, 'L*.manifest.json')):
-        with open(fp) as f:
-            m = json.load(f)
-        included.update(m.get('includes_levels') or [m['level']])
-    return included
-
-
 def _layered_level_tars(
-    tar_base: str, rgi_id: str, level: int, locate, append=False
-) -> dict[int, str]:
-    """Gets the bundle tars to layer for a glacier, keyed by level.
+    tar_base: str, rgi_id: str, label: str, base_url: str | None, locate
+) -> list[str]:
+    """Gets the bundle tars to layer for a glacier, root first.
 
-    A delta bundle needs the levels its manifest `requires`, which may
-    require more. Legacy and standalone bundles are enough on their own.
+    A delta names its parent, which may live in another tree. This
+    method walks through links until it reaches the root, a non-delta,
+    or a parent legacy directory without a manifest.
+    
+    .. important::
+        This doesn't check artefact ids. `_finalize_merged_dir` does
+        that after the tars are layered, and will raise an error for
+        trying to patch a legacy cumulative directory. Convert legacy
+        directories to the new format first.
 
     Parameters
     ----------
     tar_base : str
-        Path to the bundle tar of the requested level.
+        Path to the bundle tar of the requested label.
     rgi_id : str
         The glacier's RGI ID.
-    level : int
-        The requested level.
+    label : str
+        The requested label, e.g. ``"L3"``.
+    base_url : str | None
+        Base URL of the tree holding ``tar_base``. A parent link of None
+        resolves to the tree of the manifest holding it.
     locate : callable
-        Returns the path to the bundle tar of a given level.
-    append : bool
-        Whether the levels already in the glacier directory count as there.
+        ``locate(base_url, label)`` returns the path to a bundle tar.
 
     Returns
     -------
-    dict[int, str]
-        The bundle tars to layer, keyed by level.
+    list[str]
+        The bundle tars to layer, root first.
     """
-    tars = {level: tar_base}
-    manifest = _peek_level_manifest(tar_base, rgi_id, level)
-    if manifest is None or manifest.get("kind") == "standalone":
-        return tars
-    included = set(manifest.get("includes_levels") or [level])
-    if append:
-        included |= _get_applied_levels(rgi_id)
-    missing = set(manifest.get("requires") or []) - included
-    while missing:
-        lvl = max(missing)
-        tb = locate(lvl)
-        tars[lvl] = tb
-        m = _peek_level_manifest(tb, rgi_id, lvl)
-        included |= set((m.get("includes_levels") if m else None) or [lvl])
-        missing |= set((m.get("requires") if m else None) or [])
-        missing -= included
-    return tars
+    tars = [tar_base]
+    m = _peek_level_manifest(tar_base, rgi_id, label)
+    while m and m.get("kind") == "delta" and m.get("parent"):
+        p = m["parent"]
+        base_url = p["base_url"] or base_url  # null = this manifest's tree
+        tars.append(locate(base_url, p["label"]))
+        m = _peek_level_manifest(tars[-1], rgi_id, p["label"])
+    return tars[::-1]
+
+
+def _member_tars(tars, rgi_id):
+    """Per-glacier member paths of bundle tars, as one path if alone."""
+    out = [
+        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz") for tb in tars
+    ]
+    return out[0] if len(out) == 1 else out
 
 
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
-                     base_url=None, append=False):
+                     base_url=None):
 
     if prepro_border is None:
         prepro_border = int(cfg.PARAMS['border'])
@@ -404,24 +385,17 @@ def gdir_from_prepro(entity, from_prepro_level=None,
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
 
+    # Legacy bundles without manifest are cumulative so one fetch is enough
     tars = _layered_level_tars(
         tar_base,
         rid,
-        from_prepro_level,
-        lambda lvl: utils.get_prepro_gdir(
-            prepro_rgi_version, rid, prepro_border, lvl, base_url=base_url
+        f'L{from_prepro_level}',
+        base_url,
+        lambda url, lbl: utils.get_prepro_gdir(
+            prepro_rgi_version, rid, prepro_border, lbl[1:], base_url=url
         ),
-        append=append,
     )
-
-    # Legacy bundles without manifest are cumulative so one fetch is enough
-    from_tar = [
-        os.path.join(tb.replace(".tar", ""), rid + ".tar.gz")
-        for _, tb in sorted(tars.items())
-    ]
-    if len(from_tar) == 1 and not append:
-        from_tar = from_tar[0]
-    return oggm.GlacierDirectory(entity, from_tar=from_tar, append=append)
+    return oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rid))
 
 
 def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
@@ -447,39 +421,30 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
         )
 
     tar_base = locate(from_tar)
-    # A delta level folder (`L<n>`) takes its required levels from the
-    # sibling folders of the same tree, else from `base_url`. A chunked
-    # run writes L3 and L4 to disk, while L0 to L2 are only published.
+    # A parent in this local tree (so a null link) is a sibling folder,
+    # otherwise it comes from `base_url`. A chunked run writes L3 and L4
+    # to disk, whilst only L0 to L2 are published.
     root, name = os.path.split(os.path.normpath(from_tar))
 
-    def locate_level(lvl):
-        try:
-            return locate(os.path.join(root, f"L{lvl}"))
-        except FileNotFoundError:
-            if base_url is None:
-                raise
+    def locate_label(url, lbl):
+        if url is None:
+            try:
+                return locate(os.path.join(root, lbl))
+            except FileNotFoundError:
+                if base_url is None:
+                    raise
+            url = base_url
         return utils.get_prepro_gdir(
             prepro_rgi_version or cfg.PARAMS["rgi_version"],
             rgi_id,
             prepro_border or int(cfg.PARAMS["border"]),
-            lvl,
-            base_url=base_url,
+            lbl[1:],
+            base_url=url,
         )
 
-    if re.fullmatch(r"L\d", name):
-        tars = _layered_level_tars(
-            tar_base, rgi_id, int(name[1:]), locate_level
-        )
-    else:
-        tars = {0: tar_base}
-
-    from_tar = [
-        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz")
-        for _, tb in sorted(tars.items())
-    ]
-    if len(from_tar) == 1:
-        from_tar = from_tar[0]
-    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+    # A folder without its own manifest (e.g. L3a) loads as one tar
+    tars = _layered_level_tars(tar_base, rgi_id, name, None, locate_label)
+    return oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rgi_id))
 
 
 def _check_rgi_input(rgidf=None, err_on_lvl2=False):
@@ -693,8 +658,7 @@ def _isdir(path):
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
-                             from_tar=False, delete_tar=False,
-                             append: bool=False):
+                             from_tar=False, delete_tar=False):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
@@ -733,10 +697,6 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         will check for a tar file at the expected location in `base_dir`.
         delete the original tar file after extraction. If this
         argument is set, the existing directories will be overwritten!
-    append : bool, default False
-        For `from_prepro_level` only. Layer the downloaded level(s) on
-        top of existing glacier directories instead of replacing them
-        (e.g. to top up directories initialised at a lower level).
 
     Returns
     -------
@@ -806,8 +766,7 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                                         from_prepro_level=from_prepro_level,
                                         prepro_border=prepro_border,
                                         prepro_rgi_version=prepro_rgi_version,
-                                        base_url=prepro_base_url,
-                                        append=append)
+                                        base_url=prepro_base_url)
         else:
             # We can set the intersects file automatically here
             if (cfg.PARAMS['use_intersects'] and

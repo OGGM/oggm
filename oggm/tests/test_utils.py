@@ -1599,18 +1599,6 @@ class TestStartFromTar:
         gdir = oggm.GlacierDirectory(entity, from_tar=[tarf])
         assert gdir.rgi_area_km2 > 0
 
-    def test_from_entity_from_tar_append_keeps_dir(self):
-        entity, tarf = self._entity_gdir_tar()
-
-        gdir = oggm.GlacierDirectory(entity, from_tar=[tarf])
-        marker = os.path.join(gdir.dir, "marker.txt")
-        with open(marker, "w") as f:
-            f.write("keep me")
-
-        gdir = oggm.GlacierDirectory(entity, from_tar=[tarf], append=True)
-        assert os.path.exists(marker)
-        assert gdir.rgi_area_km2 > 0
-
     def test_to_and_from_tar_string(self):
 
         test_dir = cfg.PATHS["working_dir"]
@@ -1808,7 +1796,6 @@ class TestPreproCLI:
         assert not kwargs['store_hydro_output']
         assert not kwargs['store_monthly_hydro']
         assert kwargs['ref_area_yr'] is None
-        assert kwargs['artefact_tag'] is None
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
                                            '--map-border', '160',
@@ -1816,7 +1803,6 @@ class TestPreproCLI:
                                            '--mb-calibration-strategy', 'temp_melt',
                                            '--start-base-url', 'http://foo',
                                            '--ref-area-yr', '2000',
-                                           '--artefact-tag', 'foo',
                                            ])
 
         assert 'working_dir' in kwargs
@@ -1829,7 +1815,6 @@ class TestPreproCLI:
         assert kwargs['start_base_url'] == 'http://foo'
         assert kwargs['mb_calibration_strategy'] == 'temp_melt'
         assert kwargs['ref_area_yr'] == 2000
-        assert kwargs['artefact_tag'] == 'foo'
 
         with pytest.raises(InvalidParamsError):
             prepro_levels.parse_args([])
@@ -2452,7 +2437,6 @@ class TestPreproCLI:
                       inversion_volume_dataset='consensus',
                       temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
                       continue_on_error=False,
-                      artefact_tag='chunked_test',
                       override_params={})
 
         def wd(name):
@@ -2551,7 +2535,7 @@ class TestPreproCLI:
                 )
             )
             for tar_base in bundle:
-                m = workflow._peek_level_manifest(tar_base, rgi_id, lev)
+                m = workflow._peek_level_manifest(tar_base, rgi_id, f'L{lev}')
                 if m is not None:
                     return m
             raise AssertionError(f'No L{lev} manifest for {rgi_id} in {root}')
@@ -2560,14 +2544,17 @@ class TestPreproCLI:
             for rgi_id in test_ids:
                 ref = manifest(ref_dir, lev, rgi_id)
                 new = manifest(out_dir, lev, rgi_id)
-                for key in ['kind', 'requires', 'includes_levels']:
-                    assert ref[key] == new[key], (lev, rgi_id, key)
-                for key in ['added', 'updated']:
+                assert ref['kind'] == new['kind'] == 'delta'
+                # The ids differ (log files), the links must not
+                for key in ['label', 'base_url']:
+                    assert ref['parent'][key] == new['parent'][key], (
+                        lev, rgi_id, key)
+                assert ref['parent']['label'] == f'L{lev - 1}'
+                for key in ['added', 'updated', 'removed']:
                     assert sorted(ref['files'][key]) == sorted(
                         new['files'][key]
                     ), (lev, rgi_id, key)
                 assert sorted(ref['data_store']) == sorted(new['data_store'])
-                assert ref['requires'] == list(range(lev))
 
         # An empty chunk is a normal thing (the RGI ids have gaps) and has
         # to return quietly: on a cluster it is one task of an array job, and

@@ -287,8 +287,7 @@ def _delta_tar_entries(
     states: dict,
     border: int,
     rgi_version: str,
-    artefact_tag: str,
-    artefact_id: str = "",
+    parent_base_url: str | None = None,
 ) -> list[tuple[GlacierDirectory, dict]]:
     """Write per-glacier delta manifests for this level.
 
@@ -297,17 +296,16 @@ def _delta_tar_entries(
     gdirs : list of GlacierDirectory
         Glacier directories.
     level : int
-        The directory processing level (0-5).
+        The directory processing level (1-4).
     states : dict
         A dict of previous level manifest states, keyed by RGI ID.
-    artefact_tag : str
-        The artefact tag for this run.
     border : int
         The number of pixels at the maps border.
     rgi_version : str
         The RGI version.
-    artefact_id : str, optional
-        The artefact ID for this run.
+    parent_base_url : str | None, optional
+        Base URL of the tree holding the parent level, or None if it is
+        in this run's output tree.
 
     Returns
     --------
@@ -318,25 +316,22 @@ def _delta_tar_entries(
         manifest cannot be written (e.g. errored directories) fall back
         to a full, manifest-less (legacy) tar.
     """
-    if not artefact_id:
-        artefact_id = utils.artefact_id_from_tag(
-            artefact_tag, border, rgi_version
-        )
     entries = []
     for gdir in gdirs:
         try:
-            if gdir.rgi_id in states:
-                layers = dict(requires=list(range(level)))
+            parent = f"L{level - 1}"
+            if gdir.rgi_id in states and os.path.exists(
+                os.path.join(gdir.dir, f"{parent}.manifest.json")
+            ):
+                layers = dict(parent=parent, parent_base_url=parent_base_url)
             else:
-                # Nothing to diff against if a run started from gdirs on disk
-                layers = dict(requires=[],
-                              includes_levels=list(range(level + 1)))
+                # Nothing to diff against, or a legacy (manifest-less)
+                # parent we must not build on: ship every file
+                layers = dict(kind="materialisation")
             _, changed = utils.write_level_manifest(
                 gdir,
-                level=level,
+                label=f"L{level}",
                 prev_state=states.get(gdir.rgi_id, {}),
-                artefact_tag=artefact_tag,
-                artefact_id=artefact_id,
                 border=border,
                 rgi_version=rgi_version,
                 **layers,
@@ -380,7 +375,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       start_base_url=None,
                       start_from_dir=None,
                       max_level=5,
-                      artefact_tag=None,
                       chunk_idx=None,
                       chunk_size=1000,
                       glen_a_factor=None,
@@ -532,10 +526,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
           part of L4.
         A chunked cluster run is then 2 -> '3a' (chunks), '3a' -> 3 (whole
         region), 3 -> '4a' (chunks), '4a' -> 5 (whole region).
-    artefact_tag : str
-        explicit label identifying this artefact generation. It gets
-        hashed into level manifest's `artefact_id` to check layered
-        levels belong together. Defaults to the output folder name.
     chunk_idx : int
         process only the glaciers of this chunk (see `chunk_size`). Chunks are
         blocks of the RGI id space, so that several chunk jobs writing into
@@ -732,8 +722,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 states=manifest_states,
                 border=border,
                 rgi_version=rgi_version,
-                artefact_tag=artefact_tag,
-                artefact_id=artefact_id,
+                parent_base_url=_parent_base_url(level - 1),
             )
         level_base_dir = Path(output_base_dir) / f'L{level}'
         workflow.execute_entity_task(
@@ -813,12 +802,28 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgi_version = cfg.PARAMS['rgi_version']
     output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
 
-    if artefact_tag is None:
-        artefact_tag = (
-            os.path.basename(os.path.normpath(str(output_folder)))
-            or "oggm-prepro"
-        )
-    artefact_id = utils.artefact_id_from_tag(artefact_tag, border, rgi_version)
+    def _parent_base_url(parent_level: str) -> str | None:
+        """Get the base URL of a level's parent.
+
+        The first level of a run started from `start_base_url` has its
+        parent there. A chunked chain stage finds it in the shared
+        output folder written by the previous stage.
+
+        Parameters
+        ----------
+        parent_level : str
+            The level of the parent, e.g. '2' for a run starting at '3'.
+
+        Returns
+        -------
+        str or None
+            The base URL of the parent level, or None if the parent is
+            in the same output tree.
+        """
+        if (output_base_dir / f"L{parent_level}").is_dir():
+            return None
+        return start_base_url
+
     # Per-glacier content snapshots of the previous level for deltas
     manifest_states = {}
 
@@ -930,12 +935,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 # L0 is the root artifact so fully shipped
                 utils.write_level_manifest(
                     gdir,
-                    level=0,
+                    label="L0",
                     prev_state={},
-                    artefact_tag=artefact_tag,
-                    artefact_id=artefact_id,  # save an extra computation
-                    requires=[],
-                    includes_levels=[0],
                     border=border,
                     rgi_version=rgi_version,
                 )
@@ -1601,19 +1602,30 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                               setup='run/spinup')
 
     # L5 OK - compress all in output directory
+    full_dirs = {gdir.rgi_id: gdir.dir for gdir in gdirs}
+    l5_parent_url = _parent_base_url(4)
     for gdir in mini_gdirs:
-        # The mini run bundle is self-sufficient, so shipped as standalone
+        # The mini run bundle is self-sufficient, so shipped as standalone.
+        # Its parent L4 has the necessary manifest.
+        parent = dict(
+            parent='L4',
+            parent_base_url=l5_parent_url,
+            parent_dir=full_dirs[gdir.rgi_id],
+        )
+        if not os.path.exists(
+            os.path.join(full_dirs[gdir.rgi_id], 'L4.manifest.json')
+        ):
+            # e.g. an errored glacier whose L4 went out as a full tar
+            log.warning("(%s) no L4 manifest: L5 has no parent.", gdir.rgi_id)
+            parent = {}
         utils.write_level_manifest(
-            gdir_or_dir=gdir,
-            level=5,
+            gdir,
+            label='L5',
             prev_state={},
-            artefact_id=artefact_id,
-            artefact_tag=artefact_tag,
-            requires=[],
-            includes_levels=[5],
-            kind="standalone",
+            kind='standalone',
             border=border,
             rgi_version=rgi_version,
+            **parent,
         )
     _write_level_tars(5, mini_gdirs, deltas=False)
 
@@ -1665,11 +1677,6 @@ def parse_args(args):
                              'files. A chunked cluster run is 2 -> 3a '
                              '(chunks), 3a -> 3 (region), 3 -> 4a (chunks), '
                              '4a -> 5 (region).')
-    parser.add_argument("--artefact-tag", type=str,
-                        help="explicit label identifying this dataset "
-                        "generation, hashed into the per-level "
-                        "manifests. Defaults to the output folder "
-                        "name.")
     parser.add_argument('--chunk-idx', type=int, default=None,
                         help='process only the glaciers of this chunk. Chunks '
                              'are blocks of the RGI id space, so that several '
@@ -1954,7 +1961,6 @@ def parse_args(args):
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 start_from_dir=args.start_from_dir,
                 max_level=args.max_level,
-                artefact_tag=args.artefact_tag,
                 disable_mp=args.disable_mp,
                 chunk_idx=args.chunk_idx,
                 chunk_size=args.chunk_size,
