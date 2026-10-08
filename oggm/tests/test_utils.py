@@ -2347,9 +2347,12 @@ class TestPreproCLI:
         # Layered dir documents its levels, L4 delta only ships what L4 produced
         with open(os.path.join(gdir.dir, "L4.manifest.json")) as f:
             m4 = json.load(f)
+        with open(os.path.join(gdir.dir, "L3.manifest.json")) as f:
+            m3 = json.load(f)
         assert m4["kind"] == "delta"
-        assert m4["level"] == 4
-        assert m4["requires"] == [0, 1, 2, 3]
+        assert m4["label"] == "L4"
+        # Whole-region run: the parent sits in the same tree
+        assert m4["parent"] == {"base_url": None, "label": "L3", "id": m3["id"]}
         assert not any("gridded_data" in fn for fn in m4["files"]["added"])
         for lev in range(4):
             assert os.path.isfile(
@@ -2840,9 +2843,12 @@ class TestPreproCLI:
         # Layered dir documents its levels, L4 delta only ships what L4 produced
         with open(os.path.join(gdir.dir, "L4.manifest.json")) as f:
             m4 = json.load(f)
+        with open(os.path.join(gdir.dir, "L3.manifest.json")) as f:
+            m3 = json.load(f)
         assert m4["kind"] == "delta"
-        assert m4["level"] == 4
-        assert m4["requires"] == [0, 1, 2, 3]
+        assert m4["label"] == "L4"
+        # Whole-region run with parent in the same tree
+        assert m4["parent"] == {"base_url": None, "label": "L3", "id": m3["id"]}
         assert not any("gridded_data" in fn for fn in m4["files"]["added"])
         for lev in range(4):
             assert os.path.isfile(
