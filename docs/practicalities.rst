@@ -310,48 +310,112 @@ Splitting a region into chunks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 One job per RGI region is simple, but the regions are very unequal: RGI region
-06 (Iceland) is done in minutes while region 13 (Central Asia) can run for many
-hours. If your cluster has a wall time, the big regions will eventually hit it.
+06 (Iceland) has less than 600 glaciers, region 13 (Central Asia) more than 50 000
+(75 000 in RGI7). With expensive model options (e.g. dynamic spinup or the
+surface type mass balance model), the big regions can run for many hours and hit the
+wall time of your cluster, while the small ones are done in minutes.
 
-You can split a region into **chunks** instead, and run each chunk as its own
-job. A chunk is a block of the RGI id space: with a chunk size of 1000, chunk 3
-holds the glaciers whose id ends in 03000 to 03999. This is not an arbitrary
-choice - it is what makes the chunks line up with the glacier directory tar
-files, so that several chunk jobs writing into the same output folder produce
-files which do not overlap. Only 100 and 1000 are allowed, for the same reason.
-Because the RGI ids have gaps, chunks are not all the same size, and some can
-even be empty (such a job simply logs that there is nothing to do and exits).
+The solution is to split the regions into **chunks** of glaciers, and to run
+each chunk as its own job (typically, as one task of a
+`SLURM job array <https://slurm.schedmd.com/job_array.html>`_). Hundreds of
+small jobs of similar size are much easier to schedule than 19 very unequal
+ones, and the small regions free their nodes early.
 
-Use :py:func:`workflow.get_rgi_chunk` to select a chunk in your own scripts,
-:py:func:`workflow.count_rgi_chunks` to know how many there are, and
-:py:func:`workflow.print_slurm_array` to get the matching ``#SBATCH --array=``
-line.
+OGGM provides two functions for this: :py:func:`workflow.get_rgi_chunk`
+selects the glaciers of one chunk, and :py:func:`workflow.count_rgi_chunks`
+tells how many chunks there are. A chunk is a **block of the RGI id space**:
+with a chunk size of 1000, chunk 3 holds the glaciers whose id ends in 03000 to
+03999. Some consequences:
+
+- chunk indices **start at 0**. Make sure that your job array does too
+  (``--array=0-N``): an array starting at 1 silently skips the first chunk.
+- the number of chunks is a property of the region, not something you choose
+  (it is the highest chunk index plus one).
+- because the RGI ids have gaps, chunks are not all the same size, and some
+  can be empty. A job with an empty chunk should simply exit without error.
+- the chunks must be computed after any filtering of the glaciers, or the same
+  index will mean different glaciers in different jobs.
+
+Why blocks of ids and not simply slices of the list of glaciers? Because blocks
+of 100 or 1000 ids line up with the tar files in which OGGM stores the glacier
+directories (see :py:func:`utils.base_dir_to_tar`): several chunk jobs writing
+glacier directories into the same folder then write different files. This is
+required for the preprocessing (see below), and is harmless otherwise.
+
+Chunked projection runs
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Projections starting from preprocessed directories are the easy case: each
+glacier is independent, so each chunk is an independent job. The only thing to
+do differently is to write the compiled output files per chunk, and to put them
+together after all jobs are done. The core of a chunk job is:
+
+.. code-block:: python
+
+    rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg, version=rgi_version))
+    # The same filter as the preprocessing (it removes glaciers in Greenland
+    # for RGI62): chunks are computed after it
+    rgidf = apply_rgi_fixes(rgidf, rgi_version, rgi_reg)
+
+    chunk_idx = int(os.environ['SLURM_ARRAY_TASK_ID'])
+    rgidf = workflow.get_rgi_chunk(rgidf, chunk_idx, chunk_size=250)
+    if len(rgidf) == 0:
+        sys.exit(0)  # empty chunks are normal
+
+    gdirs = workflow.init_glacier_directories(rgidf, from_prepro_level=5, ...)
+    # ... your runs ...
+    utils.compile_run_output(gdirs, input_filesuffix=rid,
+                             path=f'run_output{rid}_chunk{chunk_idx:03d}.nc')
+
+Here, any chunk size works: choose it so that a chunk comfortably fits into
+your job time limit. Complete sample scripts:
+
+- :download:`run_projections.py <_code/cluster/projections/run_projections.py>`:
+  the projections of one chunk (it can also count the chunks of a region, so
+  that the array size and the chunk selection can not disagree)
+- :download:`run_projections.slurm <_code/cluster/projections/run_projections.slurm>`:
+  the SLURM script for one chunk, running in a container as explained above
+- :download:`submit_projections.sh <_code/cluster/projections/submit_projections.sh>`:
+  submits one job array per RGI region
+
+After the runs, the output files of a region can be opened as one dataset
+with, e.g.,
+``xr.open_mfdataset('RGI11/run_output_*_chunk*.nc', combine='nested', concat_dim='rgi_id')``.
 
 Chunked preprocessing runs
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Most of the preprocessing is per-glacier, but two things need the whole region
-at once: the Glen A calibration (it looks for the single A which matches the
-total volume of the region against a reference dataset), and the ``compile_*``
-tasks which write the region wide summary files.
+The preprocessing (``oggm_prepro``, see :doc:`shop-preprodirs`) is harder to
+chunk, because two of its steps need the whole region at once:
 
-``oggm_prepro`` therefore knows two **half levels**, which stop exactly where
-the per-glacier work ends:
+- the Glen A calibration of the inversion, which looks for the single A
+  matching the total volume of the region to a reference dataset;
+- the ``compile_*`` tasks, which write the region-wide summary files at the
+  end of each level.
+
+Everything else (climate, mass balance calibration, inversion with a given A,
+historical and spinup runs) is per glacier. Instead of merging the output of
+the chunks afterwards, ``oggm_prepro`` splits the levels where the work stops
+being per-glacier. For this, it knows two **half levels**:
 
 - ``3a``: L3 up to and including the apparent mass balance, i.e. without the
   inversion and without the summary files.
 - ``4a``: the L4 runs, without the summary files.
 
-A chunked run is then four stages, alternating between many small chunk jobs
-and one job for the whole region::
+A chunked run is then made of four stages, alternating between many small chunk
+jobs and one job for the whole region:
 
-    stage 1  array         2  -> 3a   climate, mass balance calibration
-    stage 2  1 job/region  3a -> 3    Glen A, inversion, L3 summaries
-    stage 3  array         3  -> 4a   the historical and spinup runs
-    stage 4  1 job/region  4a -> 5    L4 summaries, then the L5 directories
+====== ============ ============== ==============================================
+Stage  Levels       Jobs           What
+====== ============ ============== ==============================================
+1      2 → 3a       one per chunk  climate, mass balance calibration
+2      3a → 3       one per region Glen A, inversion, L3 summary files
+3      3 → 4a       one per chunk  the historical and dynamic spinup runs
+4      4a → 5       one per region L4 summary files, then the L5 directories
+====== ============ ============== ==============================================
 
-The stages hand the glacier directories over as tar files on disk, with
-``--start-from-dir`` (the equivalent of ``--start-base-url``, but local)::
+The stages hand the glacier directories over to each other as tar files on
+disk, with ``--start-from-dir`` (the local equivalent of ``--start-base-url``)::
 
     oggm_prepro --start-level 2  --max-level 3a --output $SCRATCH \
                 --start-base-url <the L2 url> \
@@ -367,41 +431,50 @@ The stages hand the glacier directories over as tar files on disk, with
     oggm_prepro --start-level 4a --max-level 5  --output $OUT \
                 --start-from-dir $OUT
 
-``$SCRATCH`` only holds the intermediate ``L3a`` directories and can be deleted
-once stage 2 is done. ``4a`` needs no scratch folder: it holds exactly the L4
-directories, only the summary files are missing, so it writes straight into
-``L4``.
+(``--start-from-dir`` and ``--start-base-url`` can be combined: the directories
+are then read from disk, and the summary files which are only copied along are
+fetched from the url if they are not on disk.)
 
-The number of chunks of a region is a property of the region, not something you
-choose. Ask for it with ``oggm_prepro_chunks``, and chain the stages with
-``sbatch --dependency``, which on an array job waits for every task::
+Some rules and practicalities:
 
-    #!/bin/bash
-    set -e
-    for REG in $(seq -w 1 19); do
-        LAST=$(( $(oggm_prepro_chunks --rgi-reg $REG --chunk-size 1000) - 1 ))
-        j1=$(sbatch --parsable --array=0-$LAST      run_prepro.sh 1 $REG)
-        j2=$(sbatch --parsable --dependency=afterok:$j1 run_prepro.sh 2 $REG)
-        j3=$(sbatch --parsable --dependency=afterok:$j2 --array=0-$LAST \
-                                                        run_prepro.sh 3 $REG)
-        j4=$(sbatch --parsable --dependency=afterok:$j3 run_prepro.sh 4 $REG)
-    done
+- ``--chunk-idx`` is only accepted for the two per-glacier stages
+  (``2 → 3a`` and ``3 → 4a``), and ``--chunk-size`` must be 100 or 1000 (the
+  sizes of the tar files). Any other stage writes region-wide summary files,
+  which the chunks would silently overwrite.
+- ``oggm_prepro_chunks`` tells you how many chunks a region has, without
+  downloading the RGI (e.g. ``oggm_prepro_chunks --rgi-reg 13 --rgi-version 62``).
+- each job needs its own working directory, and must write its output to its
+  own folder before copying it to the shared one. The chunk jobs of a stage
+  can then all copy into the same tree at the same time: they write different
+  tar files and no summary file.
+- ``L3a`` is scratch: delete it once stage 2 has succeeded. ``4a`` needs no
+  scratch folder, since it holds exactly the L4 directories (only the summary
+  files are missing): it writes straight into ``L4``.
+- chain the stages with ``sbatch --dependency=afterok:<jobid>``. On an array
+  job, this waits for all tasks to succeed. If one chunk fails, the rest of
+  the region's chain can not run: submit the dependent jobs with
+  ``--kill-on-invalid-dep=yes`` so that SLURM cancels them instead of leaving
+  them pending forever. Then fix the problem, resubmit only the failed chunks,
+  and carry on from there.
+- run a small test first: ``oggm_prepro --test`` picks the same four
+  glaciers in all jobs, so the whole chain can be tested quickly.
 
-All 19 chains are independent, so the small regions finish and give their nodes
-back while the big ones are still working - which is the whole point.
+Complete sample scripts, which do all of the above (including a test mode and
+the recovery of failed chunks):
 
-Two things to keep in mind. ``afterok`` fails the rest of the chain if any task
-of the array fails, which is what you want for correctness but means one bad
-chunk stalls a region. And each chunk job needs its own working directory
-(``init_glacier_directories`` empties the ``log`` folder of the one it gets),
-which is automatic if you build it from ``$SLURM_JOB_ID`` as in the example
-above.
+- :download:`config.sh <_code/cluster/prepro/config.sh>`: the configuration of
+  a run (levels, source url, ``oggm_prepro`` options, resources). This is the
+  only file to edit.
+- :download:`submit_prepro.sh <_code/cluster/prepro/submit_prepro.sh>`:
+  works out the stages from the levels in ``config.sh``, and submits the chain
+  of jobs for each region.
+- :download:`run_prepro.sh <_code/cluster/prepro/run_prepro.sh>`: the SLURM
+  script running one stage (for one chunk, if the stage is chunked).
 
-Finally, the whole-region stage writes the Glen A factor it converged to into
-``L3/summary/inversion_glen_a_{rgi_reg}.json``. If you ever need to reproduce
-an inversion without calibrating again, give it back with
-``--inversion-glen-a-factor`` (and ``--inversion-fs``): the chunk jobs then no
-longer need a whole-region stage at all.
+Finally, the stage doing the inversion writes the Glen A factor it converged
+to into ``L3/summary/inversion_glen_a_{rgi_reg}.json``. Give it back with
+``--inversion-glen-a-factor`` (and ``--inversion-fs``) to reproduce the
+inversion of a region without calibrating again.
 
 
 Reproducibility with OGGM
