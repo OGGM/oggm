@@ -877,6 +877,7 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
+
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
                                        massbalance.DailyTIModel,
                                        massbalance.SfcTypeTIModel,

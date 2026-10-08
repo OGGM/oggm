@@ -265,6 +265,107 @@ def _move_hypsometry_to_dem_folder(gdir, source=''):
     os.rename(hypso_f, os.path.join(out, os.path.basename(hypso_f)))
 
 
+# The L3a directories already hold L3 files, so a run resuming at `3a`
+# can't diff against what it loaded. The `3a` stage leaves the L2 state
+# in this file.
+_L2_STATE = 'L2.state.json'
+
+
+def _start_state(gdir, resume_at_inversion):
+    """The state the first level written by this run is a delta against.
+
+    Normally this is the current initialised directory, except at `3a`,
+    where it is the L2 state left by the `3a` stage. Returns None if
+    that state is missing (e.g. an L3a written before it was added), so
+    the level is then shipped as a materialisation.
+    """
+    if not resume_at_inversion:
+        return utils.snapshot_gdir_state(gdir.dir)
+    fp = os.path.join(gdir.dir, _L2_STATE)
+    if not os.path.exists(fp):
+        log.warning(
+            "(%s) no %s in the L3a directory: the L3 tar will " "be a materialisation.",
+            gdir.rgi_id,
+            _L2_STATE,
+        )
+        return None
+    with open(fp) as f:
+        state = json.load(f)
+    # Not an L3 file: it must not end up in the L3 tar
+    os.remove(fp)
+    return state
+
+
+def _delta_tar_entries(
+    gdirs: list[GlacierDirectory],
+    level: int,
+    states: dict,
+    border: int,
+    rgi_version: str,
+    parent_base_url: str | None = None,
+) -> list[tuple[GlacierDirectory, dict]]:
+    """Write per-glacier delta manifests for this level.
+
+    Parameters
+    ----------
+    gdirs : list of GlacierDirectory
+        Glacier directories.
+    level : int
+        The directory processing level (1-4).
+    states : dict
+        A dict of previous level manifest states, keyed by RGI ID.
+    border : int
+        The number of pixels at the maps border.
+    rgi_version : str
+        The RGI version.
+    parent_base_url : str | None, optional
+        Base URL of the tree holding the parent level, or None if it is
+        in this run's output tree.
+
+    Returns
+    --------
+    list
+        A list of ``(gdir, {'include': changed_paths})`` entries for
+        ``execute_entity_task(utils.gdir_to_tar, entries, ...)``, so
+        each level tar ships only what the level changed. Glaciers whose
+        manifest cannot be written (e.g. errored directories) fall back
+        to a full, manifest-less (legacy) tar.
+    """
+    entries = []
+    for gdir in gdirs:
+        try:
+            parent = f"L{level - 1}"
+            if gdir.rgi_id in states and os.path.exists(
+                os.path.join(gdir.dir, f"{parent}.manifest.json")
+            ):
+                layers = dict(parent=parent, parent_base_url=parent_base_url)
+            else:
+                # Nothing to diff against, or a legacy (manifest-less)
+                # parent we must not build on: ship every file
+                layers = dict(kind="materialisation")
+            _, changed = utils.write_level_manifest(
+                gdir,
+                label=f"L{level}",
+                prev_state=states.get(gdir.rgi_id, {}),
+                border=border,
+                rgi_version=rgi_version,
+                **layers,
+            )
+            states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
+            entries.append((gdir, {"include": changed}))
+        except Exception as err:
+            log.warning(
+                "(%s) could not write the L%d manifest (%s: %s); "
+                "writing a full tar instead.",
+                gdir.rgi_id,
+                level,
+                type(err).__name__,
+                err,
+            )
+            entries.append((gdir, {"include": None}))
+    return entries
+
+
 def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       output_folder='', working_dir='', dem_source='',
                       is_test=False, test_ids=None, rgi_file=None,
@@ -285,10 +386,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                       add_export_thickness_geotiff=False, compute_hypsometry=False,
                       custom_climate_task=None,
                       custom_climate_task_kwargs=None,
-                      start_level=None, start_base_url=None,
-                      start_from_dir=None, max_level=5,
-                      chunk_idx=None, chunk_size=1000,
-                      glen_a_factor=None, inversion_fs=0,
+                      start_level=None,
+                      start_base_url=None,
+                      start_from_dir=None,
+                      max_level=5,
+                      chunk_idx=None,
+                      chunk_size=1000,
+                      glen_a_factor=None,
+                      inversion_fs=0,
                       logging_level='WORKFLOW',
                       dynamic_spinup=False, ref_mb_err_scaling_factor=0.2,
                       dynamic_spinup_start_year=1979,
@@ -625,6 +730,36 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         log.workflow('OGGM prepro_levels is done! Time needed: '
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
+    def _write_level_tars(level, gdirs, deltas=True):
+        """Tar the glacier directories of a level into the output folder.
+
+        With `deltas`, the per-glacier delta manifests are written first and
+        each tar ships only what the level changed. `deltas=False` tars the
+        directories whole (L0 and L5, whose manifests are written by their
+        caller, and the multi-DEM L1 branch, which has none).
+
+        A `temp_bias_run` ships no glacier directories at all, so this is
+        then a no-op.
+        """
+        if temp_bias_run:
+            return
+        log.workflow(f'L{level} done. Writing to tar...')
+        entries = gdirs
+        if deltas:
+            entries = _delta_tar_entries(
+                gdirs=gdirs,
+                level=level,
+                states=manifest_states,
+                border=border,
+                rgi_version=rgi_version,
+                parent_base_url=_parent_base_url(level - 1),
+            )
+        level_base_dir = Path(output_base_dir) / f'L{level}'
+        workflow.execute_entity_task(
+            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+        )
+        utils.base_dir_to_tar(level_base_dir)
+
     # Local paths
     if override_params is None:
         override_params = {}
@@ -696,6 +831,31 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
     output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
+
+    def _parent_base_url(parent_level: str) -> str | None:
+        """Get the base URL of a level's parent.
+
+        The first level of a run started from `start_base_url` has its
+        parent there. A chunked chain stage finds it in the shared
+        output folder written by the previous stage.
+
+        Parameters
+        ----------
+        parent_level : str
+            The level of the parent, e.g. '2' for a run starting at '3'.
+
+        Returns
+        -------
+        str or None
+            The base URL of the parent level, or None if the parent is
+            in the same output tree.
+        """
+        if (output_base_dir / f"L{parent_level}").is_dir():
+            return None
+        return start_base_url
+
+    # Per-glacier content snapshots of the previous level for deltas
+    manifest_states = {}
 
     # Add a package version file
     utils.mkdir(output_base_dir)
@@ -809,11 +969,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         # L0 OK - compress all in output directory
         if not temp_bias_run:
-            log.workflow('L0 done. Writing to tar...')
-            level_base_dir = Path(output_base_dir) / 'L0'
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+            for gdir in gdirs:
+                # L0 is the root artifact so fully shipped
+                utils.write_level_manifest(
+                    gdir,
+                    label="L0",
+                    prev_state={},
+                    border=border,
+                    rgi_version=rgi_version,
+                )
+                manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(
+                    gdir.dir
+                )
+        _write_level_tars(0, gdirs, deltas=False)
         if max_level == 0:
             _time_log()
             return
@@ -827,9 +995,12 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                      f'to start from in {from_tar}')
         log.workflow(f'Reading the L{start_level_name} glacier directories '
                      f'from {from_tar}')
-        gdirs = workflow.init_glacier_directories(rgidf, reset=True,
-                                                  force=True,
-                                                  from_tar=str(from_tar))
+        # The lower levels a delta requires come from start_base_url when
+        # they are not on disk
+        gdirs = workflow.init_glacier_directories(
+            rgidf, reset=True, force=True, from_tar=str(from_tar),
+            prepro_base_url=start_base_url, prepro_border=border,
+            prepro_rgi_version=rgi_version)
     else:
         # The level to fetch is the one the directories are *stored* under,
         # which is not the integer we use for the level logic: resuming at
@@ -841,6 +1012,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                   prepro_rgi_version=rgi_version,
                                                   prepro_base_url=start_base_url
                                                   )
+
+    if start_level > 0:
+        # The first level produced is a delta against the loaded state
+        for gdir in gdirs:
+            state = _start_state(gdir, resume_at_inversion)
+            if state is not None:
+                manifest_states[gdir.rgi_id] = state
 
     # L1 - Add dem files
     if start_level == 0:
@@ -897,13 +1075,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs, source=dem_source)
 
             # L1 OK - compress all in output directory
-            if not temp_bias_run:
-                log.workflow('L1 done. Writing to tar...')
-                level_base_dir = Path(output_base_dir) / 'L1'
-                workflow.execute_entity_task(utils.gdir_to_tar, gdirs,
-                                             delete=False,
-                                             base_dir=level_base_dir)
-                utils.base_dir_to_tar(level_base_dir)
+            _write_level_tars(1, gdirs, deltas=False)
 
             _time_log()
             return
@@ -934,12 +1106,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L1 OK - compress all in output directory
-        if not temp_bias_run:
-            log.workflow('L1 done. Writing to tar...')
-            level_base_dir = Path(output_base_dir) / 'L1'
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+        _write_level_tars(1, gdirs)
         if max_level == 1:
             _time_log()
             return
@@ -1106,12 +1273,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                              path=opath)
 
         # L2 OK - compress all in output directory
-        if not temp_bias_run:
-            log.workflow('L2 done. Writing to tar...')
-            level_base_dir = Path(output_base_dir) / 'L2'
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+        _write_level_tars(2, gdirs)
         if max_level == 2:
             _time_log()
             return
@@ -1184,6 +1346,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             log.workflow('L3a done (no inversion, no summary). '
                          'Writing to tar...')
             level_base_dir = Path(output_base_dir) / 'L3a'
+            # The L3 delta written after `3a` is against L2, not L3a
+            for gdir in gdirs:
+                if gdir.rgi_id in manifest_states:
+                    with open(os.path.join(gdir.dir, _L2_STATE), 'w') as f:
+                        json.dump(manifest_states[gdir.rgi_id], f)
             workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
                                          base_dir=level_base_dir)
             utils.base_dir_to_tar(level_base_dir)
@@ -1274,11 +1441,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                   mb_model_class=mb_model_class)
 
         # L3 OK - compress all in output directory
-        log.workflow('L3 done. Writing to tar...')
-        level_base_dir = Path(output_base_dir) / 'L3'
-        workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                     base_dir=level_base_dir)
-        utils.base_dir_to_tar(level_base_dir)
+        _write_level_tars(3, gdirs)
         if max_level == 3:
             _time_log()
             return
@@ -1431,11 +1594,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # the summary files did not touch the directories: the `4a` chunks
         # have already written them to the very same folder.
         if not summary_only:
-            log.workflow('L4 done. Writing to tar...')
-            level_base_dir = Path(output_base_dir) / 'L4'
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
-            utils.base_dir_to_tar(level_base_dir)
+            _write_level_tars(4, gdirs)
 
         sum_dir_L4 = sum_dir
 
@@ -1477,11 +1636,32 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                               setup='run/spinup')
 
     # L5 OK - compress all in output directory
-    log.workflow('L5 done. Writing to tar...')
-    level_base_dir = Path(output_base_dir) / 'L5'
-    workflow.execute_entity_task(utils.gdir_to_tar, mini_gdirs, delete=False,
-                                 base_dir=level_base_dir)
-    utils.base_dir_to_tar(level_base_dir)
+    full_dirs = {gdir.rgi_id: gdir.dir for gdir in gdirs}
+    l5_parent_url = _parent_base_url(4)
+    for gdir in mini_gdirs:
+        # The mini run bundle is self-sufficient, so shipped as standalone.
+        # Its parent L4 has the necessary manifest.
+        parent = dict(
+            parent='L4',
+            parent_base_url=l5_parent_url,
+            parent_dir=full_dirs[gdir.rgi_id],
+        )
+        if not os.path.exists(
+            os.path.join(full_dirs[gdir.rgi_id], 'L4.manifest.json')
+        ):
+            # e.g. an errored glacier whose L4 went out as a full tar
+            log.warning("(%s) no L4 manifest: L5 has no parent.", gdir.rgi_id)
+            parent = {}
+        utils.write_level_manifest(
+            gdir,
+            label='L5',
+            prev_state={},
+            kind='standalone',
+            border=border,
+            rgi_version=rgi_version,
+            **parent,
+        )
+    _write_level_tars(5, mini_gdirs, deltas=False)
 
     _time_log()
 
@@ -1815,8 +1995,10 @@ def parse_args(args):
                 dem_source=args.dem_source,
                 start_level=args.start_level, start_base_url=args.start_base_url,
                 start_from_dir=args.start_from_dir,
-                max_level=args.max_level, disable_mp=args.disable_mp,
-                chunk_idx=args.chunk_idx, chunk_size=args.chunk_size,
+                max_level=args.max_level,
+                disable_mp=args.disable_mp,
+                chunk_idx=args.chunk_idx,
+                chunk_size=args.chunk_size,
                 glen_a_factor=args.inversion_glen_a_factor,
                 inversion_fs=args.inversion_fs,
                 logging_level=args.logging_level,

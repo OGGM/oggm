@@ -1,12 +1,15 @@
 """Wrappers for the single tasks, multi processor handling."""
 # Built ins
+import json
 import logging
 import os
 import shutil
 import warnings
-from collections.abc import Sequence
-# External libs
+import tarfile
 import multiprocessing
+from collections.abc import Sequence
+
+# External libs
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -277,6 +280,97 @@ def execute_parallel_tasks(gdir, tasks):
             task(gd, **kw)
 
 
+def _peek_level_manifest(tar_base: str, rgi_id: str, label: str) -> dict | None:
+    """Read a glacier's level manifest from inside a cached bundle tar.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the cached bundle tar file.
+    rgi_id : str
+        The glacier's RGI ID.
+    label : str
+        The label of the manifest to read, e.g. ``"L3"``.
+
+    Returns
+    -------
+    dict | None
+        The parsed ``{label}.manifest.json`` of the glacier's member
+        tarfile, or None for legacy (pre-manifest) bundles.
+    """
+    bundle_dir = os.path.basename(tar_base)
+    if bundle_dir.endswith(".tar"):
+        bundle_dir = bundle_dir[:-4]
+    try:
+        with tarfile.open(tar_base, "r") as tf:
+            member = tf.getmember(os.path.join(bundle_dir, rgi_id + ".tar.gz"))
+            with tf.extractfile(member) as fobj:
+                with tarfile.open(fileobj=fobj, mode="r:gz") as inner:
+                    mf = inner.extractfile(
+                        os.path.join(rgi_id, f"{label}.manifest.json")
+                    )
+                    if mf is None:
+                        return None
+                    with mf:
+                        return json.load(mf)
+    # KeyError means a legacy, pre-manifest bundle
+    # ReadError means a possible truncated download
+    except (KeyError, tarfile.ReadError, OSError):
+        return None
+
+
+def _layered_level_tars(
+    tar_base: str, rgi_id: str, label: str, base_url: str | None, locate
+) -> list[str]:
+    """Gets the bundle tars to layer for a glacier, root first.
+
+    A delta names its parent, which may live in another tree. This
+    method walks through links until it reaches the root, a non-delta,
+    or a parent legacy directory without a manifest.
+    
+    .. important::
+        This doesn't check artefact ids. `_finalize_merged_dir` does
+        that after the tars are layered, and will raise an error for
+        trying to patch a legacy cumulative directory. Convert legacy
+        directories to the new format first.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the bundle tar of the requested label.
+    rgi_id : str
+        The glacier's RGI ID.
+    label : str
+        The requested label, e.g. ``"L3"``.
+    base_url : str | None
+        Base URL of the tree holding ``tar_base``. A parent link of None
+        resolves to the tree of the manifest holding it.
+    locate : callable
+        ``locate(base_url, label)`` returns the path to a bundle tar.
+
+    Returns
+    -------
+    list[str]
+        The bundle tars to layer, root first.
+    """
+    tars = [tar_base]
+    m = _peek_level_manifest(tar_base, rgi_id, label)
+    while m and m.get("kind") == "delta" and m.get("parent"):
+        p = m["parent"]
+        base_url = p["base_url"] or base_url  # null = this manifest's tree
+        tars.append(locate(base_url, p["label"]))
+        m = _peek_level_manifest(tars[-1], rgi_id, p["label"])
+    return tars[::-1]
+
+
+def _member_tars(tars, rgi_id):
+    """Per-glacier member paths of bundle tars, as one path if alone."""
+    out = [
+        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz") for tb in tars
+    ]
+    return out[0] if len(out) == 1 else out
+
+
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
                      base_url=None):
@@ -290,11 +384,22 @@ def gdir_from_prepro(entity, from_prepro_level=None,
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
-    from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')
-    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+    # Legacy bundles without manifest are cumulative so one fetch is enough
+    tars = _layered_level_tars(
+        tar_base,
+        rid,
+        f'L{from_prepro_level}',
+        base_url,
+        lambda url, lbl: utils.get_prepro_gdir(
+            prepro_rgi_version, rid, prepro_border, lbl[1:], base_url=url
+        ),
+    )
+    return oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rid))
 
 
-def gdir_from_tar(entity, from_tar):
+def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
+                  prepro_rgi_version=None):
 
     rgi_id = _rgi_id_of(entity)
 
@@ -303,18 +408,43 @@ def gdir_from_tar(entity, from_tar):
     # TODO: add support for bundle sizes of 10 and 1
     region = rgi_id[:-6]
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
-    new_path = os.path.join(from_tar, region, new_bundle + ".tar")
-    old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
-    if os.path.exists(new_path):
-        from_tar = new_path
-    elif os.path.exists(old_path):
-        from_tar = old_path
-    else:
+
+    def locate(level_dir):
+        new_path = os.path.join(level_dir, region, new_bundle + ".tar")
+        old_path = os.path.join(level_dir, region, rgi_id[:-3] + ".tar")
+        if os.path.exists(new_path):
+            return new_path
+        if os.path.exists(old_path):
+            return old_path
         raise FileNotFoundError(
-            "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
+            "Cannot find bundle tar for {} in {}".format(rgi_id, level_dir)
         )
-    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
-    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+    tar_base = locate(from_tar)
+    # A parent in this local tree (so a null link) is a sibling folder,
+    # otherwise it comes from `base_url`. A chunked run writes L3 and L4
+    # to disk, whilst only L0 to L2 are published.
+    root, name = os.path.split(os.path.normpath(from_tar))
+
+    def locate_label(url, lbl):
+        if url is None:
+            try:
+                return locate(os.path.join(root, lbl))
+            except FileNotFoundError:
+                if base_url is None:
+                    raise
+            url = base_url
+        return utils.get_prepro_gdir(
+            prepro_rgi_version or cfg.PARAMS["rgi_version"],
+            rgi_id,
+            prepro_border or int(cfg.PARAMS["border"]),
+            lbl[1:],
+            base_url=url,
+        )
+
+    # A folder without its own manifest (e.g. L3a) loads as one tar
+    tars = _layered_level_tars(tar_base, rgi_id, name, None, locate_label)
+    return oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rgi_id))
 
 
 def _check_rgi_input(rgidf=None, err_on_lvl2=False):
@@ -520,8 +650,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: the preprocessed directory url from
-        which to download the directories (became mandatory in OGGM v1.6)
+        for `from_prepro_level`: the preprocessed directory url from
+        which to download the directories (became mandatory in OGGM v1.6).
+        With a `from_tar` level folder, where to download the levels it
+        requires which are not in the sibling folders.
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -640,8 +772,14 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                         pass
 
             if _isdir(from_tar):
-                gdirs = execute_entity_task(gdir_from_tar, entities,
-                                            from_tar=from_tar)
+                gdirs = execute_entity_task(
+                    gdir_from_tar,
+                    entities,
+                    from_tar=from_tar,
+                    base_url=prepro_base_url,
+                    prepro_border=prepro_border,
+                    prepro_rgi_version=prepro_rgi_version,
+                )
             else:
                 gdirs = execute_entity_task(utils.GlacierDirectory, entities,
                                             reset=reset,

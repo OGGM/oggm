@@ -5,6 +5,7 @@ import glob
 import os
 import tempfile
 import gzip
+import hashlib
 import json
 import time
 import random
@@ -3405,6 +3406,29 @@ def robust_tar_extract(
         os.remove(from_tar)
 
 
+def _extract_tars(from_tar: str, to_dir: str, delete_tar: bool = False):
+    """Extract one tar or layer several level tars into a directory.
+
+    Lists are extracted in order (root first), later members overwriting
+    earlier ones, after which the merged directory is finalised by
+    checking the level manifests.
+
+    Parameters
+    ----------
+    from_tar : str or list of str
+        Path(s) to the tar file(s) to extract.
+    to_dir : str
+        Path to the directory where to extract the tar file(s).
+    delete_tar : bool, default False
+        Whether to delete the tar file(s) after extraction.
+    """
+    tars = from_tar if isinstance(from_tar, (list, tuple)) else [from_tar]
+    for ft in tars:
+        robust_tar_extract(ft, to_dir, delete_tar=delete_tar)
+    if len(tars) > 1:
+        _finalize_merged_dir(to_dir)
+
+
 def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
     """Find the UTM projection covering a given point on the globe.
 
@@ -3522,10 +3546,17 @@ class GlacierDirectory(object):
     rgi_area_km2
     """
 
-    def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False, settings_filesuffix='',
-                 observations_filesuffix='',
-                 add_parent_values_to_settings=False):
+    def __init__(
+        self,
+        rgi_entity,
+        base_dir=None,
+        reset=False,
+        from_tar=False,
+        delete_tar=False,
+        settings_filesuffix='',
+        observations_filesuffix='',
+        add_parent_values_to_settings=False,
+    ):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -3538,9 +3569,12 @@ class GlacierDirectory(object):
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
         reset : bool, default=False
             empties the directory at construction (careful!)
-        from_tar : str or bool, default=False
-            path to a tar file to extract the gdir data from. If set to `True`,
-            will check for a tar file at the expected location in `base_dir`.
+        from_tar : str, list of str or bool, default=False
+            path to a tar file to extract the gdir data from. If set to
+            `True`, will check for a tar file at the expected location
+            in `base_dir`. A list of paths (one materialisation plus any
+            level deltas) are layered into the directory in ascending
+            order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
@@ -3568,7 +3602,7 @@ class GlacierDirectory(object):
                     shutil.rmtree(_dir)
                 if from_tar is True:
                     from_tar = _dir + '.tar.gz'
-                robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
+                _extract_tars(from_tar, _dir, delete_tar=delete_tar)
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
@@ -3608,13 +3642,14 @@ class GlacierDirectory(object):
                                 self.rgi_id[:-3], self.rgi_id)
 
         # Do we have to extract the files first?
+        # This has to happen before the settings are read below.
         if (reset or from_tar) and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
 
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            _extract_tars(from_tar, self.dir, delete_tar=delete_tar)
             write_shp = False
         else:
             mkdir(self.dir)
@@ -4170,7 +4205,7 @@ class GlacierDirectory(object):
             The absolute path to the group's npz file.
         """
         return os.path.join(
-            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
+            self.get_filepath("data_store"), f"{filename}{filesuffix or ''}.npz"
         )
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
@@ -4195,6 +4230,113 @@ class GlacierDirectory(object):
             arrays = {k: data[k] for k in data.files if k != "__meta__"}
 
         return transcoder.decode_npz(arrays, meta, filename)
+
+    def open_group(
+        self, filename: str, filesuffix: str = "", **xr_kwargs
+    ) -> xr.Dataset:
+        """Open a plain dataset group of the glacier directory.
+
+        Preferred way to read gridded, climate and GCM data. Distinct
+        from ``read_store``, which reconstructs arbitrary objects: this
+        returns the group as an ``xarray.Dataset``. Groups are
+        compressed netCDF files at the v1 path, so v1 directories read
+        unchanged.
+
+        TODO: This can be refactored, and maybe the method name should
+        be something clearer for users.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **xr_kwargs
+            Passed to ``xr.open_dataset`` (e.g. decoding options).
+
+        Returns
+        -------
+        xr.Dataset
+            The group contents.
+        """
+        # dask fancy indexing/item assignment causes breaks
+        xr_kwargs.setdefault("chunks", None)
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if not os.path.exists(fp):
+            raise FileNotFoundError(
+                f"No group `{filename}{filesuffix or ''}` in {self.dir}"
+            )
+        return xr.open_dataset(fp, engine="h5netcdf", **xr_kwargs)
+
+    def write_group(
+        self,
+        ds: xr.Dataset,
+        filename: str,
+        filesuffix: str = "",
+        mode: str = "a",
+        encoding: dict = None,
+    ) -> None:
+        """Write a plain ``xarray.Dataset`` as a group of the directory.
+
+        Preferred way to write gridded, climate and GCM data. Every data
+        variable is compressed (zlib level 4 with shuffle), and the file
+        is written beside the target then moved into place.
+
+        Parameters
+        ----------
+        ds : xr.Dataset
+            The dataset to write.
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        mode : {'a', 'w'}, default 'a'
+            'w' replaces any existing group, 'a' adds to or overwrites
+            variables in an existing group with matching dimensions.
+        encoding : dict, optional
+            Per-variable encoding, layered over the compression
+            defaults.
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if mode == "a" and os.path.exists(fp):
+            # ponytail: rewrites the whole group, fine at gdir sizes
+            with xr.open_dataset(fp, engine="h5netcdf", decode_cf=False) as old:
+                ds = xr.merge(
+                    [
+                        old.load().drop_vars(
+                            [v for v in ds.variables if v in old.variables]
+                        ),
+                        ds,
+                    ],
+                    combine_attrs="override",
+                )
+        enc = {
+            v: {"zlib": True, "complevel": 4, "shuffle": True}
+            for v in ds.data_vars
+        }
+        for v, e in (encoding or {}).items():
+            enc[v] = {**enc.get(v, {}), **e}
+        tmp = f"{fp}.tmp{os.getpid()}"
+        try:
+            ds.to_netcdf(tmp, engine="h5netcdf", encoding=enc)
+            os.replace(tmp, fp)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+    def delete_group(self, filename: str, filesuffix: str = "") -> None:
+        """Remove a plain dataset group from the directory.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename.
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if os.path.exists(fp):
+            os.remove(fp)
 
     def read_store(
         self, filename: str, filesuffix: str = "", **kwargs
@@ -5600,8 +5742,418 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
+def manifest_id(manifest: dict) -> str:
+    """Content id of one artefact, chained to its parent's id.
+
+    Hashes the content fields only, so two identical builds share an id
+    whatever their ``created`` time or ``oggm_version``. The parent's
+    ``base_url`` is left out, so a mirror serves the same id.
+
+    .. caution::
+        Regenerating a parent changes the id recorded by every child
+        built upon it.
+
+    Parameters
+    ----------
+    manifest : dict
+        A level manifest, as written by :func:`write_level_manifest`.
+
+    Returns
+    -------
+    str
+        A sha256 hex digest.
+    """
+    fields = ("rgi_id", "label", "border", "rgi_version", "files", "data_store")
+    key = {k: manifest[k] for k in fields}
+    key["parent"] = (manifest.get("parent") or {}).get("id")
+    if "grid_id" in manifest:  # add-ons only, so other ids stay put
+        key["grid_id"] = manifest["grid_id"]
+    blob = json.dumps(key, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def grid_id(grid) -> str:
+    """Content id of a glacier grid, used to match add-ons to a gdir.
+
+    Hashes the grid's parameters rather than the bytes of
+    ``glacier_grid.json``, so a change in how the file is formatted does
+    not change the id.
+
+    .. caution::
+        The projection is hashed as its proj string. If the string
+        written for the same projection changes, the id changes.
+
+    Parameters
+    ----------
+    grid : salem.Grid
+        The glacier grid, e.g. ``gdir.grid``.
+
+    Returns
+    -------
+    str
+        A sha256 hex digest.
+    """
+    blob = json.dumps(grid.to_dict(), sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _finalize_merged_dir(dirpath: str):
+    """Make a directory whole again after layering level tars into it.
+
+    Orders the layered manifests root first by following their parent
+    links, warns when a parent is missing or is not the one a child was
+    built on, and deletes the files the chain removed. The last action
+    on a path wins, so a file removed by one level and written again by
+    a later one stays.
+
+    A mismatch is a warning, not an error: build time, not the client,
+    decides what an artefact sits on.
+    """
+    manifests = {}
+    for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
+        with open(fp) as f:
+            m = json.load(f)
+        if m["kind"] != "addon":  # add-ons sit beside the chain
+            manifests[m["label"]] = m
+    if not manifests:
+        return
+
+    # This is a tie-breaker for instances where a full tar carries stale
+    # lower manifests (a `3a` start without L2.state.json).
+    named = {(m.get("parent") or {}).get("label") for m in manifests.values()}
+    leaves = [m for lbl, m in manifests.items() if lbl not in named]
+    chain = [max(leaves or manifests.values(), key=lambda m: m["created"])]
+    while (
+        chain[-1]["kind"] == "delta"
+        and chain[-1].get("parent")
+        and len(chain) <= len(manifests)
+    ):
+        child, ref = chain[-1], chain[-1]["parent"]
+        found = manifests.get(ref["label"])
+        if found is None or found["id"] != ref["id"]:
+            warnings.warn(
+                f"({child['rgi_id']}) {child['label']} was built on "
+                f"{ref['label']} id {ref['id'][:8]} at "
+                f"{ref['base_url'] or 'the same tree'}, but the layered "
+                f"{ref['label']} has "
+                + (f"id {found['id'][:8]}" if found else "no manifest")
+                + ". Clear the download cache, or rebuild "
+                f"{child['label']}.",
+                RuntimeWarning,
+            )
+        if found is None:
+            break
+        chain.append(found)
+
+    store_name = os.path.basename(cfg.BASENAMES["data_store"])
+    alive = {}
+    for m in reversed(chain):
+        for rel in m["files"].get("removed", []):
+            alive[rel] = False
+        for rel in [
+            *m["files"]["added"],
+            *m["files"]["updated"],
+            *(f"{store_name}/{g}" for g in m["data_store"]),
+        ]:
+            alive[rel] = True
+    for rel, keep in alive.items():
+        fp = os.path.join(dirpath, rel)
+        if not keep and os.path.exists(fp):
+            os.remove(fp)
+
+
+def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
+    """Content hashes of a glacier directory, for computing level deltas.
+
+    Maps each relative file path to a sha256 hex digest of its content.
+    Each group of the data store is one npz file, so a group added or
+    rewritten by a prepro level shows up as its own key, e.g.
+    ``data_store/inversion_flowlines.npz``.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory (or its path) to snapshot.
+
+    Returns
+    -------
+    dict
+        Mapping of relative file path to sha256 hex digest.
+    """
+
+    root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
+    state = {}
+    for cur, _, files in os.walk(root):
+        for fname in files:
+            if regexp.search(r"\.tmp\d+$", fname):
+                continue  # remove partial write_npz outputs
+            fpath = os.path.join(cur, fname)
+            rel = os.path.relpath(fpath, root).replace(os.sep, "/")
+            with open(fpath, "rb") as f:
+                state[rel] = hashlib.file_digest(f, "sha256").hexdigest()
+    return state
+
+
+def write_level_manifest(
+    gdir_or_dir: GlacierDirectory | str,
+    label: str,
+    prev_state: dict,
+    parent: str | None = None,
+    parent_base_url: str | None = None,
+    parent_dir: str | None = None,
+    kind: str = "delta",
+    border: int | None = None,
+    rgi_version: str | None = None,
+    grid_id: str | None = None,
+) -> tuple[str, list[str]]:
+    """Diffs a glacier directory against a snapshot and writes a manifest.
+
+    Compares the current state (see :func:`snapshot_gdir_state`) with
+    ``prev_state`` and records what this artefact added, changed, or
+    removed in a ``{label}.manifest.json`` file inside the glacier
+    directory. Per-label file names mean a layered directory
+    self-documents every artefact applied to it.
+
+    The parent's id is read from its manifest. Legacy directories will
+    therefore raise an error instead of producing a broken chain. Users
+    should convert legacy directories into the new format instead.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory or its path.
+    label : str
+        The artefact's label, which is also its folder name in the
+        published tree, e.g. ``"L3"`` or ``"L3a"``.
+    prev_state : dict
+        Snapshot of the parent's state. Ignored for the non-delta kinds,
+        which ship every file.
+    parent : str | None, optional
+        Label of the artefact this one was built on. Required for a
+        ``'delta'`` other than the root, kept for provenance by a
+        ``'standalone'``, and forbidden for a ``'materialisation'``.
+    parent_base_url : str | None, optional
+        Base URL of the tree holding the parent. None means the same tree
+        as this manifest.
+    parent_dir : str | None, optional
+        Directory holding ``{parent}.manifest.json``. Defaults to the
+        glacier directory.
+    kind : str, default ``'delta'``
+        ``'delta'`` (changes against its parent), ``'materialisation'``
+        (every file, cumulative, no parent), ``'standalone'`` (only what
+        it needs to run, e.g. the L5 bundle) or ``'addon'`` (optional
+        data for any gdir on the same grid, no parent).
+    border : int | None, optional
+        Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
+    rgi_version : str | None, optional
+        RGI version of the dataset; defaults to
+        ``cfg.PARAMS['rgi_version']``.
+    grid_id : str | None, optional
+        :func:`grid_id` of the grid the add-on was built on. Required for
+        an ``'addon'``, and not written for the other kinds.
+
+    Returns
+    -------
+    tuple[str, list[str]]
+        Path to the written manifest and the list of changed relative
+        paths, including the manifest itself, passed to
+        ``gdir_to_tar(include=...)``.
+    """
+
+    kinds = ("delta", "materialisation", "standalone", "addon")
+    if kind not in kinds:
+        raise ValueError(
+            f"Invalid manifest kind: {kind!r}. Must be one of {kinds}."
+        )
+    if kind in ("materialisation", "addon") and parent is not None:
+        raise ValueError(
+            f"A {kind} has no parent, got parent={parent!r}."
+        )
+    if kind == "addon" and grid_id is None:
+        raise ValueError("An addon needs the grid_id of its grid.")
+    if kind == "delta" and parent is None and label != "L0":
+        raise ValueError(
+            f"A delta other than the root needs a parent, got label={label!r}. "
+            "Pass kind='materialisation' to ship every file instead."
+        )
+    if kind != "delta":
+        prev_state = {}  # self-sufficient: ship every file
+
+    root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
+    rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
+    if border is None:
+        border = int(cfg.PARAMS["border"])
+    if rgi_version is None:
+        rgi_version = cfg.PARAMS["rgi_version"]
+
+    parent_ref = None
+    if parent is not None:
+        fp = os.path.join(parent_dir or root, f"{parent}.manifest.json")
+        with open(fp) as f:
+            parent_ref = {
+                "base_url": parent_base_url,
+                "label": parent,
+                "id": json.load(f)["id"],
+            }
+
+    def is_manifest(rel):
+        return "/" not in rel and rel.endswith(".manifest.json")
+
+    store_name = os.path.basename(cfg.BASENAMES["data_store"])
+    state = snapshot_gdir_state(root)
+    added, updated, data_store = {}, {}, {}
+    for rel, digest in sorted(state.items()):
+        if is_manifest(rel) or prev_state.get(rel) == digest:
+            continue
+        if rel.startswith(store_name + "/"):
+            data_store[rel[len(store_name) + 1 :]] = digest
+        elif rel in prev_state:
+            updated[rel] = digest
+        else:
+            added[rel] = digest
+    removed = sorted(
+        r for r in set(prev_state) - set(state) if not is_manifest(r)
+    )
+
+    manifest_name = f"{label}.manifest.json"
+    manifest = {
+        "schema_version": 2,
+        "kind": kind,
+        "rgi_id": rgi_id,
+        "label": label,
+        "parent": parent_ref,
+        "border": int(border),
+        "rgi_version": str(rgi_version),
+        "oggm_version": __version__,
+        "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "files": {"added": added, "updated": updated, "removed": removed},
+        "data_store": data_store,
+    }
+    if kind == "addon":
+        manifest["grid_id"] = grid_id
+    manifest["id"] = manifest_id(manifest)
+    manifest_path = os.path.join(root, manifest_name)
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    changed_paths = (
+        list(added)
+        + list(updated)
+        + [f"{store_name}/{g}" for g in data_store]
+        + [manifest_name]
+    )
+    return manifest_path, changed_paths
+
+
 @entity_task(log)
-def gdir_to_tar(gdir, base_dir=None, delete=True):
+def write_addon(
+    gdir: GlacierDirectory, label: str, variables: list, output_dir: str
+) -> str:
+    """Packs gridded variables of a glacier as an add-on.
+
+    An add-on is optional data, e.g. a velocity product, that any
+    glacier directory on the same grid can take with
+    :func:`apply_addon`, whatever chain it was built from. Writes the
+    variables and an ``'addon'`` manifest holding the :func:`grid_id` to
+    ``{output_dir}/{region}/{rgi_id[:-3]}/{rgi_id}.tar.gz``. Bundle them
+    with ``base_dir_to_tar(output_dir)``.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory holding the variables.
+    label : str
+        The add-on's name, which is also its folder name in the
+        published tree, e.g. ``"itslive"``.
+    variables : list of str
+        Variables of ``gridded_data`` to ship.
+    output_dir : str
+        Root of the add-on tree.
+
+    Returns
+    -------
+    str
+        The path to the glacier's add-on tar file.
+    """
+    rid = gdir.rgi_id
+    root = os.path.join(output_dir, rid[:-6], rid[:-3], rid)
+    mkdir(root, reset=True)
+    with gdir.open_group("gridded_data") as ds:
+        ds[variables].load().to_netcdf(
+            os.path.join(root, f"{label}.nc"), engine="h5netcdf"
+        )
+    write_level_manifest(
+        root, label, {}, kind="addon", grid_id=grid_id(gdir.grid)
+    )
+    opath = root + ".tar.gz"
+    with tarfile.open(opath, "w:gz") as tar:
+        tar.add(root, arcname=rid)
+    shutil.rmtree(root)
+    return opath
+
+
+@entity_task(log, writes=["gridded_data"])
+def apply_addon(gdir: GlacierDirectory, base_url: str) -> None:
+    """Adds an add-on's variables to a glacier's ``gridded_data``.
+
+    Refuses an add-on built on another grid. Matching ``dx`` and border
+    is not enough, since the grid origin also depends on the outlines
+    and the projection. The add-on's manifest is copied into the glacier
+    directory as a record of what was applied. Applying it twice will
+    overwrite its own variables.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory to add the variables to.
+    base_url : str
+        URL of the add-on tree, i.e. the folder holding the region
+        folders of 100-glacier bundles. This also accepts local paths.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If the add-on is not an ``'addon'`` for this glacier and grid.
+    """
+    from oggm.utils import _downloads  # module lookup, so tests can patch
+
+    rid = gdir.rgi_id
+    rel = f"{rid[:-6]}/{rid[:-6]}.{rid[-5:-2]}.tar"
+    base_url = os.fspath(base_url)
+    if os.path.isdir(base_url):
+        tar_base = os.path.join(base_url, rel)
+    else:
+        url = base_url.rstrip("/") + "/" + rel
+        tar_base = _downloads.file_downloader(url)
+        if tar_base is None:
+            raise RuntimeError(f"Could not find file at {url}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.join(tmp, rid)
+        robust_tar_extract(os.path.join(tar_base[:-4], rid + ".tar.gz"), tmp)
+        (mf,) = glob.glob(os.path.join(tmp, "*.manifest.json"))
+        with open(mf) as f:
+            m = json.load(f)
+        want = grid_id(gdir.grid)
+        if (m["kind"], m["rgi_id"], m.get("grid_id")) != ("addon", rid, want):
+            raise InvalidWorkflowError(
+                f"({rid}) {m['label']} at {base_url} is a {m['kind']} for "
+                f"{m['rgi_id']} on grid {str(m.get('grid_id'))[:8]}, but "
+                f"this glacier directory has grid {want[:8]}."
+            )
+        fp = os.path.join(tmp, f"{m['label']}.nc")
+        with xr.open_dataset(fp, engine="h5netcdf") as ds:
+            gdir.write_group(ds.load(), "gridded_data", mode="a")
+        shutil.copy(mf, gdir.dir)
+
+
+@entity_task(log)
+def gdir_to_tar(
+    gdir: GlacierDirectory,
+    base_dir: str = None,
+    delete: bool = True,
+    include: list = None,
+) -> str:
     """Writes the content of a glacier directory to a tar file.
 
     The tar file is located at the same location of the original directory.
@@ -5609,15 +6161,24 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
 
     Parameters
     ----------
-    base_dir : str
-        path to the basedir where to write the directory (defaults to the
-        same location of the original directory)
-    delete : bool
-        delete the original directory afterwards (default)
+    gdir : :py:class:`oggm.GlacierDirectory`
+        The glacier directory to write to a tar file.
+    base_dir : str, optional
+        Path to the basedir where to write the directory (defaults to
+        the same location of the original directory).
+    delete : bool, default True
+        Delete the original directory afterwards.
+    include : list of str, optional
+        Only add these paths (relative to the glacier directory) to the
+        tar file, e.g. the changed paths from ``write_level_manifest``
+        when building a per-level delta, such as
+        ``data_store/<group>.npz``. Directories are added recursively.
+        The default adds the whole directory.
 
     Returns
     -------
-    the path to the tar file
+    str
+        The path to the tar file.
     """
 
     source_dir = os.path.normpath(gdir.dir)
@@ -5627,7 +6188,15 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
         mkdir(os.path.dirname(opath))
 
     with tarfile.open(opath, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
+        if include is None:
+            tar.add(source_dir, arcname=os.path.basename(source_dir))
+        else:
+            arcbase = os.path.basename(source_dir)
+            for rel in sorted(set(include)):
+                tar.add(
+                    os.path.join(source_dir, rel),
+                    arcname=os.path.join(arcbase, rel),
+                )
 
     if delete:
         shutil.rmtree(source_dir)
