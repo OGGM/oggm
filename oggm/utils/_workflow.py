@@ -4205,7 +4205,7 @@ class GlacierDirectory(object):
             The absolute path to the group's npz file.
         """
         return os.path.join(
-            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
+            self.get_filepath("data_store"), f"{filename}{filesuffix or ''}.npz"
         )
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
@@ -4230,6 +4230,113 @@ class GlacierDirectory(object):
             arrays = {k: data[k] for k in data.files if k != "__meta__"}
 
         return transcoder.decode_npz(arrays, meta, filename)
+
+    def open_group(
+        self, filename: str, filesuffix: str = "", **xr_kwargs
+    ) -> xr.Dataset:
+        """Open a plain dataset group of the glacier directory.
+
+        Preferred way to read gridded, climate and GCM data. Distinct
+        from ``read_store``, which reconstructs arbitrary objects: this
+        returns the group as an ``xarray.Dataset``. Groups are
+        compressed netCDF files at the v1 path, so v1 directories read
+        unchanged.
+
+        TODO: This can be refactored, and maybe the method name should
+        be something clearer for users.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        **xr_kwargs
+            Passed to ``xr.open_dataset`` (e.g. decoding options).
+
+        Returns
+        -------
+        xr.Dataset
+            The group contents.
+        """
+        # dask fancy indexing/item assignment causes breaks
+        xr_kwargs.setdefault("chunks", None)
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if not os.path.exists(fp):
+            raise FileNotFoundError(
+                f"No group `{filename}{filesuffix or ''}` in {self.dir}"
+            )
+        return xr.open_dataset(fp, engine="h5netcdf", **xr_kwargs)
+
+    def write_group(
+        self,
+        ds: xr.Dataset,
+        filename: str,
+        filesuffix: str = "",
+        mode: str = "a",
+        encoding: dict = None,
+    ) -> None:
+        """Write a plain ``xarray.Dataset`` as a group of the directory.
+
+        Preferred way to write gridded, climate and GCM data. Every data
+        variable is compressed (zlib level 4 with shuffle), and the file
+        is written beside the target then moved into place.
+
+        Parameters
+        ----------
+        ds : xr.Dataset
+            The dataset to write.
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename (useful for experiments).
+        mode : {'a', 'w'}, default 'a'
+            'w' replaces any existing group, 'a' adds to or overwrites
+            variables in an existing group with matching dimensions.
+        encoding : dict, optional
+            Per-variable encoding, layered over the compression
+            defaults.
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if mode == "a" and os.path.exists(fp):
+            # ponytail: rewrites the whole group, fine at gdir sizes
+            with xr.open_dataset(fp, engine="h5netcdf", decode_cf=False) as old:
+                ds = xr.merge(
+                    [
+                        old.load().drop_vars(
+                            [v for v in ds.variables if v in old.variables]
+                        ),
+                        ds,
+                    ],
+                    combine_attrs="override",
+                )
+        enc = {
+            v: {"zlib": True, "complevel": 4, "shuffle": True}
+            for v in ds.data_vars
+        }
+        for v, e in (encoding or {}).items():
+            enc[v] = {**enc.get(v, {}), **e}
+        tmp = f"{fp}.tmp{os.getpid()}"
+        try:
+            ds.to_netcdf(tmp, engine="h5netcdf", encoding=enc)
+            os.replace(tmp, fp)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+    def delete_group(self, filename: str, filesuffix: str = "") -> None:
+        """Remove a plain dataset group from the directory.
+
+        Parameters
+        ----------
+        filename : str
+            File name (must be listed in cfg.BASENAMES).
+        filesuffix : str, optional
+            Append a suffix to the filename.
+        """
+        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
+        if os.path.exists(fp):
+            os.remove(fp)
 
     def read_store(
         self, filename: str, filesuffix: str = "", **kwargs
@@ -5659,7 +5766,34 @@ def manifest_id(manifest: dict) -> str:
     fields = ("rgi_id", "label", "border", "rgi_version", "files", "data_store")
     key = {k: manifest[k] for k in fields}
     key["parent"] = (manifest.get("parent") or {}).get("id")
+    if "grid_id" in manifest:  # add-ons only, so other ids stay put
+        key["grid_id"] = manifest["grid_id"]
     blob = json.dumps(key, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def grid_id(grid) -> str:
+    """Content id of a glacier grid, used to match add-ons to a gdir.
+
+    Hashes the grid's parameters rather than the bytes of
+    ``glacier_grid.json``, so a change in how the file is formatted does
+    not change the id.
+
+    .. caution::
+        The projection is hashed as its proj string. If the string
+        written for the same projection changes, the id changes.
+
+    Parameters
+    ----------
+    grid : salem.Grid
+        The glacier grid, e.g. ``gdir.grid``.
+
+    Returns
+    -------
+    str
+        A sha256 hex digest.
+    """
+    blob = json.dumps(grid.to_dict(), sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()
 
 
@@ -5679,7 +5813,8 @@ def _finalize_merged_dir(dirpath: str):
     for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
         with open(fp) as f:
             m = json.load(f)
-        manifests[m["label"]] = m
+        if m["kind"] != "addon":  # add-ons sit beside the chain
+            manifests[m["label"]] = m
     if not manifests:
         return
 
@@ -5769,6 +5904,7 @@ def write_level_manifest(
     kind: str = "delta",
     border: int | None = None,
     rgi_version: str | None = None,
+    grid_id: str | None = None,
 ) -> tuple[str, list[str]]:
     """Diffs a glacier directory against a snapshot and writes a manifest.
 
@@ -5804,13 +5940,17 @@ def write_level_manifest(
         glacier directory.
     kind : str, default ``'delta'``
         ``'delta'`` (changes against its parent), ``'materialisation'``
-        (every file, cumulative, no parent) or ``'standalone'`` (only what
-        it needs to run, e.g. the L5 bundle).
+        (every file, cumulative, no parent), ``'standalone'`` (only what
+        it needs to run, e.g. the L5 bundle) or ``'addon'`` (optional
+        data for any gdir on the same grid, no parent).
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
         RGI version of the dataset; defaults to
         ``cfg.PARAMS['rgi_version']``.
+    grid_id : str | None, optional
+        :func:`grid_id` of the grid the add-on was built on. Required for
+        an ``'addon'``, and not written for the other kinds.
 
     Returns
     -------
@@ -5820,15 +5960,17 @@ def write_level_manifest(
         ``gdir_to_tar(include=...)``.
     """
 
-    kinds = ("delta", "materialisation", "standalone")
+    kinds = ("delta", "materialisation", "standalone", "addon")
     if kind not in kinds:
         raise ValueError(
             f"Invalid manifest kind: {kind!r}. Must be one of {kinds}."
         )
-    if kind == "materialisation" and parent is not None:
+    if kind in ("materialisation", "addon") and parent is not None:
         raise ValueError(
-            f"A materialisation has no parent, got parent={parent!r}."
+            f"A {kind} has no parent, got parent={parent!r}."
         )
+    if kind == "addon" and grid_id is None:
+        raise ValueError("An addon needs the grid_id of its grid.")
     if kind == "delta" and parent is None and label != "L0":
         raise ValueError(
             f"A delta other than the root needs a parent, got label={label!r}. "
@@ -5887,6 +6029,8 @@ def write_level_manifest(
         "files": {"added": added, "updated": updated, "removed": removed},
         "data_store": data_store,
     }
+    if kind == "addon":
+        manifest["grid_id"] = grid_id
     manifest["id"] = manifest_id(manifest)
     manifest_path = os.path.join(root, manifest_name)
     with open(manifest_path, "w") as f:
@@ -5899,6 +6043,108 @@ def write_level_manifest(
         + [manifest_name]
     )
     return manifest_path, changed_paths
+
+
+@entity_task(log)
+def write_addon(
+    gdir: GlacierDirectory, label: str, variables: list, output_dir: str
+) -> str:
+    """Packs gridded variables of a glacier as an add-on.
+
+    An add-on is optional data, e.g. a velocity product, that any
+    glacier directory on the same grid can take with
+    :func:`apply_addon`, whatever chain it was built from. Writes the
+    variables and an ``'addon'`` manifest holding the :func:`grid_id` to
+    ``{output_dir}/{region}/{rgi_id[:-3]}/{rgi_id}.tar.gz``. Bundle them
+    with ``base_dir_to_tar(output_dir)``.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory holding the variables.
+    label : str
+        The add-on's name, which is also its folder name in the
+        published tree, e.g. ``"itslive"``.
+    variables : list of str
+        Variables of ``gridded_data`` to ship.
+    output_dir : str
+        Root of the add-on tree.
+
+    Returns
+    -------
+    str
+        The path to the glacier's add-on tar file.
+    """
+    rid = gdir.rgi_id
+    root = os.path.join(output_dir, rid[:-6], rid[:-3], rid)
+    mkdir(root, reset=True)
+    with gdir.open_group("gridded_data") as ds:
+        ds[variables].load().to_netcdf(
+            os.path.join(root, f"{label}.nc"), engine="h5netcdf"
+        )
+    write_level_manifest(
+        root, label, {}, kind="addon", grid_id=grid_id(gdir.grid)
+    )
+    opath = root + ".tar.gz"
+    with tarfile.open(opath, "w:gz") as tar:
+        tar.add(root, arcname=rid)
+    shutil.rmtree(root)
+    return opath
+
+
+@entity_task(log, writes=["gridded_data"])
+def apply_addon(gdir: GlacierDirectory, base_url: str) -> None:
+    """Adds an add-on's variables to a glacier's ``gridded_data``.
+
+    Refuses an add-on built on another grid. Matching ``dx`` and border
+    is not enough, since the grid origin also depends on the outlines
+    and the projection. The add-on's manifest is copied into the glacier
+    directory as a record of what was applied. Applying it twice will
+    overwrite its own variables.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory to add the variables to.
+    base_url : str
+        URL of the add-on tree, i.e. the folder holding the region
+        folders of 100-glacier bundles. This also accepts local paths.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If the add-on is not an ``'addon'`` for this glacier and grid.
+    """
+    from oggm.utils import _downloads  # module lookup, so tests can patch
+
+    rid = gdir.rgi_id
+    rel = f"{rid[:-6]}/{rid[:-6]}.{rid[-5:-2]}.tar"
+    base_url = os.fspath(base_url)
+    if os.path.isdir(base_url):
+        tar_base = os.path.join(base_url, rel)
+    else:
+        url = base_url.rstrip("/") + "/" + rel
+        tar_base = _downloads.file_downloader(url)
+        if tar_base is None:
+            raise RuntimeError(f"Could not find file at {url}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.join(tmp, rid)
+        robust_tar_extract(os.path.join(tar_base[:-4], rid + ".tar.gz"), tmp)
+        (mf,) = glob.glob(os.path.join(tmp, "*.manifest.json"))
+        with open(mf) as f:
+            m = json.load(f)
+        want = grid_id(gdir.grid)
+        if (m["kind"], m["rgi_id"], m.get("grid_id")) != ("addon", rid, want):
+            raise InvalidWorkflowError(
+                f"({rid}) {m['label']} at {base_url} is a {m['kind']} for "
+                f"{m['rgi_id']} on grid {str(m.get('grid_id'))[:8]}, but "
+                f"this glacier directory has grid {want[:8]}."
+            )
+        fp = os.path.join(tmp, f"{m['label']}.nc")
+        with xr.open_dataset(fp, engine="h5netcdf") as ds:
+            gdir.write_group(ds.load(), "gridded_data", mode="a")
+        shutil.copy(mf, gdir.dir)
 
 
 @entity_task(log)
