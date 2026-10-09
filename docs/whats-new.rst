@@ -281,6 +281,14 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
+  in the wrong direction, step length ignoring ``melt_f_max``, broken
+  error recovery, swapped "part success" / "dynamic spinup only" labels)
+  and added a bisection fallback for non-monotonic responses. This changes
+  the calibrated melt_f of some glaciers. The new
+  ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic stores why the
+  calibration stopped.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The monthly hydrological output of ``run_with_hydro`` (``*_monthly``
   variables) now has the correct ``kg month-1`` unit attribute: the values
   are monthly totals, but the attribute was copied from the annual variables
