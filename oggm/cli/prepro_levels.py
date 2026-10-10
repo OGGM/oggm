@@ -703,6 +703,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
+    # The intersects are only needed to build the L0 directories (#1981)
+    intersects = None
     if rgi_file is None:
 
         # Get the RGI file
@@ -717,7 +719,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                             version=rgi_version)
             else:
                 rgif = intersects_file
-            cfg.set_intersects_db(rgif)
+            intersects = rgif
 
         rgidf = apply_rgi_fixes(rgidf, rgi_version, rgi_reg)
     else:
@@ -726,7 +728,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             rgidf = rgi_file
         if start_level == 0:
-            cfg.set_intersects_db(intersects_file)
+            intersects = intersects_file
 
     if is_test:
         if test_ids is not None:
@@ -799,7 +801,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L0 - go
     if start_level == 0:
-        gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+        gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True,
+                                                  intersects=intersects)
 
         # Glacier stats
         sum_dir = Path(output_base_dir) / 'L0' / 'summary'
@@ -861,7 +864,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 rs = i == 0
                 log.workflow('Running prepro on sources: {}'.format(s))
                 gdirs = workflow.init_glacier_directories(rgidf, reset=rs,
-                                                          force=rs)
+                                                          force=rs,
+                                                          intersects=intersects)
                 workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                              source=s)
                 workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)

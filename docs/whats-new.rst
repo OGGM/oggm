@@ -387,6 +387,13 @@ Breaking changes
   way to set them, ``cfg.set_intersects_db``, is unchanged, and so is
   ``cfg.PARAMS['use_intersects']`` (:pull:`1980`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The glacier intersects are now an argument of
+  :py:func:`workflow.init_glacier_directories` (and of
+  :py:class:`GlacierDirectory`), ``intersects``, instead of a global setting:
+  they are only needed to build the directories, never afterwards.
+  ``cfg.set_intersects_db`` still works but is deprecated and raises a
+  ``DeprecationWarning`` (:issue:`1981`).
+  By `Louis Schlegel <https://github.com/louisschlegel>`_.
 - The temperature-bias prior file of the `informed_threestep` calibration
   now always has to given explicitly. There is no
   default file anymore: `utils.get_temp_bias_dataframe` takes a single

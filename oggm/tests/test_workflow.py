@@ -598,19 +598,58 @@ def test_plot_region_model():
     return fig
 
 
+def test_intersects_argument():
+    # #1981: intersects are an argument of init_glacier_directories, and
+    # do not need to be set globally
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = _TEST_DIR
+    hef = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    inter = gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp'))
+    assert len(cfg.INTERSECTS_GDF) == 0
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error', message='.*intersects.*',
+                                category=DeprecationWarning)
+        gdir = workflow.init_glacier_directories(hef, reset=True, force=True,
+                                                 intersects=inter)[0]
+    assert len(gdir.intersects_ids) == 2
+    # nothing was set globally
+    assert len(cfg.INTERSECTS_GDF) == 0
+
+    # also as a file path
+    gdir = workflow.init_glacier_directories(
+        hef, reset=True, force=True,
+        intersects=get_demo_file('rgi7g_hef_intersects.shp'))[0]
+    assert len(gdir.intersects_ids) == 2
+
+
+def test_intersects_global_deprecated():
+    # #1981: the old global way still works, with a warning
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = _TEST_DIR
+    hef = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    with pytest.warns(DeprecationWarning, match='intersects'):
+        cfg.set_intersects_db(
+            gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp')))
+    with pytest.warns(DeprecationWarning, match='intersects'):
+        gdir = workflow.init_glacier_directories(hef, reset=True,
+                                                 force=True)[0]
+    assert len(gdir.intersects_ids) == 2
+    cfg.set_intersects_db()
+
+
 def test_rgi7_glacier_dirs():
     # create test dir
     if not os.path.exists(_TEST_DIR):
         os.makedirs(_TEST_DIR)
     # initialize
     cfg.initialize()
-    # Set intersects
-    cfg.set_intersects_db(gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp')))
     cfg.PATHS['working_dir'] = _TEST_DIR
     # load and read test data
     hef_rgi7_df = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
-    # create GDIR
-    gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
+    # create GDIR - the intersects are an argument (#1981)
+    inter = gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp'))
+    gdir = workflow.init_glacier_directories(hef_rgi7_df,
+                                             intersects=inter)[0]
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 8
     assert gdir.name == 'Hintereisferner'
