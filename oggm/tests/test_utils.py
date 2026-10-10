@@ -3783,6 +3783,34 @@ class TestFakeDownloads(unittest.TestCase):
         finally:
             cfg.CACHE_DIR = cache_dir
 
+    def test_interrupted_download_is_not_cached(self):
+        self.reset_dir()
+        cache_obj_name = 'some/file.txt'
+        cache_path = os.path.join(cfg.PATHS['dl_cache_dir'], cache_obj_name)
+
+        def interrupted_dl(path):
+            with open(path, 'w') as f:
+                f.write('trunc')
+            # Nothing should be visible in the cache while downloading
+            assert not os.path.exists(cache_path)
+            raise KeyboardInterrupt()
+
+        with self.assertRaises(KeyboardInterrupt):
+            _downloads._cached_download_helper(cache_obj_name, interrupted_dl)
+        assert not os.path.exists(cache_path)
+        assert not os.path.exists(cache_path + '.part')
+
+        def complete_dl(path):
+            with open(path, 'w') as f:
+                f.write('complete')
+            return path
+
+        out = _downloads._cached_download_helper(cache_obj_name, complete_dl)
+        assert out == cache_path
+        assert not os.path.exists(cache_path + '.part')
+        with open(out) as f:
+            assert f.read() == 'complete'
+
     def test_rgi(self):
 
         # Make a fake RGI file

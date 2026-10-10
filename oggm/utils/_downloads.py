@@ -244,13 +244,20 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
 
     mkdir(os.path.dirname(cache_path))
 
+    # Download to a temporary file and only move it into place once complete,
+    # so that an interrupted download never leaves a truncated cache hit
+    tmp_path = cache_path + '.part'
     try:
-        cache_path = _call_dl_func(dl_func, cache_path)
+        dl_path = _call_dl_func(dl_func, tmp_path)
     except BaseException:
-        if os.path.exists(cache_path):
-            os.remove(cache_path)
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
         raise
 
+    if dl_path != tmp_path:
+        return dl_path
+
+    os.replace(tmp_path, cache_path)
     return cache_path
 
 
