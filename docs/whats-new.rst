@@ -277,6 +277,12 @@ Enhancements
   to the glacier state of a given simulation year, instead of the default
   largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Preprocessed glacier directories are now incremental. Each prepro level ships
+  only the files it added, changed or removed relative to its parent, plus a
+  manifest file recording build information. Clients layer the levels they need
+  into one glacier directory so several experiments can share one set of lower
+  levels. Legacy cumulative datasets still work (:pull:`1951`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
@@ -472,11 +478,9 @@ Breaking changes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``read_pickle`` and ``write_pickle`` have been removed in favour of
   ``read_store`` and ``write_store``, which store data as npz files in the
-  glacier directory's ``data_store`` folder. Existing pickles from older
-  glacier directories are still read transparently by ``read_store``
-  (:pull:`1908`).
+  glacier directory. Existing pickles from older glacier directories are still
+  supported by ``read_store`` (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-
 
 
 v1.6.3 (April 13, 2026)
