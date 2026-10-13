@@ -2580,7 +2580,6 @@ class TestPreproCLI:
                     assert sorted(ref['files'][key]) == sorted(
                         new['files'][key]
                     ), (lev, rgi_id, key)
-                assert sorted(ref['data_store']) == sorted(new['data_store'])
 
         # An empty chunk is a normal thing (the RGI ids have gaps) and has
         # to return quietly: on a cluster it is one task of an array job, and
@@ -5048,3 +5047,29 @@ class TestELAComputation(unittest.TestCase):
         ela2 = pd.read_parquet(fpath.replace('.csv', '.parquet'))
 
         assert_allclose(ela1, ela2, rtol=1e-3)
+
+
+class TestShapefileTar:
+
+    def test_keeps_siblings(self, tmp_path, hef_gdir):
+        """Tarring a shapefile leaves same-stem files of other types alone."""
+        rid = hef_gdir.rgi_id
+        shutil.copytree(hef_gdir.dir, tmp_path / rid[:-6] / rid[:-3] / rid)
+        gdir = oggm.GlacierDirectory(rid, base_dir=str(tmp_path))
+        outlines = gdir.read_shapefile('outlines')
+        for ext in ('.npz', '.parquet'):
+            with open(os.path.join(gdir.dir, 'outlines' + ext), 'w') as f:
+                f.write('sibling')
+
+        with mock.patch.dict(cfg.PARAMS, {'use_tar_shapefiles': True}):
+            gdir.write_shapefile(outlines, 'outlines')
+
+        for ext in ('.npz', '.parquet'):
+            assert os.path.isfile(os.path.join(gdir.dir, 'outlines' + ext))
+        tpath = gdir.get_filepath('outlines').replace('.shp', '.tar')
+        if cfg.PARAMS['use_compression']:
+            tpath += '.gz'
+        with tarfile.open(tpath) as tf:
+            exts = {os.path.splitext(n)[1] for n in tf.getnames()}
+        assert exts <= {'.shp', '.shx', '.dbf', '.prj', '.cpg', '.properties'}
+        assert '.shp' in exts

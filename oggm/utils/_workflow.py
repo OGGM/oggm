@@ -880,8 +880,10 @@ def _write_shape_to_disk(
     if os.path.exists(fpath):
         os.remove(fpath)
 
-    # List all files that were written as shape
-    fs = glob.glob(fpath.replace('.gz', '').replace('.tar', '.*'))
+    # bare `<stem>.*` glob would catch unrelated siblings like `<stem>.parquet`
+    stem = fpath.replace('.gz', '').replace('.tar', '')
+    side_exts = ('.shp', '.shx', '.dbf', '.prj', '.cpg', '.properties')
+    fs = [stem + ext for ext in side_exts if os.path.exists(stem + ext)]
     # Add them to tar
     with tarfile.open(fpath, mode=mode) as tf:
         for ff in fs:
@@ -4188,9 +4190,10 @@ class GlacierDirectory(object):
     def get_store_filepath(self, filename: str, filesuffix: str = "") -> str:
         """Absolute path to a group of the npz data store.
 
-        Each group of the store is one npz file, named after the
-        filename and its suffix, so that a group can be written or
-        replaced without touching the rest of the store.
+        Each group of the store is one npz file at the top level of the
+        glacier directory, named after the filename and its suffix, so
+        that a group can be written or replaced without touching the rest
+        of the store.
 
         Parameters
         ----------
@@ -4204,9 +4207,7 @@ class GlacierDirectory(object):
         str
             The absolute path to the group's npz file.
         """
-        return os.path.join(
-            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
-        )
+        return os.path.join(self.dir, f"{filename}{filesuffix}.npz")
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
         """Reads an npz file located in the directory.
@@ -4237,7 +4238,7 @@ class GlacierDirectory(object):
         """Reads a data store located in the glacier directory.
 
         Supports npz and pickle. Each group of the npz store is one file
-        under ``data_store``, named after the filename and its suffix.
+        in the glacier directory, named after the filename and its suffix.
         If the group is not found, falls back to reading a pickle file
         with the same name and suffix.
 
@@ -4321,7 +4322,6 @@ class GlacierDirectory(object):
         group = f"{filename}{filesuffix}"
         arrays, meta = transcoder.encode_npz(var, group)
         fp = self.get_store_filepath(filename, filesuffix=filesuffix)
-        mkdir(os.path.dirname(fp))
         # Write beside the target and move it into place, so that an
         # interrupted write cannot leave a half-written group behind.
         tmp_fp = f"{fp}.tmp{os.getpid()}"
@@ -5656,7 +5656,7 @@ def manifest_id(manifest: dict) -> str:
     str
         A sha256 hex digest.
     """
-    fields = ("rgi_id", "label", "border", "rgi_version", "files", "data_store")
+    fields = ("rgi_id", "label", "border", "rgi_version", "files")
     key = {k: manifest[k] for k in fields}
     key["parent"] = (manifest.get("parent") or {}).get("id")
     blob = json.dumps(key, sort_keys=True).encode()
@@ -5710,16 +5710,11 @@ def _finalize_merged_dir(dirpath: str):
             break
         chain.append(found)
 
-    store_name = os.path.basename(cfg.BASENAMES["data_store"])
     alive = {}
     for m in reversed(chain):
         for rel in m["files"].get("removed", []):
             alive[rel] = False
-        for rel in [
-            *m["files"]["added"],
-            *m["files"]["updated"],
-            *(f"{store_name}/{g}" for g in m["data_store"]),
-        ]:
+        for rel in [*m["files"]["added"], *m["files"]["updated"]]:
             alive[rel] = True
     for rel, keep in alive.items():
         fp = os.path.join(dirpath, rel)
@@ -5733,7 +5728,7 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     Maps each relative file path to a sha256 hex digest of its content.
     Each group of the data store is one npz file, so a group added or
     rewritten by a prepro level shows up as its own key, e.g.
-    ``data_store/inversion_flowlines.npz``.
+    ``inversion_flowlines.npz``.
 
     Parameters
     ----------
@@ -5857,15 +5852,12 @@ def write_level_manifest(
     def is_manifest(rel):
         return "/" not in rel and rel.endswith(".manifest.json")
 
-    store_name = os.path.basename(cfg.BASENAMES["data_store"])
     state = snapshot_gdir_state(root)
-    added, updated, data_store = {}, {}, {}
+    added, updated = {}, {}
     for rel, digest in sorted(state.items()):
         if is_manifest(rel) or prev_state.get(rel) == digest:
             continue
-        if rel.startswith(store_name + "/"):
-            data_store[rel[len(store_name) + 1 :]] = digest
-        elif rel in prev_state:
+        if rel in prev_state:
             updated[rel] = digest
         else:
             added[rel] = digest
@@ -5885,19 +5877,13 @@ def write_level_manifest(
         "oggm_version": __version__,
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "files": {"added": added, "updated": updated, "removed": removed},
-        "data_store": data_store,
     }
     manifest["id"] = manifest_id(manifest)
     manifest_path = os.path.join(root, manifest_name)
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    changed_paths = (
-        list(added)
-        + list(updated)
-        + [f"{store_name}/{g}" for g in data_store]
-        + [manifest_name]
-    )
+    changed_paths = list(added) + list(updated) + [manifest_name]
     return manifest_path, changed_paths
 
 
@@ -5926,7 +5912,7 @@ def gdir_to_tar(
         Only add these paths (relative to the glacier directory) to the
         tar file, e.g. the changed paths from ``write_level_manifest``
         when building a per-level delta, such as
-        ``data_store/<group>.npz``. Directories are added recursively.
+        ``<group>.npz``. Directories are added recursively.
         The default adds the whole directory.
 
     Returns

@@ -1,4 +1,10 @@
-"""Tests for incremental (delta-per-level) glacier directory creation."""
+"""Tests for incremental (delta-per-level) glacier directory creation.
+
+Note there are occasional references to `data_store`, these were part of
+an interim implementation and are no longer used. The tests remain to
+make sure snapshotting doesn't accidentally pick up any stray
+`data_store` sections.
+"""
 
 import io
 import json
@@ -47,7 +53,7 @@ def _write_npz_store(
 ):
     """Write a minimal npz data store to disk."""
 
-    store = Path(path) / "data_store"
+    store = Path(path)
     store.mkdir(parents=True, exist_ok=True)
     # avoid double suffixes
     fp = store / f"{name.removesuffix(".npz")}.npz"
@@ -67,7 +73,7 @@ def _write_npz_store(
 def _make_fake_gdir(path, extra_file=None):
     """A minimal on-disk stand-in for a glacier directory.
 
-    Contains regular files plus a data_store with an npz, in a structure
+    Contains regular files plus an npz store group, in a structure
     readable by `snapshot_gdir_state`.
     """
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -94,9 +100,9 @@ def test_make_fake_dir(tmp_path):
     assert (gdir_dir / "diagnostics.json").is_file()
     assert (gdir_dir / "log.txt").is_file()
     assert (gdir_dir / "dem.tif").is_file()
-    assert (gdir_dir / "data_store").is_dir()
-    assert (gdir_dir / "data_store" / "inversion_flowlines.npz").is_file()
-    test_npz = np.load(gdir_dir / "data_store" / "inversion_flowlines.npz")
+    assert not (gdir_dir / "data_store").exists()  # check no traces of zarr
+    assert (gdir_dir / "inversion_flowlines.npz").is_file()
+    test_npz = np.load(gdir_dir / "inversion_flowlines.npz")
     assert "flux" in test_npz
     test_flux = test_npz["flux"]
     assert test_flux.shape == (20,)
@@ -111,9 +117,8 @@ def test_snapshot_gdir_state(tmp_path):
     # Regular files are keyed by relative path
     assert "diagnostics.json" in state
     assert "log.txt" in state
-    group_key = "data_store/inversion_flowlines.npz"
+    group_key = "inversion_flowlines.npz"
     assert group_key in state
-    assert "data_store" not in state
 
     # Unchanged directory -> identical snapshot
     assert utils.snapshot_gdir_state(gdir_dir) == state
@@ -127,10 +132,10 @@ def test_snapshot_gdir_state(tmp_path):
     assert new_state[group_key] == state[group_key]
 
     # Adding an npz group gives a new key, the existing group is unchanged
-    store = gdir_dir / "data_store"
+    store = gdir_dir
     np.savez(store / "model_flowlines.npz", w=np.ones(3), allow_pickle=False)
     grown = utils.snapshot_gdir_state(gdir_dir)
-    assert "data_store/model_flowlines.npz" in grown
+    assert "model_flowlines.npz" in grown
     assert grown[group_key] == state[group_key]
 
     # Rewriting a group changes its digest
@@ -142,7 +147,7 @@ def test_snapshot_gdir_state(tmp_path):
 
     # ensure partial npz left by interrupted write_npz is never snapshotted
     (store / "x.npz.tmp123").write_bytes(b"partial")
-    assert "data_store/x.npz.tmp123" not in utils.snapshot_gdir_state(gdir_dir)
+    assert "x.npz.tmp123" not in utils.snapshot_gdir_state(gdir_dir)
 
 
 def _write_parent_manifest(gdir_dir, label="L2", mid="parent-l2-id"):
@@ -165,11 +170,11 @@ def test_write_level_manifest_schema(tmp_path):
         json.dump({"melt_f": 5.0}, f)
 
     np.savez(
-        gdir_dir / "data_store" / "model_flowlines",
+        gdir_dir / "model_flowlines",
         w=np.ones(3),
         allow_pickle=False,
     )
-    assert (gdir_dir / "data_store" / "model_flowlines.npz").is_file()
+    assert (gdir_dir / "model_flowlines.npz").is_file()
 
     manifest_path, changed = utils.write_level_manifest(
         gdir_dir,
@@ -200,15 +205,15 @@ def test_write_level_manifest_schema(tmp_path):
     assert manifest["oggm_version"]
     assert manifest["created"]
     assert len(manifest["id"]) == 64
+    # store groups are plain files, with no section of their own
     assert manifest["files"]["added"] == {
-        "mb_calib.json": state["mb_calib.json"]
+        "mb_calib.json": state["mb_calib.json"],
+        "model_flowlines.npz": state["model_flowlines.npz"],
     }
     assert manifest["files"]["updated"] == {"log.txt": state["log.txt"]}
     assert manifest["files"]["removed"] == []
-    assert manifest["data_store"] == {
-        "model_flowlines.npz": state["data_store/model_flowlines.npz"]
-    }
     for key in (
+        "data_store",
         "level",
         "requires",
         "includes_levels",
@@ -222,7 +227,7 @@ def test_write_level_manifest_schema(tmp_path):
     assert set(changed) == {
         "mb_calib.json",
         "log.txt",
-        "data_store/model_flowlines.npz",
+        "model_flowlines.npz",
         "L3.manifest.json",
     }
 
@@ -271,7 +276,7 @@ def test_write_level_manifest_removed(tmp_path):
     _write_parent_manifest(gdir_dir)
     prev_state = utils.snapshot_gdir_state(gdir_dir)
     os.remove(gdir_dir / "x.txt")
-    os.remove(gdir_dir / "data_store" / "inversion_flowlines.npz")
+    os.remove(gdir_dir / "inversion_flowlines.npz")
     os.remove(gdir_dir / "L2.manifest.json")  # manifests are never diffed
 
     _write_parent_manifest(gdir_dir)
@@ -279,7 +284,7 @@ def test_write_level_manifest_removed(tmp_path):
         gdir_dir, "L3", prev_state, parent="L2", **_DS
     )
     files = _manifest(path)["files"]
-    assert files["removed"] == ["data_store/inversion_flowlines.npz", "x.txt"]
+    assert files["removed"] == ["inversion_flowlines.npz", "x.txt"]
     assert files["added"] == {} and files["updated"] == {}
     assert changed == ["L3.manifest.json"]
 
@@ -311,6 +316,8 @@ def test_manifest_id(tmp_path):
     assert build("content", extra="!")["id"] != ref["id"]
     assert build("border", border=40)["id"] != ref["id"]
     assert build("parent", parent_id="regenerated")["id"] != ref["id"]
+    # a stray data_store section is not part of the id
+    assert utils.manifest_id({**ref, "data_store": {"x.npz": "0"}}) == ref["id"]
 
 
 @pytest.mark.parametrize("kind", ["materialisation", "standalone"])
@@ -324,8 +331,12 @@ def test_write_level_manifest_ships_every_file(tmp_path, kind):
     )
     m = _manifest(path)
     assert m["kind"] == kind
-    assert set(m["files"]["added"]) == {"diagnostics.json", "log.txt"}
-    assert set(m["data_store"]) == {"inversion_flowlines.npz"}
+    assert set(m["files"]["added"]) == {
+        "diagnostics.json",
+        "log.txt",
+        "inversion_flowlines.npz",
+    }
+    assert "data_store" not in m
     assert (m["parent"] or {}).get("label") == parent
     assert "L4.manifest.json" not in changed
 
@@ -406,7 +417,7 @@ def test_simulate_level(tmp_path):
     assert set(changed) == {
         "mb_calib.json",
         "log.txt",
-        "data_store/model_flowlines.npz",
+        "model_flowlines.npz",
         "L3.manifest.json",
     }
 
@@ -427,12 +438,10 @@ def test_gdir_to_tar_include(tmp_path):
     assert f"{rid}/log.txt" in files
     assert f"{rid}/L3.manifest.json" in files
     # npz group is included
-    assert any(n.startswith(f"{rid}/data_store/model_flowlines") for n in files)
+    assert f"{rid}/model_flowlines.npz" in files
     # unchanged files are not shipped
     assert not any("dem.tif" in n or "diagnostics.json" in n for n in files)
-    assert not any(
-        n.startswith(f"{rid}/data_store/inversion_flowlines") for n in files
-    )
+    assert f"{rid}/inversion_flowlines.npz" not in files
     os.remove(opath)
 
     # include=None keeps the full-directory behavior
@@ -508,7 +517,7 @@ class TestLayeredGdir:
         workbase = str(tmp_path / "work")
         workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
         shutil.copytree(hef_gdir.dir, workdir)
-        assert os.path.isdir(os.path.join(workdir, "data_store"))
+        assert os.path.isfile(os.path.join(workdir, "inversion_flowlines.npz"))
 
         # Materialisation artifact: everything up to L3 in one tar
         utils.write_level_manifest(
@@ -572,20 +581,45 @@ class TestLayeredGdir:
         for n in names:
             gdir._write_pickle(original[n], n)
             assert Path(gdir.dir, f"{n}.pkl").is_file()
-            assert not Path(gdir.dir, "data_store", n).is_dir()
+            assert not Path(gdir.dir, f"{n}.npz").exists()
 
         _compat.convert_pickles_to_npz(gdir, delete=arg_delete)
 
         # check the pickles are gone
         for n in names:
-            assert Path(gdir.dir, "data_store").is_dir()
-            assert Path(gdir.dir, "data_store", f"{n}.npz").is_file()
+            assert Path(gdir.dir, f"{n}.npz").is_file()
             if arg_delete:
                 assert not Path(gdir.dir, f"{n}.pkl").is_file()
             else:
                 assert Path(gdir.dir, f"{n}.pkl").is_file()
 
             assert len(gdir.read_store(n)) == len(original[n])
+
+    def test_convert_pickles_to_npz_suffixes(self, tmp_path, hef_gdir):
+        """Each suffixed pickle maps to its own group, and an npz sharing
+        the stem is never read as a pickle."""
+        from oggm.utils import _compat
+
+        rid = hef_gdir.rgi_id
+        workbase = Path(tmp_path / "work")
+        shutil.copytree(hef_gdir.dir, workbase / rid[:-6] / rid[:-3] / rid)
+        gdir = oggm.GlacierDirectory(rid, base_dir=workbase)
+
+        fls = gdir.read_store("model_flowlines")
+        assert len(fls) > 1
+        gdir._write_pickle(fls, "model_flowlines")
+        gdir._write_pickle(
+            fls[-1:], "model_flowlines", filesuffix="_historical"
+        )
+        # a stale group beside the pickle, holding something else
+        np.savez(Path(gdir.dir, "model_flowlines.npz"), v=-np.ones(2))
+
+        _compat.convert_pickles_to_npz(gdir)
+
+        npz = sorted(p.name for p in Path(gdir.dir).glob("model_flowlines*"))
+        assert npz == ["model_flowlines.npz", "model_flowlines_historical.npz"]
+        assert len(gdir.read_store("model_flowlines")) == len(fls)
+        assert len(gdir.read_store("model_flowlines", "_historical")) == 1
 
 
 class TestDeltaServer:
@@ -839,7 +873,7 @@ class TestParentChain:
                 "L3",
                 "L2",
                 self.url("base"),
-                rm=["l2.txt", "data_store/inversion_flowlines.npz"],
+                rm=["l2.txt", "inversion_flowlines.npz"],
             ),
         )
         publish(
@@ -901,9 +935,7 @@ class TestParentChain:
     def test_removal_then_readdition(self, chain):
         gdir = self.load(chain, "rm", 4)
         assert Path(gdir.dir, "l2.txt").read_text() == "back"
-        assert not Path(
-            gdir.dir, "data_store", "inversion_flowlines.npz"
-        ).exists()
+        assert not Path(gdir.dir, "inversion_flowlines.npz").exists()
         built = utils.snapshot_gdir_state(chain.workdir("rm"))
         assert utils.snapshot_gdir_state(gdir.dir) == built
 

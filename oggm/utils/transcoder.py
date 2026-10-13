@@ -35,15 +35,8 @@ def get_store_paths(directory: str | Path, pickle: bool = False) -> list[Path]:
         raise ValueError(f"{directory} is not a valid directory.")
 
     # Using glob is slower and doesn't return the same result
-    if not pickle:
-        return [
-            Path(f)
-            # is it safe to hardcode this?
-            for f in os.listdir(directory / "data_store")
-            if f.endswith(".npz")
-        ]
-    else:
-        return [Path(f) for f in os.listdir(directory) if f.endswith(".pkl")]
+    ext = ".pkl" if pickle else ".npz"
+    return [Path(f) for f in os.listdir(directory) if f.endswith(ext)]
 
 
 def _join_path(path: str, key: str) -> str:
