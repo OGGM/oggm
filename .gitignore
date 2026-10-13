@@ -47,3 +47,4 @@ oggm/version.py
 oggm/ignore
 *_project*
 CLAUDE.md
+.claude

@@ -1384,7 +1384,7 @@ class TestWorkflowUtils:
             assert 'melt_on_glacier' in ds.data_vars
             assert 'melt_on_glacier_monthly' in ds.data_vars
             assert ds_1['melt_on_glacier'].unit == 'kg yr-1'
-            assert ds_1['melt_on_glacier_monthly'].unit == 'kg yr-1'
+            assert ds_1['melt_on_glacier_monthly'].unit == 'kg month-1'
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_min_h'].values))
             assert np.all(np.isnan(
@@ -2135,17 +2135,40 @@ class TestPreproCLI:
         assert list(workflow.get_rgi_chunk(df7, 1, chunk_size=1000).rgi_id) == \
             ['RGI2000-v7.0-G-13-01234']
 
-        # Only the two tar bundle sizes are allowed
-        for bad in [10, 250, 5000]:
+        # Any chunk size works for the selection (the 100 / 1000 rule is
+        # about the prepro tar files, and enforced by run_prepro_levels)
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=250)
+        seen = []
+        for i in range(n_chunks):
+            seen.extend(workflow.get_rgi_chunk(rgidf, i, chunk_size=250).RGIId)
+        assert sorted(seen) == sorted(rgidf.RGIId)
+        for bad in [0, -10, 2.5]:
             with pytest.raises(InvalidParamsError):
                 workflow.count_rgi_chunks(rgidf, chunk_size=bad)
         with pytest.raises(InvalidParamsError):
             workflow.get_rgi_chunk(rgidf, -1, chunk_size=100)
 
-        # The slurm helper says how to wire it up
-        out = workflow.print_slurm_array(rgidf, chunk_size=100)
-        assert f'--array=0-{n_chunks - 1}' in out
-        assert '$SLURM_ARRAY_TASK_ID' in out
+    def test_chunkable_stages(self):
+        # A chunk job must not write region-wide summary files, or the chunks
+        # would silently overwrite each other's: only the per-glacier stages
+        # are allowed. These checks happen before anything is read.
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      output_folder=self.testdir, working_dir=self.testdir,
+                      start_base_url='http://foo',
+                      temp_bias_file_path='foo.csv')
+
+        for start, end in [('2', '3'), ('2', '4a'), ('2', '5'), ('0', '3a'),
+                           ('3a', '3'), ('3', '4'), ('4a', '5')]:
+            with pytest.raises(InvalidParamsError, match='whole RGI region'):
+                run_prepro_levels(start_level=start, max_level=end,
+                                  chunk_idx=0, **common)
+
+        # And the chunks have to line up with the tar bundles
+        with pytest.raises(InvalidParamsError, match='100 or 1000'):
+            run_prepro_levels(start_level='2', max_level='3a', chunk_idx=0,
+                              chunk_size=250, **common)
 
     def test_half_level_addressing(self):
         # A half level is decomposed into an integer plus a flag so that the
