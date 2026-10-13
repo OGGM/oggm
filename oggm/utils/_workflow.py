@@ -5664,16 +5664,29 @@ def manifest_id(manifest: dict) -> str:
 
 
 def _finalize_merged_dir(dirpath: str):
-    """Make a directory whole again after layering level tars into it.
+    """Reconstruct a directory after layering level tars into it.
 
-    Orders the layered manifests root first by following their parent
-    links, warns when a parent is missing or is not the one a child was
-    built on, and deletes the files the chain removed. The last action
-    on a path wins, so a file removed by one level and written again by
-    a later one stays.
+    This orders layered manifests by following a leaf's links to its
+    root, checking each parent is the one its child was built on and
+    deleting files removed by the delta encoding chain.
 
-    A mismatch is a warning, not an error: build time, not the client,
-    decides what an artefact sits on.
+    .. note::
+        A file removed by one level and written again by a later one
+        stays.
+
+    Parameters
+    ----------
+    dirpath : str
+        Path to the merged glacier directory.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If a parent manifest is missing, or its ``id`` differs from the
+        child's ``parent.id``. This happens with a stale download cache,
+        a regenerated parent, or a legacy cumulative parent, and leaves
+        the directory as the tars extracted it, without the removal
+        pass.
     """
     manifests = {}
     for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
@@ -5696,18 +5709,15 @@ def _finalize_merged_dir(dirpath: str):
         child, ref = chain[-1], chain[-1]["parent"]
         found = manifests.get(ref["label"])
         if found is None or found["id"] != ref["id"]:
-            warnings.warn(
+            raise InvalidWorkflowError(
                 f"({child['rgi_id']}) {child['label']} was built on "
                 f"{ref['label']} id {ref['id'][:8]} at "
                 f"{ref['base_url'] or 'the same tree'}, but the layered "
                 f"{ref['label']} has "
                 + (f"id {found['id'][:8]}" if found else "no manifest")
                 + ". Clear the download cache, or rebuild "
-                f"{child['label']}.",
-                RuntimeWarning,
+                f"{child['label']}."
             )
-        if found is None:
-            break
         chain.append(found)
 
     alive = {}

@@ -21,6 +21,7 @@ import pytest
 
 import oggm
 from oggm import cfg, utils, workflow
+from oggm.exceptions import InvalidWorkflowError
 from oggm.utils import _compat, _downloads
 from oggm.utils.transcoder import encode_npz
 
@@ -939,7 +940,7 @@ class TestParentChain:
         built = utils.snapshot_gdir_state(chain.workdir("rm"))
         assert utils.snapshot_gdir_state(gdir.dir) == built
 
-    def test_regenerated_parent_warns(self, chain):
+    def test_regenerated_parent_raises(self, chain):
         wdir = chain.workdir("base_l1")
         chain.publish(
             "base",
@@ -952,26 +953,21 @@ class TestParentChain:
         with open(chain.workdir("w5e5") / "L2.manifest.json") as f:
             old_id = json.load(f)["id"]
 
-        with pytest.warns(RuntimeWarning) as rec:
-            gdir = self.load(chain, "w5e5", 3)
-        msgs = [str(w.message) for w in rec if "L3" in str(w.message)]
-        assert len(msgs) == 1
-        assert old_id[:8] in msgs[0] and new_id[:8] in msgs[0]
-        assert self.url("base") in msgs[0]
-        # A warning, not an error: the directory still loads
-        assert Path(gdir.dir, "l2.txt").read_text() == "regenerated"
+        with pytest.raises(InvalidWorkflowError, match="L3") as exc:
+            self.load(chain, "w5e5", 3)
+        msg = str(exc.value)
+        assert old_id[:8] in msg and new_id[:8] in msg
+        assert self.url("base") in msg
 
-    def test_parent_without_manifest_warns(self, chain):
+    def test_parent_without_manifest_raises(self, chain):
         # A legacy, cumulative L2: every file, no manifests
         wdir = chain.fork("base", "legacy")
         for fp in wdir.glob("*.manifest.json"):
             fp.unlink()
         chain.publish("base", "L2", wdir, None)
-        with pytest.warns(RuntimeWarning, match="no manifest"):
-            gdir = self.load(chain, "w5e5", 3)
+        with pytest.raises(InvalidWorkflowError, match="no manifest"):
+            self.load(chain, "w5e5", 3)
         assert len(chain.calls) == 2
-        assert Path(gdir.dir, "climate.txt").read_text() == "w5e5"
-        assert Path(gdir.dir, "l1.txt").is_file()
 
     def test_legacy_tree_is_one_fetch(self, chain):
         wdir = chain.fork("w5e5", "old")
@@ -1232,9 +1228,8 @@ def test_level_consistency_mismatch(tmp_path):
     l4_on_b = tar("l4.tar.gz", changed)
 
     layered = tmp_path / "layered"
-    with pytest.warns(RuntimeWarning, match="L4 was built on L3"):
+    with pytest.raises(InvalidWorkflowError, match="L4 was built on L3"):
         utils._workflow._extract_tars([l3_a, l4_on_b], str(layered / rid))
-    assert (layered / rid / "mb_calib.json").is_file()
 
 
 def test_finalize_ignores_stale_lower_manifests(tmp_path):
