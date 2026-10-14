@@ -2,6 +2,7 @@
 
 # Builtins
 import glob
+import io
 import os
 import tempfile
 import gzip
@@ -5897,6 +5898,28 @@ def write_level_manifest(
     return manifest_path, changed_paths
 
 
+def _tar_add_unstamped(tar: tarfile.TarFile, path: str, arcname: str):
+    """Adds a path to a tar, dropping a manifest's ``fetched_from``.
+
+    The ``fetched_from`` field shows which layer a tar is linked from,
+    which may be a local path. For security reasons, this field is
+    removed before adding the tar to published archives. Other paths,
+    and manifests without the field, are added unchanged.
+    """
+    m = None
+    if path.endswith(".manifest.json") and os.path.isfile(path):
+        with open(path) as f:
+            m = json.load(f)
+    if not isinstance(m, dict) or "fetched_from" not in m:
+        tar.add(path, arcname=arcname)
+        return
+    del m["fetched_from"]
+    data = json.dumps(m, indent=2).encode()  # as `write_level_manifest`
+    ti = tar.gettarinfo(path, arcname=arcname)
+    ti.size = len(data)
+    tar.addfile(ti, io.BytesIO(data))
+
+
 @entity_task(log)
 def gdir_to_tar(
     gdir: GlacierDirectory,
@@ -5937,16 +5960,25 @@ def gdir_to_tar(
         opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
         mkdir(os.path.dirname(opath))
 
+    arcbase = os.path.basename(source_dir)
+
+    def skip_manifests(ti):
+        top = ti.name.count("/") == 1
+        return None if top and ti.name.endswith(".manifest.json") else ti
+
     with tarfile.open(opath, "w:gz") as tar:
         if include is None:
-            tar.add(source_dir, arcname=os.path.basename(source_dir))
-        else:
-            arcbase = os.path.basename(source_dir)
-            for rel in sorted(set(include)):
-                tar.add(
-                    os.path.join(source_dir, rel),
-                    arcname=os.path.join(arcbase, rel),
-                )
+            tar.add(source_dir, arcname=arcbase, filter=skip_manifests)
+            include = [
+                os.path.basename(fp)
+                for fp in glob.glob(os.path.join(source_dir, "*.manifest.json"))
+            ]
+        for rel in sorted(set(include)):
+            _tar_add_unstamped(
+                tar,
+                os.path.join(source_dir, rel),
+                arcname=os.path.join(arcbase, rel),
+            )
 
     if delete:
         shutil.rmtree(source_dir)

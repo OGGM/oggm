@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 import shutil
 import warnings
 import tarfile
@@ -320,14 +321,19 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, label: str) -> dict | None:
 
 
 def _layered_level_tars(
-    tar_base: str, rgi_id: str, label: str, base_url: str | None, locate
-) -> list[str]:
+    tar_base: str,
+    rgi_id: str,
+    label: str,
+    base_url: str | None,
+    locate,
+    source: str | None = None,
+) -> tuple[list[str], dict[str, str | None]]:
     """Gets the bundle tars to layer for a glacier, root first.
 
     A delta names its parent, which may live in another tree. This
     method walks through links until it reaches the root, a non-delta,
     or a parent legacy directory without a manifest.
-    
+
     .. important::
         This doesn't check artefact ids. `_finalize_merged_dir` does
         that after the tars are layered, and will raise an error for
@@ -346,21 +352,46 @@ def _layered_level_tars(
         Base URL of the tree holding ``tar_base``. A parent link of None
         resolves to the tree of the manifest holding it.
     locate : callable
-        ``locate(base_url, label)`` returns the path to a bundle tar.
+        ``locate(base_url, label)`` returns the path to a bundle tar and
+        the tree root it was found in.
+    source : str | None, optional
+        Tree root of ``tar_base``. Defaults to ``base_url``.
 
     Returns
     -------
-    list[str]
-        The bundle tars to layer, root first.
+    tuple[list[str], dict[str, str | None]]
+        The bundle tars to layer, root first, and the tree root each
+        label was fetched from.
     """
+
     tars = [tar_base]
+    sources = {label: source or base_url}
     m = _peek_level_manifest(tar_base, rgi_id, label)
     while m and m.get("kind") == "delta" and m.get("parent"):
         p = m["parent"]
         base_url = p["base_url"] or base_url  # null = this manifest's tree
-        tars.append(locate(base_url, p["label"]))
-        m = _peek_level_manifest(tars[-1], rgi_id, p["label"])
-    return tars[::-1]
+        path, sources[p["label"]] = locate(base_url, p["label"])
+        tars.append(path)
+        m = _peek_level_manifest(path, rgi_id, p["label"])
+    return tars[::-1], sources
+
+
+def _stamp_fetched_from(dirpath: str, sources: dict[str, str | None]):
+    """Records in each layer's manifest the tree root it came from.
+
+    Runs after the tars are layered, so the id checks if
+    `_finalize_merged_dir` considers the manifests as published. Legacy
+    directories are skipped because they have no manifest.
+    """
+    for label, src in sources.items():
+        fp = os.path.join(dirpath, f"{label}.manifest.json")
+        if not os.path.isfile(fp):
+            continue
+        with open(fp) as f:
+            m = json.load(f)
+        m["fetched_from"] = src
+        with open(fp, "w") as f:
+            json.dump(m, f, indent=2)
 
 
 def _member_tars(tars, rgi_id):
@@ -386,16 +417,21 @@ def gdir_from_prepro(entity, from_prepro_level=None,
                                      from_prepro_level, base_url=base_url)
 
     # Legacy bundles without manifest are cumulative so one fetch is enough
-    tars = _layered_level_tars(
+    tars, sources = _layered_level_tars(
         tar_base,
         rid,
         f'L{from_prepro_level}',
         base_url,
-        lambda url, lbl: utils.get_prepro_gdir(
-            prepro_rgi_version, rid, prepro_border, lbl[1:], base_url=url
+        lambda url, lbl: (
+            utils.get_prepro_gdir(
+                prepro_rgi_version, rid, prepro_border, lbl[1:], base_url=url
+            ),
+            url,
         ),
     )
-    return oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rid))
+    gdir = oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rid))
+    _stamp_fetched_from(gdir.dir, sources)
+    return gdir
 
 
 def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
@@ -425,26 +461,39 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
     # otherwise it comes from `base_url`. A chunked run writes L3 and L4
     # to disk, whilst only L0 to L2 are published.
     root, name = os.path.split(os.path.normpath(from_tar))
+    # For local paths I assumed a `<tree>/RGIxx/b_yyy/<label>` layout,
+    # so the tree reads like a `base_url`. Other layouts keep `root`.
+    tree, b_dir = os.path.split(root)
+    local_source = root
+    if re.fullmatch(r"b_\d{3}", b_dir) and os.path.basename(tree).startswith(
+        "RGI"
+    ):
+        local_source = os.path.dirname(tree)
 
     def locate_label(url, lbl):
         if url is None:
             try:
-                return locate(os.path.join(root, lbl))
+                return locate(os.path.join(root, lbl)), local_source
             except FileNotFoundError:
                 if base_url is None:
                     raise
             url = base_url
-        return utils.get_prepro_gdir(
+        path = utils.get_prepro_gdir(
             prepro_rgi_version or cfg.PARAMS["rgi_version"],
             rgi_id,
             prepro_border or int(cfg.PARAMS["border"]),
             lbl[1:],
             base_url=url,
         )
+        return path, url
 
     # A folder without its own manifest (e.g. L3a) loads as one tar
-    tars = _layered_level_tars(tar_base, rgi_id, name, None, locate_label)
-    return oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rgi_id))
+    tars, sources = _layered_level_tars(
+        tar_base, rgi_id, name, None, locate_label, source=local_source
+    )
+    gdir = oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rgi_id))
+    _stamp_fetched_from(gdir.dir, sources)
+    return gdir
 
 
 def _check_rgi_input(rgidf=None, err_on_lvl2=False):

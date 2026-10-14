@@ -623,6 +623,26 @@ class TestLayeredGdir:
         assert len(gdir.read_store("model_flowlines", "_historical")) == 1
 
 
+def _assert_matches_build(loaded, built):
+    """A loaded gdir equals its build, except for the `fetched_from` stamps.
+    
+    Since this uses tmp paths, the stamps keep changing so we can't
+    really check the `fetched_from` values.
+    """
+
+    def split(d):
+        state = utils.snapshot_gdir_state(str(d))
+        manifests = {}
+        for k in [k for k in state if k.endswith(".manifest.json")]:
+            del state[k]
+            m = json.loads(Path(d, k).read_text())
+            m.pop("fetched_from", None)
+            manifests[k] = m
+        return state, manifests
+
+    assert split(loaded) == split(built)
+
+
 class TestDeltaServer:
     """End-to-end: init_glacier_directories against a delta-file server."""
 
@@ -781,6 +801,41 @@ class TestDeltaServer:
         mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
         assert mb_calib["melt_f"] == 6.0
 
+    @staticmethod
+    def fetched_from(gdir, label):
+        m = json.loads(Path(gdir.dir, f"{label}.manifest.json").read_text())
+        assert utils.manifest_id(m) == m["id"]
+        return m["fetched_from"]
+
+    def test_url_load_records_fetched_from(self, served_calls):
+        _, rid = served_calls
+        for level, labels in ((4, ("L4", "L3")), (5, ("L5",))):
+            gdir = workflow.init_glacier_directories(
+                [rid],
+                from_prepro_level=level,
+                prepro_border=80,
+                prepro_base_url=self.BASE_URL,
+            )[0]
+            for label in labels:
+                assert self.fetched_from(gdir, label) == self.BASE_URL
+
+    def test_local_tree_records_tree_root(self, delta_server, served_calls):
+        server, rid = delta_server
+        gdir = workflow.gdir_from_tar(
+            rid, os.path.join(server, "RGI62", "b_080", "L4")
+        )
+        for label in ("L4", "L3"):
+            assert self.fetched_from(gdir, label) == server
+
+    def test_fallback_level_records_base_url(self, served_calls, local_l4_only):
+        _, rid = served_calls
+        gdir = workflow.gdir_from_tar(
+            rid, local_l4_only, base_url=self.BASE_URL, prepro_border=80
+        )
+        local_root = str(Path(local_l4_only).parents[2])
+        assert self.fetched_from(gdir, "L4") == local_root
+        assert self.fetched_from(gdir, "L3") == self.BASE_URL
+
     def test_local_tree_missing_level_without_base_url(
         self, served_calls, local_l4_only
     ):
@@ -926,19 +981,40 @@ class TestParentChain:
                 c.split("b_080/")[1][:2] for c in chain.calls
             ]
             states[exp] = utils.snapshot_gdir_state(gdir.dir)
-            built = utils.snapshot_gdir_state(chain.workdir(exp))
-            assert states[exp] == built
+            _assert_matches_build(gdir.dir, chain.workdir(exp))
         diff = {
             k for k in states["w5e5"] if states["w5e5"][k] != states["era5"][k]
         }
         assert diff == {"climate.txt", "L3.manifest.json"}
 
+    def test_layers_record_fetched_from(self, chain):
+        gdir = self.load(chain, "w5e5", 3)
+        expected = {
+            "L3": self.url("w5e5"),
+            "L2": self.url("base"),
+            "L1": self.url("base"),
+            "L0": self.url("base"),
+        }
+        for label, url in expected.items():
+            m = json.loads(Path(gdir.dir, f"{label}.manifest.json").read_text())
+            assert m["fetched_from"] == url
+            assert utils.manifest_id(m) == m["id"]
+
+    def test_full_archive_strips_fetched_from(self, chain):
+        gdir = self.load(chain, "w5e5", 3)
+        opath = utils.gdir_to_tar.unwrapped(gdir, delete=False)
+        built = chain.workdir("w5e5")
+        with tarfile.open(opath, "r:gz") as tar:
+            for label in ("L0", "L1", "L2", "L3"):
+                name = f"{label}.manifest.json"
+                with tar.extractfile(f"{chain.rid}/{name}") as f:
+                    assert f.read() == (built / name).read_bytes()
+
     def test_removal_then_readdition(self, chain):
         gdir = self.load(chain, "rm", 4)
         assert Path(gdir.dir, "l2.txt").read_text() == "back"
         assert not Path(gdir.dir, "inversion_flowlines.npz").exists()
-        built = utils.snapshot_gdir_state(chain.workdir("rm"))
-        assert utils.snapshot_gdir_state(gdir.dir) == built
+        _assert_matches_build(gdir.dir, chain.workdir("rm"))
 
     def test_regenerated_parent_raises(self, chain):
         wdir = chain.workdir("base_l1")
@@ -977,6 +1053,7 @@ class TestParentChain:
         gdir = self.load(chain, "old", 3)
         assert len(chain.calls) == 1
         assert Path(gdir.dir, "climate.txt").read_text() == "w5e5"
+        assert not list(Path(gdir.dir).glob("*.manifest.json"))
 
 
 class TestStartState:
