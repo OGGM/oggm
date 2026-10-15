@@ -190,6 +190,32 @@ def _call_dl_func(dl_func, cache_path):
     return dl_func(cache_path)
 
 
+def _is_complete(path) -> bool:
+    """Check if an archive is complete.
+
+    If truncated, the file is downloaded again.
+    """
+    if path.endswith(".zip"):
+        return zipfile.is_zipfile(path)
+    if path.endswith(".tar"):
+        if os.path.getsize(path) < 1024:
+            return False
+        with open(path, "rb") as f:
+            f.seek(-1024, os.SEEK_END)
+            return f.read() == bytes(1024)
+    return True
+
+
+def _is_cache_hit(path) -> bool:
+    """True for a complete file at path, warning when it is truncated."""
+    if not os.path.isfile(path):
+        return False
+    if _is_complete(path):
+        return True
+    logger.warning(f"Cached file {path} is truncated, downloading it again.")
+    return False
+
+
 def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     """Helper function for downloads.
 
@@ -223,11 +249,11 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
         cache_ro = False
 
     fb_path = os.path.join(fb_cache_dir, cache_obj_name)
-    if not reset and os.path.isfile(fb_path):
+    if not reset and _is_cache_hit(fb_path):
         return fb_path
 
     cache_path = os.path.join(cache_dir, cache_obj_name)
-    if not reset and os.path.isfile(cache_path):
+    if not reset and _is_cache_hit(cache_path):
         return cache_path
 
     if cache_ro:
@@ -244,8 +270,9 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
 
     mkdir(os.path.dirname(cache_path))
 
-    # so a killed process can never leave a truncated file in cache
-    tmp_path = cache_path + ".tmp"
+    # so a killed process can never leave a truncated file in cache, and
+    # prevent concurrent downloads by using the pid
+    tmp_path = f"{cache_path}.tmp{os.getpid()}"
     try:
         dl_path = _call_dl_func(dl_func, tmp_path)
     except BaseException:
@@ -278,16 +305,22 @@ def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
             reporthook(chunk_count, chunk_size, size)
 
         with open(path, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=chunk_size):
-                if not chunk:
-                    continue
-                f.write(chunk)
-                chunk_count += 1
-                if reporthook:
-                    reporthook(chunk_count, chunk_size, size)
+            try:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    if not chunk:
+                        continue
+                    f.write(chunk)
+                    chunk_count += 1
+                    if reporthook:
+                        reporthook(chunk_count, chunk_size, size)
+            except requests.exceptions.ChunkedEncodingError as err:
+                # urllib3 enforces Content-Length and raises this on a
+                # short body, so only one retry is needed
+                raise HttpContentTooShortError(url) from err
+            n_bytes = f.tell()
 
-        if chunk_count * chunk_size < size:
-            raise HttpContentTooShortError()
+        if n_bytes < size:
+            raise HttpContentTooShortError(url)
 
 
 def _classic_urlretrieve(url, path, reporthook, auth=None, timeout=None):
@@ -310,7 +343,7 @@ def _classic_urlretrieve(url, path, reporthook, auth=None, timeout=None):
     except urllib.error.HTTPError as e:
         raise HttpDownloadError(e.code, ourl)
     except urllib.error.ContentTooShortError:
-        raise HttpContentTooShortError()
+        raise HttpContentTooShortError(ourl)
     finally:
         socket.setdefaulttimeout(old_def_timeout)
 
@@ -537,9 +570,11 @@ def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
             else:
                 raise
         except HttpContentTooShortError as err:
-            logger.info("Downloading %s failed with ContentTooShortError"
-                        " error %s, retrying in %s seconds... %s/%s" %
-                        (www_path, err.code, sleep_on_retry, retry_counter, retry_max))
+            logger.info(
+                "Downloading %s failed with ContentTooShortError,"
+                " retrying in %s seconds... %s/%s"
+                % (www_path, sleep_on_retry, retry_counter, retry_max)
+            )
             time.sleep(sleep_on_retry)
             continue
         except DownloadVerificationFailedException as err:

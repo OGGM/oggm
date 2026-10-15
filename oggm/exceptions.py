@@ -49,4 +49,5 @@ class FTPSDownloadError(Exception):
 
 
 class HttpContentTooShortError(Exception):
-    pass
+    def __init__(self, url):
+        self.url = url

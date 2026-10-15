@@ -3774,7 +3774,7 @@ class TestDownloadCacheAtomicity:
     def test_stale_tmp_from_hard_kill_is_never_served(self):
         # a hard-killed process left a partial tmp behind
         utils.mkdir(os.path.dirname(self.final))
-        with open(self.final + ".tmp", "w") as f:
+        with open(f"{self.final}.tmp{os.getpid() + 1}", "w") as f:
             f.write("garbage")
 
         def good(path):
@@ -3786,6 +3786,134 @@ class TestDownloadCacheAtomicity:
         assert out == self.final
         with open(out) as f:
             assert f.read() == "complete"
+
+    def test_two_writers_one_entry(self, monkeypatch):
+        """Check concurrent downloads don't write to the same file."""
+        pid = os.getpid()
+
+        def second(path):
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        def first(path):
+            with open(path, "w") as f:
+                f.write("comp")
+                f.flush()
+                monkeypatch.setattr(os, "getpid", lambda: pid + 1)
+                _downloads._cached_download_helper(
+                    self.name, second, reset=True
+                )
+                monkeypatch.setattr(os, "getpid", lambda: pid)
+                f.write("lete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, first)
+        assert out == self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+        assert os.listdir(os.path.dirname(self.final)) == [
+            os.path.basename(self.final)
+        ]
+
+    @staticmethod
+    def _archive_bytes(ext, tmp_path):
+        src = tmp_path / "member.bin"
+        src.write_bytes(os.urandom(20000))
+        out = tmp_path / f"src.{ext}"
+        if ext == "zip":
+            import zipfile
+
+            with zipfile.ZipFile(out, "w") as zf:
+                zf.write(src, "member.bin")
+        else:
+            with tarfile.open(out, "w") as tf:
+                tf.add(src, "member.bin")
+        return out.read_bytes()
+
+    @pytest.mark.parametrize("ext", ["zip", "tar"])
+    def test_truncated_archive_hit_is_downloaded_again(self, ext, tmp_path):
+        name = f"example.com/bundle.{ext}"
+        final = os.path.join(cfg.PATHS["dl_cache_dir"], name)
+        data = self._archive_bytes(ext, tmp_path)
+        calls = []
+
+        def dl(path):
+            calls.append(path)
+            with open(path, "wb") as f:
+                f.write(data)
+            return path
+
+        # a truncated file left by an older OGGM
+        utils.mkdir(os.path.dirname(final))
+        with open(final, "wb") as f:
+            f.write(data[: len(data) * 2 // 3])
+
+        assert _downloads._cached_download_helper(name, dl) == final
+        assert len(calls) == 1
+        with open(final, "rb") as f:
+            assert f.read() == data
+
+        # a complete file is served from cache
+        assert _downloads._cached_download_helper(name, dl) == final
+        assert len(calls) == 1
+
+    def test_truncated_readonly_cache_hit_uses_fallback(self, tmp_path):
+        name = "example.com/bundle.tar"
+        data = self._archive_bytes("tar", tmp_path)
+        ro = os.path.join(cfg.PATHS["dl_cache_dir"], name)
+        utils.mkdir(os.path.dirname(ro))
+        with open(ro, "wb") as f:
+            f.write(data[: len(data) // 2])
+        cfg.PARAMS["dl_cache_readonly"] = True
+
+        def dl(path):
+            with open(path, "wb") as f:
+                f.write(data)
+            return path
+
+        out = _downloads._cached_download_helper(name, dl)
+        assert out == os.path.join(cfg.PATHS["working_dir"], "cache", name)
+        with open(out, "rb") as f:
+            assert f.read() == data
+        # the read-only cache is left as it was
+        assert os.path.getsize(ro) == len(data) // 2
+
+    def test_truncated_transfer_is_retried_and_not_cached(self, monkeypatch):
+        import http.server
+        import threading
+
+        requests_seen = []
+
+        class ShortBody(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests_seen.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "1000000")
+                self.end_headers()
+                self.wfile.write(bytes(300000))
+                self.close_connection = True
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ShortBody)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        cfg.PARAMS["has_internet"] = True
+        cfg.PARAMS["download_url_allowlist"] = []
+        monkeypatch.setattr(_downloads.time, "sleep", lambda s: None)
+        url = f"http://127.0.0.1:{server.server_port}/short.bin"
+        try:
+            # file_downloader returns None once its retries are used up
+            assert utils.file_downloader(url, retry_max=3) is None
+        finally:
+            server.shutdown()
+            server.server_close()
+
+        assert len(requests_seen) == 3
+        cached = os.path.join(cfg.PATHS["dl_cache_dir"], "127.0.0.1")
+        assert not os.path.exists(cached) or os.listdir(cached) == []
 
     def test_probe_dl_func_returning_none(self):
         # no file may be created
