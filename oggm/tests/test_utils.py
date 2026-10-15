@@ -1341,7 +1341,8 @@ class TestWorkflowUtils:
                              'snowfall_off_glacier', 'snowfall_on_glacier',
                              'melt_residual_off_glacier',
                              'melt_residual_on_glacier', 'model_mb',
-                             'residual_mb', 'snow_bucket', 'mass']
+                             'residual_mb', 'snow_bucket', 'mass',
+                             'temp_on_glacier', 'temp_ref_area']
         for gi in range(10):
             allowed_data_vars += [f'terminus_thick_{gi}']
 
@@ -1382,7 +1383,7 @@ class TestWorkflowUtils:
             assert 'melt_on_glacier' in ds.data_vars
             assert 'melt_on_glacier_monthly' in ds.data_vars
             assert ds_1['melt_on_glacier'].unit == 'kg yr-1'
-            assert ds_1['melt_on_glacier_monthly'].unit == 'kg yr-1'
+            assert ds_1['melt_on_glacier_monthly'].unit == 'kg month-1'
             assert np.all(np.isnan(
                 ds.loc[{'rgi_id': gdirs[0].rgi_id}]['area_min_h'].values))
             assert np.all(np.isnan(
@@ -1675,7 +1676,7 @@ class TestStartFromV14:
 
         assert gdir.get_climate_info()
         # This we can read
-        gdir.read_pickle('inversion_flowlines')
+        gdir.read_store('inversion_flowlines')
 
         df = utils.compile_glacier_statistics(gdirs)
         assert 'dem_med_elev' in df
@@ -2115,17 +2116,40 @@ class TestPreproCLI:
         assert list(workflow.get_rgi_chunk(df7, 1, chunk_size=1000).rgi_id) == \
             ['RGI2000-v7.0-G-13-01234']
 
-        # Only the two tar bundle sizes are allowed
-        for bad in [10, 250, 5000]:
+        # Any chunk size works for the selection (the 100 / 1000 rule is
+        # about the prepro tar files, and enforced by run_prepro_levels)
+        n_chunks = workflow.count_rgi_chunks(rgidf, chunk_size=250)
+        seen = []
+        for i in range(n_chunks):
+            seen.extend(workflow.get_rgi_chunk(rgidf, i, chunk_size=250).RGIId)
+        assert sorted(seen) == sorted(rgidf.RGIId)
+        for bad in [0, -10, 2.5]:
             with pytest.raises(InvalidParamsError):
                 workflow.count_rgi_chunks(rgidf, chunk_size=bad)
         with pytest.raises(InvalidParamsError):
             workflow.get_rgi_chunk(rgidf, -1, chunk_size=100)
 
-        # The slurm helper says how to wire it up
-        out = workflow.print_slurm_array(rgidf, chunk_size=100)
-        assert f'--array=0-{n_chunks - 1}' in out
-        assert '$SLURM_ARRAY_TASK_ID' in out
+    def test_chunkable_stages(self):
+        # A chunk job must not write region-wide summary files, or the chunks
+        # would silently overwrite each other's: only the per-glacier stages
+        # are allowed. These checks happen before anything is read.
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      output_folder=self.testdir, working_dir=self.testdir,
+                      start_base_url='http://foo',
+                      temp_bias_file_path='foo.csv')
+
+        for start, end in [('2', '3'), ('2', '4a'), ('2', '5'), ('0', '3a'),
+                           ('3a', '3'), ('3', '4'), ('4a', '5')]:
+            with pytest.raises(InvalidParamsError, match='whole RGI region'):
+                run_prepro_levels(start_level=start, max_level=end,
+                                  chunk_idx=0, **common)
+
+        # And the chunks have to line up with the tar bundles
+        with pytest.raises(InvalidParamsError, match='100 or 1000'):
+            run_prepro_levels(start_level='2', max_level='3a', chunk_idx=0,
+                              chunk_size=250, **common)
 
     def test_half_level_addressing(self):
         # A half level is decomposed into an integer plus a flag so that the
@@ -2200,16 +2224,16 @@ class TestPreproCLI:
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
                                                 'SfcTypeTIModel'])
-    def test_full_run_defaults(self, mb_model_class):
+    def test_full_run_defaults(self, mb_model_class, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
+        wdir = tmpdir.mkdir("wd")
+        utils.mkdir(wdir, reset=True)
+        odir = tmpdir.mkdir("my_levs")
+        topof = utils.get_demo_file("srtm_oetztal.tif")
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
@@ -2327,6 +2351,8 @@ class TestPreproCLI:
                                             filesuffix='_historical'))
         assert model.y0 == 1979
         assert model.last_yr == 2020
+
+        assert gdir.has_file('model_geometry', filesuffix='_historical')
         with pytest.raises(FileNotFoundError):
             # We can't create this because the glacier dir is mini
             tasks.init_present_time_glacier(gdir)
@@ -2509,16 +2535,15 @@ class TestPreproCLI:
         assert_allclose(ref['inv_volume_km3'], new['inv_volume_km3'])
 
     @pytest.mark.slow
-    def test_distributed_thickness_and_geotiff_export(self):
+    def test_distributed_thickness_and_geotiff_export(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
         import rioxarray as rioxr
 
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
 
@@ -2611,18 +2636,22 @@ class TestPreproCLI:
             assert 'melt_on_glacier_monthly' in ds
             assert 'month_2d' in ds.coords
             assert np.all(np.isfinite(ds['on_area'].sel(time=2000)))
+            # The temperature diagnostics come with the hydro output
+            assert 'temp_ref_area' in ds
+            assert 'temp_on_glacier_monthly' in ds
+            assert ds['temp_ref_area'].attrs['unit'] == 'degC'
+            assert np.all(np.isfinite(ds['temp_ref_area'].sel(time=2000)))
 
     @pytest.mark.slow
-    def test_full_run_cru_centerlines(self):
+    def test_full_run_cru_centerlines(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
+        topof = utils.get_demo_file("srtm_oetztal.tif")
         np.random.seed(0)
         ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
@@ -2638,6 +2667,7 @@ class TestPreproCLI:
                           override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
+                                           'use_mp_spawn': True,
                                            }
                           )
 
@@ -2772,7 +2802,7 @@ class TestPreproCLI:
     @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
                                                 'SfcTypeTIModel'])
     def test_elev_bands_and_spinup_run_with_different_evolution_models(
-            self, mb_model_class):
+            self, mb_model_class, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -2782,10 +2812,9 @@ class TestPreproCLI:
             # Read in the RGI file
             inter, rgidf = _read_shp()
 
-            wdir = os.path.join(self.testdir, 'wd')
-            utils.mkdir(wdir, reset=True)
-            odir = os.path.join(self.testdir, 'my_levs')
-            topof = utils.get_demo_file('srtm_oetztal.tif')
+            wdir = tmpdir.mkdir(f"wd_{evolution_model}")
+            odir = tmpdir.mkdir(f"my_levs_{evolution_model}")
+            topof = utils.get_demo_file("srtm_oetztal.tif")
             np.random.seed(0)
             border = 80
             bstr = 'b_080'
@@ -2809,6 +2838,7 @@ class TestPreproCLI:
                                                'evolution_model': evolution_model,
                                                'downstream_line_shape': downstream_line_shape,
                                                'prcp_fac': 2.5,
+                                               'use_mp_spawn': True,
                                                })
 
             df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
@@ -2931,17 +2961,16 @@ class TestPreproCLI:
                         rtol=0.02)
 
     @pytest.mark.slow
-    def test_geodetic_per_glacier_and_massredis_run(self):
+    def test_geodetic_per_glacier_and_massredis_run(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
         # Read in the RGI file
         inter, rgidf = _read_shp()
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
-        topof = utils.get_demo_file('srtm_oetztal.tif')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
+        topof = utils.get_demo_file("srtm_oetztal.tif")
         np.random.seed(0)
 
         params = {'geodetic_mb_period': '2000-01-01_2010-01-01',
@@ -2956,7 +2985,7 @@ class TestPreproCLI:
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
                           output_folder=odir, working_dir=wdir, is_test=True,
                           rgi_file=rgidf, intersects_file=inter,
-                          override_params=params,
+                          override_params={**params, 'use_mp_spawn': True},
                           disable_mp=False,
                           mb_calibration_strategy='melt_temp',
                           inversion_volume_dataset='consensus',
@@ -3034,7 +3063,7 @@ class TestPreproCLI:
         np.testing.assert_allclose(ds.hydro_month, 4)
         np.testing.assert_allclose(ds.calendar_month, 1)
 
-    def test_start_from_prepro(self):
+    def test_start_from_prepro(self, tmpdir):
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
@@ -3043,9 +3072,8 @@ class TestPreproCLI:
 
         # Read in the RGI file
         inter, rgidf = _read_shp()
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
         np.random.seed(0)
         ref_mb_period = '2000-01-01_2010-01-01'
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
@@ -3059,6 +3087,7 @@ class TestPreproCLI:
                           override_params={'geodetic_mb_period': ref_mb_period,
                                            'baseline_climate': 'CRU',
                                            'prcp_fac': 2.5,
+                                           'use_mp_spawn': True,
                                            }
                           )
 
@@ -3082,7 +3111,7 @@ class TestPreproCLI:
                               rgi_file=rgidf, intersects_file=inter,
                               start_level=2, max_level=4)
 
-    def test_source_run(self, monkeypatch):
+    def test_source_run(self, tmpdir, monkeypatch):
 
         monkeypatch.setattr(oggm.utils, 'DEM_SOURCES', ['USER'])
 
@@ -3092,9 +3121,8 @@ class TestPreproCLI:
         inter, rgidf = _read_shp()
         rgidf = rgidf.iloc[:4]
 
-        wdir = os.path.join(self.testdir, 'wd')
-        utils.mkdir(wdir)
-        odir = os.path.join(self.testdir, 'my_levs')
+        wdir = tmpdir.mkdir("wd")
+        odir = tmpdir.mkdir("my_levs")
         topof = utils.get_demo_file('srtm_oetztal.tif')
         np.random.seed(0)
         run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,

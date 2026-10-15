@@ -9,6 +9,23 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- ``run_with_hydro`` can now store two area-weighted air temperature
+  diagnostics, i.e. the downscaled temperature (temperature bias and lapse
+  rate applied) which the mass balance model actually uses for melt and for
+  the solid/liquid precipitation split. ``temp_ref_area`` is weighted by the
+  reference area *and* evaluated at the reference surface elevation, i.e. it
+  is a fixed geometry diagnostic which does not depend on the glacier
+  evolution: this is the diagnostic asked for by GlacierMIP4 (use it together
+  with ``ref_area_yr`` or ``ref_area_from_y0``, so that areas and elevations
+  refer to the same year). ``temp_on_glacier`` is weighted by the evolving
+  glacier area, at the surface elevation of the model. Both are in the default
+  ``PARAMS['store_diagnostic_variables']``, like the other hydro variables, and
+  are only computed by ``run_with_hydro``. Note that these are per glacier
+  means, so a regional average has to be area-weighted by the user.
+  ``SfcTypeTIModel`` and ``RandomMassBalance`` gained the
+  ``get_annual_climate`` / ``get_monthly_climate`` methods this needs
+  (:pull:`1998`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The preprocessing can now be run in chunks, so that a big RGI region does not
   have to fit into a single cluster job. ``oggm_prepro`` gained
   ``--chunk-idx`` / ``--chunk-size`` (chunks are blocks of the RGI id space, of
@@ -20,11 +37,11 @@ Enhancements
   directory tar files on disk with the new ``--start-from-dir``, the local
   equivalent of ``--start-base-url``. Nothing needs merging afterwards: the
   whole-region stages write the summary files exactly as a single job would.
-  New helpers :py:func:`workflow.get_rgi_chunk`,
-  :py:func:`workflow.count_rgi_chunks` and
-  :py:func:`workflow.print_slurm_array` make the same chunking available to
-  ordinary runs, and the new ``oggm_prepro_chunks`` command tells you how many
-  chunks a region has. See the documentation for a complete SLURM example.
+  New helpers :py:func:`workflow.get_rgi_chunk` and
+  :py:func:`workflow.count_rgi_chunks` make the same chunking available to
+  ordinary runs (e.g. projections, with any chunk size), and the new
+  ``oggm_prepro_chunks`` command tells you how many chunks a region has. See
+  :ref:`chunked-runs` for the rationale and sample SLURM scripts (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``calibrate_inversion_from_ref_table`` gained a ``glen_a_factor`` keyword to
   skip the calibration and invert with a known A factor instead. The factor a
@@ -43,7 +60,12 @@ Enhancements
   is meant for comparing two runs made with different options - e.g. to pick a
   spinup strategy. ``utils.get_geodetic_mb_dataframe`` grows a ``regional``
   keyword to fetch the regional averages published by Hugonnet et al., which
-  the comparison uses (:pull:`1988`).
+  the comparison uses (:pull:`1988`). The spinup section also reports what the
+  spinup series *contains* (from ``is_fixed_geometry_spinup``) and not only
+  what ``used_spinup_option`` says: a dynamic spinup which did not converge
+  over the requested period is retried over a shorter one and the years before
+  it are filled with a fixed geometry, which the statistics still report as a
+  success.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Added type aliases to autodocs which allows Sphinx to recognise OGGM classes
   (:pull:`1800`).
@@ -259,6 +281,11 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- The monthly hydrological output of ``run_with_hydro`` (``*_monthly``
+  variables) now has the correct ``kg month-1`` unit attribute: the values
+  are monthly totals, but the attribute was copied from the annual variables
+  (``kg yr-1``). The values themselves are unchanged.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
   have origin widths > 0" when the inversion returns a trapezoid sitting
   exactly on its physical boundary (thickness = width / lambda, i.e. a zero
@@ -443,6 +470,12 @@ Breaking changes
   returned by the ``run_*`` tasks. With multiprocessing this would
   run the main process out of memory on large RGI regions (:pull:`1977`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``read_pickle`` and ``write_pickle`` have been removed in favour of
+  ``read_store`` and ``write_store``, which store data as npz files in the
+  glacier directory's ``data_store`` folder. Existing pickles from older
+  glacier directories are still read transparently by ``read_store``
+  (:pull:`1908`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 
 
@@ -656,7 +689,6 @@ break some code, but remain minor in nature:
   resulting thickness fields. This would yield to weird effects at glacier boundaries
   and seemed overkill since topography is smoothed quite aggressively as well (:pull:`1773`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
-
 
 v1.6.2 (August 25, 2024)
 ------------------------

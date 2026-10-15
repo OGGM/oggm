@@ -78,7 +78,7 @@ Install OGGM and its dependencies
 
         .. code-block:: console
 
-            mamba env create -n oggm_env python=3.13 oggm[full] -c conda-forge -c oggm
+            mamba env create -n oggm_env python=3.13 "oggm[full]" -c conda-forge -c oggm
             conda activate oggm
 
         You are now ready to :ref:`test-oggm`!

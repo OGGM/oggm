@@ -3,8 +3,10 @@ import shutil
 import unittest
 from packaging.version import Version
 import pickle
+import warnings
 import pytest
 import json
+import shapely
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -378,7 +380,12 @@ class TestFullRun(unittest.TestCase):
         utils.mkdir(base_dir, reset=True)
         gdirs = workflow.execute_entity_task(utils.copy_to_basedir, gdirs,
                                              base_dir=base_dir, setup='all')
-        os.remove(gdirs[0].get_filepath('centerlines'))
+        for path in [
+            gdirs[0].get_filepath('centerlines'),
+            gdirs[0].get_store_filepath('centerlines'),
+        ]:
+            if os.path.exists(path):
+                os.remove(path)
         cfg.PARAMS['continue_on_error'] = True
         write_centerlines_to_shape(gdirs)
 
@@ -407,7 +414,7 @@ class TestFullRun(unittest.TestCase):
             from oggm.core.massbalance import LinearMassBalance
             from oggm.core.flowline import FluxBasedModel
             mb_mod = LinearMassBalance(ela_h=2500)
-            fls = gd.read_pickle('model_flowlines')
+            fls = gd.read_store('model_flowlines')
             model = FluxBasedModel(fls, mb_model=mb_mod)
             df.loc[gd.rgi_id, 'start_area_km2'] = model.area_km2
             df.loc[gd.rgi_id, 'start_volume_km3'] = model.volume_km3
@@ -906,8 +913,8 @@ class TestGdirSettings:
         custom_settings['trapezoid_lambdas'] = gdir.settings['trapezoid_lambdas'] * 1.5
         workflow.inversion_tasks(gdir, settings_filesuffix='_large_lambda',
                                  input_filesuffix='')
-        inv_out_default = gdir.read_pickle('inversion_output')
-        inv_out_lambda = gdir.read_pickle('inversion_output',
+        inv_out_default = gdir.read_store('inversion_output')
+        inv_out_lambda = gdir.read_store('inversion_output',
                                           filesuffix='_large_lambda')
         # do not look at last 5 grid points because of filter_inversion_output
         assert np.all(inv_out_default[0]['thick'][:-5] <
@@ -938,7 +945,7 @@ class TestGdirSettings:
             gdirs, settings_filesuffix='_large_melt_f', ref_table=ref_table,
             input_filesuffix='_large_melt_f', apply_fs_on_mismatch=True)
         glen_a_after = custom_settings['inversion_glen_a']
-        inv_out_melt_f = gdir.read_pickle('inversion_output',
+        inv_out_melt_f = gdir.read_store('inversion_output',
                                           filesuffix='_large_melt_f')
         # with larger melt_f the residual of the apparent mass balance must be
         # larger, to compensate for the more negative mb
@@ -972,7 +979,7 @@ class TestGdirSettings:
 
         inversion.prepare_for_inversion(gdir)
         inversion.mass_conservation_inversion(gdir)
-        cls1 = gdir.read_pickle('inversion_output')
+        cls1 = gdir.read_store('inversion_output')
         # Increase calving for this one using settings
         custom_settings = ModelSettings(gdir,
                                         filesuffix='_large_k',
@@ -984,7 +991,7 @@ class TestGdirSettings:
         out = inversion.find_inversion_calving_from_any_mb(
             gdir, settings_filesuffix='_large_k', output_filesuffix='_large_k',
         )
-        cls2 = gdir.read_pickle('inversion_output', filesuffix='_large_k')
+        cls2 = gdir.read_store('inversion_output', filesuffix='_large_k')
 
         # Calving increases the volume and adds a residual
         v_ref = np.sum([np.sum(fl['volume']) for fl in cls1])
@@ -1113,3 +1120,103 @@ class TestGdirObservations:
                 write_to_gdir=False,
             )
         assert 'You have not provided an reference' in str(exc_info.value)
+
+
+class TestStoreWorkflow:
+    """Tests for the npz data store as used through the workflow."""
+
+    def test_pickle_warnings(self, hef_gdir):
+        """Test that write_pickle errors if called."""
+        gdir = hef_gdir
+
+        with pytest.raises(AttributeError) as exc_info:
+            gdir.write_pickle(
+                var={"array": [1, 2]},
+                filename="inversion_input",
+                filesuffix="test_pickle",
+            )
+        assert "has no attribute 'write_pickle'" in str(exc_info.value)
+
+    @pytest.mark.parametrize("arg_filesuffix", ["", "_exp01"])
+    def test_write_npz(self, tmp_path, hef_gdir, arg_filesuffix):
+        """Create an npz store group at the expected path."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        gdir.write_npz(
+            {"temperature": np.array([1.0, 2.0, 3.0])},
+            filename="inversion_input",
+            filesuffix=arg_filesuffix,
+        )
+
+        fp = gdir.get_store_filepath(
+            "inversion_input", filesuffix=arg_filesuffix
+        )
+        assert os.path.isfile(fp)
+        assert os.path.dirname(fp) == os.path.join(gdir.dir, "data_store")
+
+        back = gdir.read_npz("inversion_input", filesuffix=arg_filesuffix)
+        np.testing.assert_array_equal(back["temperature"], [1.0, 2.0, 3.0])
+
+        # second write replaces group rather than appending to it
+        gdir.write_npz(
+            {"val": np.array([9.0, 8.0])},
+            filename="inversion_input",
+            filesuffix=arg_filesuffix,
+        )
+        back = gdir.read_npz("inversion_input", filesuffix=arg_filesuffix)
+        assert set(back) == {"val"}
+        np.testing.assert_array_equal(back["val"], [9.0, 8.0])
+
+    def test_read_store(self, tmp_path, hef_gdir):
+        """Test that read_store reads back what write_store wrote."""
+        cfg.initialize()
+        cfg.PATHS["working_dir"] = str(tmp_path)
+        gdir = hef_gdir
+
+        gdir.write_store(
+            [{"flux": np.array([1.0, 2.0, 3.0])}],
+            filename="inversion_input",
+            filesuffix="_test",
+        )
+        result = gdir.read_store(filename="inversion_input", filesuffix="_test")
+
+        assert isinstance(result, list)
+        assert isinstance(result[0], dict)
+
+        # This will fail if it reads a pickle instead of the store
+        np.testing.assert_array_equal(result[0]["flux"], [1.0, 2.0, 3.0])
+
+    def test_read_store_fallback(self, hef_gdir):
+        """Test read_store falls back to _read_pickle if npz is not found."""
+        from oggm.utils import _workflow
+
+        gdir = hef_gdir
+        # Force use of pickle, or this test can never fail
+        gdir._write_pickle(
+            var=[1, 2, 3],
+            filename="inversion_flowlines",
+            filesuffix="test_pickle",
+        )
+        # reset so test observes first warning
+        _workflow._warn_store_fallback.cache_clear()
+        with pytest.warns(
+            Warning,
+            match="Store data not found, attempting to read pickle file instead.",
+        ):
+            ds_read = gdir.read_store(
+                filename="inversion_flowlines", filesuffix="test_pickle"
+            )
+        assert isinstance(ds_read, list)
+
+        # warn-once behaviour
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            ds_read = gdir.read_store(
+                filename="inversion_flowlines", filesuffix="test_pickle"
+            )
+        assert not any(
+            "Store data not found" in str(r.message) for r in records
+        )
+        assert isinstance(ds_read, list)

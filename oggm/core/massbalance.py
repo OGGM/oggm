@@ -1560,9 +1560,9 @@ class SfcTypeTIModel(MassBalanceModel):
             if self.hbins is not None:
                 _fl = None
             elif use_main_fl_from == 'inversion_flowlines':
-                _fl = self.gdir.read_pickle("inversion_flowlines")[-1]
+                _fl = self.gdir.read_store("inversion_flowlines")[-1]
             elif use_main_fl_from == 'model_flowlines':
-                _fl = self.gdir.read_pickle("model_flowlines")[-1]
+                _fl = self.gdir.read_store("model_flowlines")[-1]
             else:
                 raise InvalidParamsError("We need a flowline or height bins "
                                          "(hbins) for defining the number of "
@@ -1868,6 +1868,14 @@ class SfcTypeTIModel(MassBalanceModel):
         self.mbmod.temp_bias = value
         # Reset state, we do not want to change parameters midway
         self.reset_state()
+
+    def get_monthly_climate(self, heights, year=None):
+        """The climate is the one of the underlying mb model."""
+        return self.mbmod.get_monthly_climate(heights, year=year)
+
+    def get_annual_climate(self, heights, year=None):
+        """The climate is the one of the underlying mb model."""
+        return self.mbmod.get_annual_climate(heights, year=year)
 
     def set_melt_f_buckets(self):
         """Set the melt factor for each bucket."""
@@ -3141,7 +3149,7 @@ class ConstantMassBalance(MassBalanceModel):
 
         # This is a quick'n dirty optimisation
         try:
-            fls = gdir.read_pickle('model_flowlines')
+            fls = gdir.read_store('model_flowlines')
             h = []
             for fl in fls:
                 # We use bed because of overdeepenings
@@ -3452,6 +3460,15 @@ class RandomMassBalance(MassBalanceModel):
         ryr = self.get_state_yr(int(year))
         return self.mbmod.get_annual_mb(heights, year=ryr, **kwargs)
 
+    def get_monthly_climate(self, heights, year=None):
+        ryr, m = floatyear_to_date(year)
+        ryr = date_to_floatyear(self.get_state_yr(ryr), m)
+        return self.mbmod.get_monthly_climate(heights, year=ryr)
+
+    def get_annual_climate(self, heights, year=None):
+        ryr = self.get_state_yr(int(year))
+        return self.mbmod.get_annual_climate(heights, year=ryr)
+
 
 class UncertainMassBalance(MassBalanceModel):
     """Adding uncertainty to a mass balance model.
@@ -3620,12 +3637,12 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
         # Read in the flowlines
         if use_inversion_flowlines:
-            fls = gdir.read_pickle('inversion_flowlines',
+            fls = gdir.read_store('inversion_flowlines',
                                    filesuffix=flowlines_filesuffix)
 
         if fls is None:
             try:
-                fls = gdir.read_pickle('model_flowlines',
+                fls = gdir.read_store('model_flowlines',
                                        filesuffix=flowlines_filesuffix)
             except FileNotFoundError:
                 raise InvalidWorkflowError('Need a valid `model_flowlines` '
@@ -3989,7 +4006,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         # re-read flowlines from disk).
         obj = object.__new__(cls)
         try:
-            obj.fls = gdir.read_pickle('model_flowlines')
+            obj.fls = gdir.read_store('model_flowlines')
         except FileNotFoundError:
             obj.fls = None
         obj.gdir = gdir
@@ -4253,7 +4270,7 @@ def mb_calibration_to_rmsd(gdir, *,
         temp_bias_max = gdir.settings['temp_bias_max']
 
     if not use_2d_mb:
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
     else:
         # if the 2D data is used, the flowline is not needed.
         fls = None
@@ -4508,9 +4525,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         # Get the reference data
         ref_mb_err = np.nan
         try:
+            # Double brackets: a DataFrame even with one period per glacier
             ref_mb_df = get_geodetic_mb_dataframe(
                 file_path=file_path,
-                rgi_version=gdir.rgi_version).loc[gdir.rgi_id]
+                rgi_version=gdir.rgi_version).loc[[gdir.rgi_id]]
             ref_mb_df = ref_mb_df.loc[ref_mb_df['period'] == ref_mb_period]
             # dmdtda: in meters water-equivalent per year -> we convert to kg m-2 yr-1
             ref_mb = ref_mb_df['dmdtda'].iloc[0] * 1000
@@ -4607,9 +4625,10 @@ def mb_calibration_from_geodetic_mb(gdir, *,
         assert np.isfinite(temp_bias), 'Temp bias not finite?'
 
         if gdir.settings['prcp_fac'] is not None:
-            raise InvalidParamsError('With `informed_threestep` you cannot use '
-                                     'a preset prcp_fac - we need to rely on '
-                                     'decide_winter_precip_factor().')
+            # A preset prcp_fac replaces the winter precipitation heuristic
+            prcp_fac = gdir.settings['prcp_fac']
+        else:
+            prcp_fac = decide_winter_precip_factor(gdir)
 
         # Some magic heuristics - we just decide to calibrate
         # precip -> melt_f -> temp but informed by previous data.
@@ -4619,7 +4638,6 @@ def mb_calibration_from_geodetic_mb(gdir, *,
 
         # We use the precip factor but allow it to vary between 0.8, 1.2 of
         # the previous value (uncertainty).
-        prcp_fac = decide_winter_precip_factor(gdir)
         mi, ma = gdir.settings['prcp_fac_min'], gdir.settings['prcp_fac_max']
         prcp_fac_min = clip_scalar(prcp_fac * 0.8, mi, ma)
         prcp_fac_max = clip_scalar(prcp_fac * 1.2, mi, ma)
@@ -4900,7 +4918,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
                                  'at the same time.')
 
     if not use_2d_mb:
-        fls = gdir.read_pickle('inversion_flowlines')
+        fls = gdir.read_store('inversion_flowlines')
     else:
         # if the 2D data is used, the flowline is not needed.
         fls = None
@@ -5330,7 +5348,7 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix:str='',
 
     # For each flowline compute the apparent MB
     rho = gdir.settings['ice_density']
-    fls = gdir.read_pickle('inversion_flowlines')
+    fls = gdir.read_store('inversion_flowlines')
     # Reset flux
     for fl in fls:
         fl.flux = np.zeros(len(fl.surface_h))
@@ -5342,9 +5360,9 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix:str='',
 
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
-    gdir.write_pickle(fls, 'inversion_flowlines')
-    gdir.write_pickle({'ela_h': ela_h, 'grad': mb_gradient},
-                      'linear_mb_params')
+    gdir.write_store(fls, 'inversion_flowlines')
+    gdir.write_store({'ela_h': ela_h, 'grad': mb_gradient},
+                     'linear_mb_params')
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -5413,7 +5431,7 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     is_calving = cmb != 0
 
     # For each flowline compute the apparent MB
-    fls = gdir.read_pickle('inversion_flowlines', filesuffix=input_filesuffix)
+    fls = gdir.read_store('inversion_flowlines', filesuffix=input_filesuffix)
 
     if mb_model is None:
         mb_model = MultipleFlowlineMassBalance(
@@ -5492,7 +5510,7 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     if settings_filesuffix == '':
         gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
 
-    gdir.write_pickle(fls, 'inversion_flowlines', filesuffix=output_filesuffix)
+    gdir.write_store(fls, 'inversion_flowlines', filesuffix=output_filesuffix)
 
 
 @entity_task(log)
