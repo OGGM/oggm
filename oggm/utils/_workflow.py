@@ -5636,6 +5636,12 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
+# Readers compare the major part only: a minor bump (e.g. a new kind) stays
+# readable, a major bump raises in `_finalize_merged_dir`.
+_MANIFEST_SCHEMA = "1.0"
+_MANIFEST_KINDS = ("delta", "materialisation", "standalone")
+
+
 def manifest_id(manifest: dict) -> str:
     """Content id of one artefact, chained to its parent's id.
 
@@ -5675,6 +5681,10 @@ def _finalize_merged_dir(dirpath: str):
         A file removed by one level and written again by a later one
         stays.
 
+    .. note::
+        Manifests of a kind this version does not know, e.g. an add-on
+        written by a newer minor schema, are skipped with a warning.
+
     Parameters
     ----------
     dirpath : str
@@ -5683,16 +5693,32 @@ def _finalize_merged_dir(dirpath: str):
     Raises
     ------
     InvalidWorkflowError
-        If a parent manifest is missing, or its ``id`` differs from the
-        child's ``parent.id``. This happens with a stale download cache,
-        a regenerated parent, or a legacy cumulative parent, and leaves
-        the directory as the tars extracted it, without the removal
-        pass.
+        If a manifest's schema major version is newer than what this
+        OGGM version can read. Also raised if a parent manifest is
+        missing, or its ``id`` differs from the child's ``parent.id``.
+        This happens with a stale download cache, a regenerated parent,
+        or a legacy cumulative parent. Either way the directory is left
+        as the tars extracted it, without the removal pass.
     """
     manifests = {}
     for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
         with open(fp) as f:
             m = json.load(f)
+        version = str(m.get("schema_version", 1))
+        if int(version.split(".")[0]) > int(_MANIFEST_SCHEMA.split(".")[0]):
+            raise InvalidWorkflowError(
+                f"{os.path.basename(fp)} uses manifest schema {version}, "
+                f"but this OGGM version reads schema {_MANIFEST_SCHEMA}. "
+                "Upgrade OGGM, or rebuild the level."
+            )
+        if m.get("kind") not in _MANIFEST_KINDS:
+            log.warning(
+                "Skipping %s: unknown manifest kind %r. A newer OGGM "
+                "version may use it.",
+                os.path.basename(fp),
+                m.get("kind"),
+            )
+            continue
         manifests[m["label"]] = m
     if not manifests:
         return
@@ -5826,10 +5852,10 @@ def write_level_manifest(
         ``gdir_to_tar(include=...)``.
     """
 
-    kinds = ("delta", "materialisation", "standalone")
-    if kind not in kinds:
+    if kind not in _MANIFEST_KINDS:
         raise ValueError(
-            f"Invalid manifest kind: {kind!r}. Must be one of {kinds}."
+            f"Invalid manifest kind: {kind!r}. "
+            f"Must be one of {_MANIFEST_KINDS}."
         )
     if kind == "materialisation" and parent is not None:
         raise ValueError(
@@ -5878,7 +5904,7 @@ def write_level_manifest(
 
     manifest_name = f"{label}.manifest.json"
     manifest = {
-        "schema_version": 2,
+        "schema_version": _MANIFEST_SCHEMA,
         "kind": kind,
         "rgi_id": rgi_id,
         "label": label,

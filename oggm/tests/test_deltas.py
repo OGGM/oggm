@@ -192,7 +192,8 @@ def test_write_level_manifest_schema(tmp_path):
         manifest = json.load(f)
 
     state = utils.snapshot_gdir_state(gdir_dir)
-    assert manifest["schema_version"] == 2
+    # this needs to be updated whenever the schema changes
+    assert manifest["schema_version"] == "1.0"
     assert manifest["kind"] == "delta"
     assert manifest["rgi_id"] == "RGI60-11.00897"
     assert manifest["label"] == "L3"
@@ -1348,3 +1349,45 @@ def test_finalize_ignores_stale_lower_manifests(tmp_path):
     assert utils.snapshot_gdir_state(layered) == utils.snapshot_gdir_state(
         gdir_dir
     )
+
+
+def _addon_manifest(gdir_dir, **overrides):
+    """Writes a manifest of a kind this OGGM version does not know."""
+    m = {
+        "schema_version": "1.1",
+        "kind": "addon",
+        "rgi_id": "RGI60-11.00897",
+        "label": "itslive",
+        "id": "0" * 64,
+        "parent": None,
+        "created": "2999-01-01T00:00:00+00:00",
+        "files": {"added": {"itslive.nc": "0" * 64}, "updated": {}},
+    }
+    m.update(overrides)
+    with open(os.path.join(gdir_dir, f"{m['label']}.manifest.json"), "w") as f:
+        json.dump(m, f)
+
+
+def test_finalize_skips_unknown_kind(tmp_path, caplog):
+    """A newer manifest kind (e.g. an add-on) must not hide the chain."""
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
+    prev = utils.snapshot_gdir_state(gdir_dir)
+    os.remove(gdir_dir / "log.txt")
+    utils.write_level_manifest(gdir_dir, "L1", prev, parent="L0", **_DS)
+    (gdir_dir / "log.txt").write_text("restored by the L0 tar\n")
+    _addon_manifest(gdir_dir)
+
+    with caplog.at_level(logging.WARNING, logger="oggm.utils"):
+        utils._workflow._finalize_merged_dir(str(gdir_dir))
+    assert not (gdir_dir / "log.txt").exists()
+    assert "'addon'" in caplog.text
+
+
+@pytest.mark.parametrize("version", ["2.0", 2])
+def test_finalize_rejects_newer_major(tmp_path, version):
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
+    _addon_manifest(gdir_dir, kind="delta", label="L1", schema_version=version)
+    with pytest.raises(InvalidWorkflowError, match="schema 2"):
+        utils._workflow._finalize_merged_dir(str(gdir_dir))

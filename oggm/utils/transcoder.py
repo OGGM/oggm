@@ -12,7 +12,7 @@ import numpy as np
 import shapely
 from salem import Grid, wgs84
 
-SCHEMA_VERSION = 2
+NPZ_SCHEMA_VERSION = 2
 
 
 def get_store_paths(directory: str | Path, pickle: bool = False) -> list[Path]:
@@ -960,7 +960,7 @@ def encode_npz(data: Any, name: str = "") -> tuple[dict, dict]:
     arrays = {}
     root = encode_node(data, path=name, arrays=arrays)
 
-    return arrays, {"schema": SCHEMA_VERSION, "root": root}
+    return arrays, {"schema": NPZ_SCHEMA_VERSION, "root": root}
 
 
 def decode_npz(arrays: dict, meta: dict, name: str = "") -> Any:
