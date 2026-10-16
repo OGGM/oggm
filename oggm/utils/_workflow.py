@@ -5952,6 +5952,7 @@ def gdir_to_tar(
     base_dir: str = None,
     delete: bool = True,
     include: list = None,
+    keep_fetched_from: bool = False,
 ) -> str:
     """Writes the content of a glacier directory to a tar file.
 
@@ -5973,6 +5974,11 @@ def gdir_to_tar(
         when building a per-level delta, such as
         ``<group>.npz``. Directories are added recursively.
         The default adds the whole directory.
+    keep_fetched_from : bool, default False
+        Keep the ``fetched_from`` field of the manifests, which is
+        otherwise dropped. Only for tars which are never published, since
+        the field may hold local paths: the ``L3a`` directories of a
+        chunked run use it to tell the next stage where L2 came from.
 
     Returns
     -------
@@ -6000,11 +6006,12 @@ def gdir_to_tar(
                 for fp in glob.glob(os.path.join(source_dir, "*.manifest.json"))
             ]
         for rel in sorted(set(include)):
-            _tar_add_unstamped(
-                tar,
-                os.path.join(source_dir, rel),
-                arcname=os.path.join(arcbase, rel),
-            )
+            path = os.path.join(source_dir, rel)
+            arcname = os.path.join(arcbase, rel)
+            if keep_fetched_from:
+                tar.add(path, arcname=arcname)
+            else:
+                _tar_add_unstamped(tar, path, arcname=arcname)
 
     if delete:
         shutil.rmtree(source_dir)

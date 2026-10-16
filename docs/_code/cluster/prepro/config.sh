@@ -35,6 +35,10 @@ PREPRO_OPTS="--elev-bands \
 
 CHUNK_SIZE=1000          # 100 or 1000 glaciers per chunk
 
+# The L3a scratch folder of a region is deleted once its L3 is made. Set to
+# true to keep it, e.g. to redo the Glen A calibration without stage 1.
+KEEP_L3A=false
+
 # Resources of the chunk jobs (many small ones) and of the whole-region jobs
 CPUS_CHUNK=32  ; TIME_CHUNK=08:00:00
 CPUS_REGION=64 ; TIME_REGION=08:00:00

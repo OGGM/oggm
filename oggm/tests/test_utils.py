@@ -2493,13 +2493,17 @@ class TestPreproCLI:
 
         monkeypatch.setattr(_downloads, 'file_downloader', fake_downloader)
         monkeypatch.setattr(_downloads, '_prepro_bundle_format', {})
+        # The fake urls exist, for the check before fetching a prepro level
+        real_url_exists = utils.url_exists
+        monkeypatch.setattr(utils, 'url_exists', lambda url: (
+            url.startswith('https://fake.oggm/') or real_url_exists(url)))
         scratch = os.path.join(self.testdir, 'scratch')
 
         # 1 - the chunkable part of L3
         for i in chunks:
             run_prepro_levels(output_folder=scratch,
                               working_dir=wd(f'wd_s1_{i}'),
-                              start_level='2', start_from_dir=ref_dir,
+                              start_level='2', start_base_url=base_url,
                               max_level='3a',
                               chunk_idx=i, chunk_size=chunk_size, **common)
 
@@ -2571,11 +2575,13 @@ class TestPreproCLI:
                 ref = manifest(ref_dir, lev, rgi_id)
                 new = manifest(out_dir, lev, rgi_id)
                 assert ref['kind'] == new['kind'] == 'delta'
-                # The ids differ (log files), the links must not
-                for key in ['label', 'base_url']:
-                    assert ref['parent'][key] == new['parent'][key], (
-                        lev, rgi_id, key)
+                # The ids differ (log files). The links point to the same
+                # labels, but the chunked L3 sits on the published L2
+                assert ref['parent']['label'] == new['parent']['label']
                 assert ref['parent']['label'] == f'L{lev - 1}'
+                assert ref['parent']['base_url'] is None
+                assert new['parent']['base_url'] == (
+                    base_url if lev == 3 else None), (lev, rgi_id)
                 for key in ['added', 'updated', 'removed']:
                     assert sorted(ref['files'][key]) == sorted(
                         new['files'][key]
@@ -2617,6 +2623,50 @@ class TestPreproCLI:
         new = pd.read_csv(summary(redo_dir, 'L3', 'glacier_statistics_11.csv'),
                           index_col=0).sort_index()
         assert_allclose(ref['inv_volume_km3'], new['inv_volume_km3'])
+
+        # The same stages as the cluster script runs them: each job writes
+        # to its own output folder, which is then copied into one shared
+        # tree, and every stage after the first also gets the L2 url.
+        shared = os.path.join(self.testdir, 'shared_out')
+
+        def job(name, **kwargs):
+            job_out = os.path.join(self.testdir, name)
+            run_prepro_levels(output_folder=job_out, working_dir=wd(f'wd_{name}'),
+                              start_base_url=base_url, **kwargs, **common)
+            shutil.copytree(job_out, shared, dirs_exist_ok=True)
+
+        job('job_s2', start_level='3a', start_from_dir=scratch, max_level='3')
+        for i in chunks:
+            job(f'job_s3_{i}', start_level='3', start_from_dir=shared,
+                max_level='4a', chunk_idx=i, chunk_size=chunk_size)
+        job('job_s4', start_level='4a', start_from_dir=shared, max_level='5')
+
+        # Both trees, once published, load like any prepro url: L3 and L4
+        # find L2 at the L1-L2 url, and L5 is standalone
+        for name, tree in [('docs', out_dir), ('script', shared)]:
+            tree_url = 'https://fake.oggm/experiment/'
+
+            def tree_downloader(www_path, **kwargs):
+                if not www_path.startswith(tree_url):
+                    return fake_downloader(www_path, **kwargs)
+                local = os.path.join(tree, www_path[len(tree_url):])
+                return local if os.path.isfile(local) else None
+
+            monkeypatch.setattr(_downloads, 'file_downloader', tree_downloader)
+            for lev in [3, 4, 5]:
+                monkeypatch.setattr(_downloads, '_prepro_bundle_format', {})
+                cfg.PATHS['working_dir'] = wd(f'wd_user_{name}_{lev}')
+                gdirs = workflow.init_glacier_directories(
+                    test_ids, from_prepro_level=lev, prepro_border=20,
+                    prepro_rgi_version='61', prepro_base_url=tree_url)
+                assert len(gdirs) == len(test_ids)
+                for gdir in gdirs:
+                    if lev < 5:
+                        assert gdir.has_file('climate_historical')
+                        assert gdir.has_file('inversion_flowlines')
+                    if lev > 3:
+                        assert gdir.has_file('model_geometry',
+                                             filesuffix='_historical')
 
     @pytest.mark.slow
     def test_distributed_thickness_and_geotiff_export(self, tmpdir):

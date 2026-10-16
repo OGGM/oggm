@@ -296,13 +296,45 @@ def _start_state(gdir, resume_at_inversion):
     return state
 
 
+def _parent_base_url(gdir_dir: str, parent: str) -> str | None:
+    """The base url to publish in a level's link to its parent.
+
+    Read from where the parent was actually loaded from, rather than
+    guessed from the output folder (which, on a cluster, is often local
+    to the job and copied into the shared tree afterwards):
+
+    - a parent fetched from a url (``fetched_from`` is a url) is linked
+      to that url;
+    - a parent read from disk (``start_from_dir``) is in the tree this
+      run adds to, so the link is None (same tree);
+    - a parent written by this run has no ``fetched_from``, and is in
+      the same tree as well.
+
+    Parameters
+    ----------
+    gdir_dir : str
+        The glacier directory holding ``{parent}.manifest.json``.
+    parent : str
+        The parent's label, e.g. ``"L2"``.
+
+    Returns
+    -------
+    str or None
+        The base url of the parent's tree, or None for the same tree.
+    """
+    with open(os.path.join(gdir_dir, f"{parent}.manifest.json")) as f:
+        src = json.load(f).get("fetched_from")
+    if src is not None and "://" in src:
+        return src
+    return None
+
+
 def _delta_tar_entries(
     gdirs: list[GlacierDirectory],
     level: int,
     states: dict,
     border: int,
     rgi_version: str,
-    parent_base_url: str | None = None,
 ) -> list[tuple[GlacierDirectory, dict]]:
     """Write per-glacier delta manifests for this level.
 
@@ -318,9 +350,6 @@ def _delta_tar_entries(
         The number of pixels at the maps border.
     rgi_version : str
         The RGI version.
-    parent_base_url : str | None, optional
-        Base URL of the tree holding the parent level, or None if it is
-        in this run's output tree.
 
     Returns
     --------
@@ -338,7 +367,10 @@ def _delta_tar_entries(
             if gdir.rgi_id in states and os.path.exists(
                 os.path.join(gdir.dir, f"{parent}.manifest.json")
             ):
-                layers = dict(parent=parent, parent_base_url=parent_base_url)
+                layers = dict(
+                    parent=parent,
+                    parent_base_url=_parent_base_url(gdir.dir, parent),
+                )
             else:
                 # Nothing to diff against, or a legacy (manifest-less)
                 # parent we must not build on: ship every file
@@ -531,6 +563,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         only carried forward are still fetched from the url. That is the
         normal case when the previous stage made the directories without
         writing any summary file (`max_level` '3a' or '4a').
+        The folder must be (a copy of) the tree this run adds to: a level
+        whose parent was read from there is published with a link to the
+        same tree. To build on another tree, use `start_base_url`.
     max_level : str or int
         the maximum pre-processing level before stopping. Besides 1 to 5,
         two half levels split L3 and L4 where the work stops being
@@ -752,7 +787,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 states=manifest_states,
                 border=border,
                 rgi_version=rgi_version,
-                parent_base_url=_parent_base_url(level - 1),
             )
         level_base_dir = Path(output_base_dir) / f'L{level}'
         workflow.execute_entity_task(
@@ -831,28 +865,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if rgi_version is None:
         rgi_version = cfg.PARAMS['rgi_version']
     output_base_dir = Path(output_folder) / f'RGI{rgi_version}' / f'b_{border:03d}'
-
-    def _parent_base_url(parent_level: str) -> str | None:
-        """Get the base URL of a level's parent.
-
-        The first level of a run started from `start_base_url` has its
-        parent there. A chunked chain stage finds it in the shared
-        output folder written by the previous stage.
-
-        Parameters
-        ----------
-        parent_level : str
-            The level of the parent, e.g. '2' for a run starting at '3'.
-
-        Returns
-        -------
-        str or None
-            The base URL of the parent level, or None if the parent is
-            in the same output tree.
-        """
-        if (output_base_dir / f"L{parent_level}").is_dir():
-            return None
-        return start_base_url
 
     # Per-glacier content snapshots of the previous level for deltas
     manifest_states = {}
@@ -1351,8 +1363,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 if gdir.rgi_id in manifest_states:
                     with open(os.path.join(gdir.dir, _L2_STATE), 'w') as f:
                         json.dump(manifest_states[gdir.rgi_id], f)
+            # L3a is never published: keep where L2 came from, so that the
+            # next stage links L3 to it
             workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
-                                         base_dir=level_base_dir)
+                                         base_dir=level_base_dir,
+                                         keep_fetched_from=True)
             utils.base_dir_to_tar(level_base_dir)
             _time_log()
             return
@@ -1637,18 +1652,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # L5 OK - compress all in output directory
     full_dirs = {gdir.rgi_id: gdir.dir for gdir in gdirs}
-    l5_parent_url = _parent_base_url(4)
     for gdir in mini_gdirs:
         # The mini run bundle is self-sufficient, so shipped as standalone.
         # Its parent L4 has the necessary manifest.
-        parent = dict(
-            parent='L4',
-            parent_base_url=l5_parent_url,
-            parent_dir=full_dirs[gdir.rgi_id],
-        )
-        if not os.path.exists(
-            os.path.join(full_dirs[gdir.rgi_id], 'L4.manifest.json')
-        ):
+        full_dir = full_dirs[gdir.rgi_id]
+        if os.path.exists(os.path.join(full_dir, 'L4.manifest.json')):
+            parent = dict(
+                parent='L4',
+                parent_base_url=_parent_base_url(full_dir, 'L4'),
+                parent_dir=full_dir,
+            )
+        else:
             # e.g. an errored glacier whose L4 went out as a full tar
             log.warning("(%s) no L4 manifest: L5 has no parent.", gdir.rgi_id)
             parent = {}
