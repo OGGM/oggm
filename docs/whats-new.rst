@@ -9,6 +9,16 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
+  rounded to the nearest meter before being written to ``dem.tif`` and to
+  ``gridded_data.nc`` (``topo`` and ``topo_smoothed``). This roughly halves
+  the size of these files for DEMs stored as floats (e.g. COPDEM). The data
+  type is unchanged (float32). Note that rounding ``topo_smoothed`` is new
+  (it was never rounded before, even with integer DEMs) and leads to small
+  changes in the results, e.g. in the flowlines and the calibrated
+  parameters. Set ``round_dem`` to ``False`` to recover the previous
+  behavior (:issue:`1864`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` can now store two area-weighted air temperature
   diagnostics, i.e. the downscaled temperature (temperature bias and lapse
   rate applied) which the mass balance model actually uses for melt and for
