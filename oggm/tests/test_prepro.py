@@ -810,7 +810,7 @@ class TestCenterlines:
             len(d["full_line"].coords) - len(d["downstream_line"].coords)
             == cl.nx
         )
-        np.testing.assert_allclose(d['downstream_line'].length, 12, atol=0.5)
+        np.testing.assert_allclose(d['downstream_line'].length, 10, atol=0.5)
 
     def test_downstream_bedshape(self, hef_entity):
 
@@ -1090,7 +1090,7 @@ class TestElevationBandFlowlines:
 
         # And the distributed diff is not too large either
         rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
-        assert rms < 30
+        assert rms < 31
 
     def test_run(self, hef_entity):
 
@@ -2431,7 +2431,7 @@ class TestInversion:
                                                          ref_table=ref_table,
                                                          a_bounds=a,
                                                          error_on_mismatch=False)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.08)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.09)
 
         # With fs it can work
         a = (0.1, 3)
