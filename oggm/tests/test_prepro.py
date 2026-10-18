@@ -466,6 +466,7 @@ class TestGIS:
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
         gis.define_glacier_region(gdir)
 
+        cfg.PARAMS['round_smoothed_dem'] = False
         gis.process_dem(gdir)
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
             ref = ds.topo_smoothed.load()

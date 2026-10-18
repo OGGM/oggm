@@ -14,10 +14,17 @@ Enhancements
   ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
   stored as floats (e.g. COPDEM). The data type is unchanged (float32).
   Set ``round_dem`` to ``False`` to recover the previous behavior. The new
-  ``PARAMS['round_smoothed_dem']`` (``False`` per default) does the same for
-  ``topo_smoothed``: it saves about as much space again but changes the
-  results, as some tasks (e.g. the downstream line) are very sensitive to
-  small changes in the smoothed topography (:issue:`1864`).
+  ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the same for
+  ``topo_smoothed``: it saves about as much space again. This changes the
+  results slightly: in a test on 300 Alpine glaciers (elevation bands), the
+  regional volume changed by -0.2%, with differences of about +/-2% for
+  individual glaciers. Set it to ``False`` to recover the previous behavior
+  (:issue:`1864`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``compute_downstream_line`` now also finds the domain exits located on
+  flat stretches of the domain edge (equal elevation values, more frequent
+  with rounded DEMs), which were ignored before. This changes the
+  downstream line of a few glaciers. It is also faster.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` can now store two area-weighted air temperature
   diagnostics, i.e. the downscaled temperature (temperature bias and lapse
