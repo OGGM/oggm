@@ -870,7 +870,7 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         smoothed_dem = gaussian_blur(dem, int(gsize))
-        if cfg.PARAMS['round_dem']:
+        if cfg.PARAMS['round_smoothed_dem']:
             np.round(smoothed_dem, out=smoothed_dem)
     else:
         smoothed_dem = dem.copy()

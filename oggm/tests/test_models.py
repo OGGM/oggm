@@ -125,7 +125,7 @@ class TestInitPresentDayFlowline:
         lons = fl.point_lons
         lats = fl.point_lats
         assert_allclose([lons[0], lats[0]], [10.7470, 46.8048], atol=1e-4)
-        assert_allclose([lons[-1], lats[-1]], [10.8543, 46.8371], atol=1e-4)
+        assert_allclose([lons[-1], lats[-1]], [10.8551, 46.8376], atol=1e-4)
 
         # Diags
         ref_vol = 0.
@@ -570,7 +570,7 @@ class TestMassBalanceModels:
           Attributes:
             - hemisphere: nh
             - climate_source: histalp_merged_hef.nc
-            - melt_f: 6.54
+            - melt_f: 6.53
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
@@ -604,7 +604,7 @@ class TestMassBalanceModels:
           Attributes:
             - hemisphere: nh
             - climate_source: GSWP3_W5E5_daily
-            - melt_f: 6.54
+            - melt_f: 6.53
             - prcp_fac: 2.50
             - temp_bias: 0.00
             - bias: 0.00
