@@ -30,7 +30,7 @@ import scipy.signal
 import shapely.geometry as shpg
 from scipy.interpolate import RegularGridInterpolator
 from scipy.ndimage import (gaussian_filter1d, distance_transform_edt,
-                           label, find_objects)
+                           label, find_objects, minimum_filter1d)
 
 # Optional libs
 try:
@@ -43,7 +43,7 @@ except ImportError:
     pass
 try:
     from skimage import measure
-    from skimage.graph import route_through_array
+    from skimage.graph import route_through_array, MCP_Geometric
 except ImportError:
     pass
 
@@ -1031,22 +1031,34 @@ def compute_downstream_line(gdir):
     _x = [xmesh[:, 0], xmesh[0, :], xmesh[:, -1], xmesh[-1, :]]
     _y = [ymesh[:, 0], ymesh[0, :], ymesh[:, -1], ymesh[-1, :]]
 
+    # Candidate exits: the local minima along the domain edge (within +/- 10
+    # grid points). Unlike scipy.signal.argrelmin, this also detects minima
+    # on flat stretches (e.g. with rounded DEMs).
+    cands = []
+    for h, x, y in zip(_h, _x, _y):
+        h = np.asarray(h)
+        ids = np.nonzero(minimum_filter1d(h, size=21, mode='wrap') == h)[0]
+        cands.extend(zip(y[ids], x[ids]))
+
+    # Cost of the cheapest route from the head to all grid points
+    # (same as route_through_array, but in one go)
+    mcp = MCP_Geometric(np.asarray(topo, dtype=np.float64),
+                        fully_connected=True)
+    costs, _ = mcp.find_costs([head])
+
     # Find the way out of the domain
     min_cost = np.inf
     min_len = np.inf
     line = None
-    for h, x, y in zip(_h, _x, _y):
-        ids = scipy.signal.argrelmin(h, order=10, mode='wrap')
-        if np.all(h == 0) or len(ids[0]) == 0:
-            # Test every fifth (we don't really care)
-            ids = [np.arange(0, len(h), 5)]
-        for i in ids[0]:
-            lids, cost = route_through_array(topo, head, (y[i], x[i]))
-            if ((cost < min_cost) or
-                    ((cost <= min_cost) and (len(lids) < min_len))):
-                min_cost = cost
-                min_len = len(lids)
-                line = shpg.LineString(np.array(lids)[:, [1, 0]])
+    for end in cands:
+        cost = costs[end]
+        if not np.isfinite(cost) or cost > min_cost:
+            continue
+        lids = mcp.traceback(end)
+        if (cost < min_cost) or (len(lids) < min_len):
+            min_cost = cost
+            min_len = len(lids)
+            line = shpg.LineString(np.array(lids)[:, [1, 0]])
     if line is None:
         raise GeometryError('Downstream line not found')
 
