@@ -16,8 +16,7 @@ Enhancements
   The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the 
   same for ``topo_smoothed``: it saves about as much space again. 
   This changes the results slightly. Set both to ``False`` to recover 
-  the previous behavior
-  (:pull:`2014`).
+  the previous behavior (:pull:`2014`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``compute_downstream_line`` now also finds the domain exits located on
   flat stretches of the domain edge (equal elevation values, more frequent
@@ -491,7 +490,10 @@ Breaking changes
   glacier directories are still read transparently by ``read_store``
   (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-
+- New ``PARAMS['round_dem']`` and ``PARAMS['round_smoothed_dem']`` params
+  changed a bit the centerlines and downstream lines results. This is most 
+  noticeable in the centerlines representation (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 v1.6.3 (April 13, 2026)
