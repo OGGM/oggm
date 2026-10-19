@@ -51,3 +51,17 @@ class FTPSDownloadError(Exception):
 class HttpContentTooShortError(Exception):
     def __init__(self, url):
         self.url = url
+
+
+class DownloadOutageError(RuntimeError):
+    """A download failed for a transient reason after every retry."""
+
+    def __init__(self, url, attempts, last_error):
+        # args must match the signature, or unpickling in the main
+        # process fails when a pool worker raises this
+        super().__init__(url, attempts, repr(last_error))
+        self.url, self.attempts, self.last_error = self.args
+
+    def __str__(self):
+        return (f"Download of {self.url} failed after {self.attempts} "
+                f"attempts: {self.last_error}")

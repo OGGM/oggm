@@ -32,7 +32,9 @@ from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              InvalidWorkflowError,
-                             DownloadVerificationFailedException)
+                             DownloadVerificationFailedException,
+                             DownloadOutageError, HttpDownloadError,
+                             HttpContentTooShortError)
 from oggm.core import flowline
 
 salem = pytest.importorskip('salem')
@@ -3903,10 +3905,11 @@ class TestDownloadCacheAtomicity:
         cfg.PARAMS["has_internet"] = True
         cfg.PARAMS["download_url_allowlist"] = []
         monkeypatch.setattr(_downloads.time, "sleep", lambda s: None)
+        monkeypatch.setattr(_downloads, "_DEAD_HOSTS", {})
         url = f"http://127.0.0.1:{server.server_port}/short.bin"
         try:
-            # file_downloader returns None once its retries are used up
-            assert utils.file_downloader(url, retry_max=3) is None
+            with pytest.raises(DownloadOutageError):
+                utils.file_downloader(url, retry_max=3)
         finally:
             server.shutdown()
             server.server_close()
@@ -3920,6 +3923,156 @@ class TestDownloadCacheAtomicity:
         out = _downloads._cached_download_helper(self.name, lambda p: None)
         assert out is None
         assert not os.path.exists(self.final)
+
+
+class TestDownloadRetries:
+
+    URL = "https://example.com/dir/file.txt"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_path, monkeypatch):
+        cfg.initialize()
+        cfg.PATHS["dl_cache_dir"] = str(tmp_path / "dl_cache")
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        utils.mkdir(cfg.PATHS["dl_cache_dir"])
+        utils.mkdir(cfg.PATHS["working_dir"])
+        monkeypatch.setattr(_downloads, "_DEAD_HOSTS", {})
+        self.sleeps = []
+        monkeypatch.setattr(_downloads.time, "sleep", self.sleeps.append)
+
+    def test_outage_error_survives_pickling(self):
+        import pickle
+
+        err = DownloadOutageError(self.URL, 3, OSError("refused"))
+        back = pickle.loads(pickle.dumps(err))
+        assert isinstance(back, RuntimeError)
+        assert back.url == self.URL
+        assert back.attempts == 3
+        assert "refused" in str(back)
+
+    def fake_dl(self, monkeypatch, *outcomes):
+        """Each call to the network pops an outcome: raise it or return it."""
+        outcomes = list(outcomes)
+        calls = []
+
+        def fake(url, **kwargs):
+            calls.append(url)
+            out = outcomes.pop(0) if len(outcomes) > 1 else outcomes[0]
+            if isinstance(out, BaseException):
+                raise out
+            return out
+
+        monkeypatch.setattr(_downloads, "_progress_urlretrieve", fake)
+        return calls
+
+    def test_connection_outage_is_retried_then_raises(self, monkeypatch):
+        import requests
+        from urllib3.exceptions import MaxRetryError, NewConnectionError
+
+        err = requests.ConnectionError(
+            MaxRetryError(None, self.URL, NewConnectionError(None, "refused"))
+        )
+        calls = self.fake_dl(monkeypatch, err)
+        with pytest.raises(DownloadOutageError) as exc:
+            utils.file_downloader(self.URL)
+        assert len(calls) == 3
+        assert self.sleeps == [5, 15]
+        assert exc.value.url == self.URL
+        assert exc.value.attempts == 3
+        assert exc.value.__cause__ is err
+
+    def test_recovers_after_two_failures(self, monkeypatch):
+        import requests
+
+        calls = self.fake_dl(
+            monkeypatch,
+            requests.ConnectionError("a"),
+            requests.ConnectionError("b"),
+            "/tmp/ok",
+        )
+        assert utils.file_downloader(self.URL) == "/tmp/ok"
+        assert len(calls) == 3
+        assert self.sleeps == [5, 15]
+
+    def test_404_is_a_miss_and_403_is_permanent(self, monkeypatch):
+        calls = self.fake_dl(monkeypatch, HttpDownloadError(404, self.URL))
+        assert utils.file_downloader(self.URL) is None
+        assert len(calls) == 1
+
+        calls = self.fake_dl(monkeypatch, HttpDownloadError(403, self.URL))
+        with pytest.raises(HttpDownloadError):
+            utils.file_downloader(self.URL)
+        assert len(calls) == 1
+        assert self.sleeps == []
+
+    @pytest.mark.parametrize(
+        "make_err",
+        [
+            lambda url: __import__("requests").ReadTimeout("slow"),
+            lambda url: HttpContentTooShortError(url),
+            lambda url: HttpDownloadError(503, url),
+            # a certificate failure is a ConnectionError too, so it ends up
+            # labelled an outage (accepted misclassification)
+            lambda url: __import__("requests").exceptions.SSLError("cert"),
+        ],
+    )
+    def test_transient_errors_are_retried(self, monkeypatch, make_err):
+        calls = self.fake_dl(monkeypatch, make_err(self.URL))
+        with pytest.raises(DownloadOutageError):
+            utils.file_downloader(self.URL)
+        assert len(calls) == 3
+
+    def test_dead_host_fails_fast_but_serves_cache(self, monkeypatch):
+        import requests
+
+        cfg.PARAMS["has_internet"] = True
+        cfg.PARAMS["download_url_allowlist"] = []
+        calls = []
+
+        def net(url, *args):
+            calls.append(url)
+            raise requests.ConnectionError("down")
+
+        monkeypatch.setattr(_downloads, "_requests_urlretrieve", net)
+        with pytest.raises(DownloadOutageError):
+            utils.file_downloader(self.URL)
+        assert len(calls) == 3
+
+        other = "https://example.com/dir/other.txt"
+        with pytest.raises(DownloadOutageError):
+            utils.file_downloader(other)
+        assert len(calls) == 3
+
+        cached = os.path.join(
+            cfg.PATHS["dl_cache_dir"], "example.com/dir/cached.txt"
+        )
+        utils.mkdir(os.path.dirname(cached))
+        with open(cached, "w") as f:
+            f.write("cached")
+        url = "https://example.com/dir/cached.txt"
+        assert utils.file_downloader(url) == cached
+        assert len(calls) == 3
+
+    def test_classic_urlretrieve_takes_the_default_timeout(
+        self, tmp_path, monkeypatch
+    ):
+        import inspect
+
+        timeout = (
+            inspect.signature(utils.file_downloader)
+            .parameters["timeout"]
+            .default
+        )
+        seen = []
+        monkeypatch.setattr(
+            _downloads.urllib.request,
+            "urlretrieve",
+            lambda *a: seen.append(_downloads.socket.getdefaulttimeout()),
+        )
+        _downloads._classic_urlretrieve(
+            self.URL, str(tmp_path / "f"), None, timeout=timeout
+        )
+        assert seen == [60]
 
 
 class FakeDownloadManager():

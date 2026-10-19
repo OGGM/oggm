@@ -56,7 +56,8 @@ from oggm.exceptions import (InvalidParamsError, NoInternetException,
                              DownloadVerificationFailedException,
                              DownloadCredentialsMissingException,
                              HttpDownloadError, HttpContentTooShortError,
-                             InvalidDEMError, FTPSDownloadError)
+                             InvalidDEMError, FTPSDownloadError,
+                             DownloadOutageError)
 
 # Python 3.12+ gives a deprecation warning if TarFile.extraction_filter is None.
 # https://docs.python.org/3.12/library/tarfile.html#tarfile-extraction-filter
@@ -463,6 +464,10 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
         cache_obj_name = _get_url_cache_name(url)
 
     def _dlf(cache_path):
+        # here rather than in file_downloader, so cache hits still work
+        host = urlparse(url).netloc
+        if _DEAD_HOSTS.get(host, 0) > time.monotonic():
+            raise DownloadOutageError(url, 0, f"{host} failed recently")
         logger.info("Downloading %s to %s..." % (url, cache_path))
         try:
             _requests_urlretrieve(url, cache_path, reporthook, auth, timeout)
@@ -539,52 +544,56 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
-def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
-                    cache_name=None, reset=False, auth=None,
-                    timeout=None):
-    """A slightly better downloader: it tries more than once."""
+_DEAD_HOSTS = {}  # netloc -> time.monotonic() until which to fail fast
 
-    local_path = None
-    retry_counter = 0
-    while retry_counter < retry_max:
-        # Try to download
+
+def file_downloader(
+    www_path: str,
+    retry_max: int = 3,
+    sleep_on_retry: int = 5,
+    cache_name: str = None,
+    reset: bool = False,
+    auth=None,
+    timeout: int = 60,
+):
+    """A slightly better downloader: it tries more than once.
+
+    Returns
+    -------
+    str | None
+        The path to the downloaded file, or ``None`` for 404 or 300
+        errors.
+
+    Raises
+    ------
+    ``DownloadOutageError`` when a transient error (5xx, connection,
+    timeout, truncation) persists over the ``retry_max`` attempts.
+    """
+
+    last = None
+    for attempt in range(1, retry_max + 1):
         try:
-            retry_counter += 1
-            local_path = _progress_urlretrieve(www_path, cache_name=cache_name,
-                                               reset=reset, auth=auth,
-                                               timeout=timeout)
-            # if no error, exit
-            break
-        except HttpDownloadError as err:
-            # This works well for py3
-            if err.code == 404 or err.code == 300:
-                # Ok so this *should* be an ocean tile
-                return None
-            elif err.code >= 500 and err.code < 600:
-                logger.info(f"Downloading {www_path} failed with "
-                            f"HTTP error {err.code}, "
-                            f"retrying in {sleep_on_retry} seconds... "
-                            f"{retry_counter}/{retry_max}")
-                time.sleep(sleep_on_retry)
-                continue
-            else:
-                raise
-        except HttpContentTooShortError as err:
-            logger.info(
-                "Downloading %s failed with ContentTooShortError,"
-                " retrying in %s seconds... %s/%s"
-                % (www_path, sleep_on_retry, retry_counter, retry_max)
+            return _progress_urlretrieve(
+                www_path,
+                cache_name=cache_name,
+                reset=reset,
+                auth=auth,
+                timeout=timeout,
             )
-            time.sleep(sleep_on_retry)
-            continue
+        except HttpDownloadError as err:
+            if err.code in (404, 300):
+                return None
+            if not 500 <= err.code < 600:
+                raise
+            last = err
         except DownloadVerificationFailedException as err:
+            #  TODO: remove after cache integrity clean-up as this is never raised
             if (cfg.PATHS['dl_cache_dir'] and
                   err.path.startswith(cfg.PATHS['dl_cache_dir']) and
                   cfg.PARAMS['dl_cache_readonly']):
                 if not cache_name:
                     cache_name = _get_url_cache_name(www_path)
                 cache_name = "GLOBAL_CACHE_INVALID/" + cache_name
-                retry_counter -= 1
                 logger.info("Global cache for %s is invalid!")
             else:
                 try:
@@ -595,32 +604,26 @@ def file_downloader(www_path, retry_max=3, sleep_on_retry=5,
                             "DownloadVerificationFailedException\n %s\n"
                             "The file might have changed or is corrupted. "
                             "File deleted. Re-downloading... %s/%s" %
-                            (www_path, err.msg, retry_counter, retry_max))
+                            (www_path, err.msg, attempt, retry_max))
             continue
-        except requests.ConnectionError as err:
-            if err.args[0].__class__.__name__ == 'MaxRetryError':
-                # if request tried often enough we don't have to do this
-                # this error does happen for not existing ASTERv3 files
-                return None
-            else:
-                # in other cases: try again
-                logger.info("Downloading %s failed with ConnectionError, "
-                            "retrying in %s seconds... %s/%s" %
-                            (www_path, sleep_on_retry, retry_counter, retry_max))
-                time.sleep(sleep_on_retry)
-                continue
-        except FTPSDownloadError as err:
-            logger.info("Downloading %s failed with FTPSDownloadError"
-                        " error: '%s', retrying in %s seconds... %s/%s" %
-                        (www_path, err.orgerr, sleep_on_retry, retry_counter, retry_max))
-            time.sleep(sleep_on_retry)
-            continue
+        except (
+            requests.ConnectionError,
+            requests.Timeout,
+            HttpContentTooShortError,
+            FTPSDownloadError,
+        ) as err:
+            last = err
+        if attempt < retry_max:
+            wait = sleep_on_retry * 3 ** (attempt - 1)
+            logger.info(
+                f"Downloading {www_path} failed with "
+                f"{type(last).__name__}, retrying in {wait} s... "
+                f"{attempt}/{retry_max}"
+            )
+            time.sleep(wait)
 
-    # See if we managed (fail is allowed)
-    if not local_path or not os.path.exists(local_path):
-        logger.warning('Downloading %s failed.' % www_path)
-
-    return local_path
+    _DEAD_HOSTS[urlparse(www_path).netloc] = time.monotonic() + 120
+    raise DownloadOutageError(www_path, retry_max, last) from last
 
 
 def locked_func(func):
