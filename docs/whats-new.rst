@@ -13,13 +13,11 @@ Enhancements
   rounded to the nearest meter before being written to ``dem.tif`` and to
   ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
   stored as floats (e.g. COPDEM). The data type is unchanged (float32).
-  Set ``round_dem`` to ``False`` to recover the previous behavior. The new
-  ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the same for
-  ``topo_smoothed``: it saves about as much space again. This changes the
-  results slightly: in a test on 300 Alpine glaciers (elevation bands), the
-  regional volume changed by -0.2%, with differences of about +/-2% for
-  individual glaciers. Set it to ``False`` to recover the previous behavior
-  (:issue:`1864`).
+  The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the 
+  same for ``topo_smoothed``: it saves about as much space again. 
+  This changes the results slightly. Set both to ``False`` to recover 
+  the previous behavior
+  (:pull:`2014`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``compute_downstream_line`` now also finds the domain exits located on
   flat stretches of the domain edge (equal elevation values, more frequent
