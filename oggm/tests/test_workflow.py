@@ -46,7 +46,8 @@ def clean_dir(testdir):
     os.makedirs(testdir)
 
 
-def up_to_climate(reset=False, use_mp=None, params_file=None):
+def up_to_climate(reset=False, use_mp=None, params_file=None,
+                  round_smoothed_dem=True):
     """Run the tasks you want."""
 
     # test directory
@@ -61,6 +62,7 @@ def up_to_climate(reset=False, use_mp=None, params_file=None):
 
     # Init
     cfg.initialize(file=params_file)
+    cfg.PARAMS['round_smoothed_dem'] = round_smoothed_dem
 
     # Use multiprocessing
     use_mp = False
@@ -131,10 +133,11 @@ def up_to_climate(reset=False, use_mp=None, params_file=None):
     return gdirs
 
 
-def up_to_inversion(reset=False, params_file=None):
+def up_to_inversion(reset=False, params_file=None, round_smoothed_dem=True):
     """Run the tasks you want."""
 
-    gdirs = up_to_climate(reset=reset, params_file=params_file)
+    gdirs = up_to_climate(reset=reset, params_file=params_file,
+                          round_smoothed_dem=round_smoothed_dem)
 
     with open(CLI_LOGF, 'rb') as f:
         clilog = pickle.load(f)
@@ -161,7 +164,7 @@ def up_to_inversion(reset=False, params_file=None):
     return gdirs
 
 
-def random_for_plot():
+def random_for_plot(round_smoothed_dem=True):
 
     # Fake Reset (all these tests are horribly coded)
     try:
@@ -169,7 +172,8 @@ def random_for_plot():
             pickle.dump('none', f)
     except FileNotFoundError:
         pass
-    gdirs = up_to_inversion(reset=True)
+    gdirs = up_to_inversion(reset=True,
+                            round_smoothed_dem=round_smoothed_dem)
 
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
     workflow.execute_entity_task(flowline.run_random_climate, gdirs, y0=1985,
@@ -365,7 +369,7 @@ class TestFullRun(unittest.TestCase):
         shp_w = gpd.read_file(fpath)
         self.assertTrue(shp_w is not None)
         shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
-        self.assertEqual(len(shp_w), 90)
+        self.assertEqual(len(shp_w), 91)
 
         fpath = os.path.join(_TEST_DIR, 'widths_corr.shp')
         write_centerlines_to_shape(gdirs, path=fpath, corrected_widths_output=True)
@@ -373,7 +377,7 @@ class TestFullRun(unittest.TestCase):
         shp_w = gpd.read_file(fpath)
         self.assertTrue(shp_w is not None)
         shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
-        self.assertEqual(len(shp_w), 90)
+        self.assertEqual(len(shp_w), 91)
 
         # Test that one wrong glacier still works
         base_dir = os.path.join(cfg.PATHS['working_dir'], 'dummy_pergla')
@@ -540,26 +544,33 @@ def test_plot_region_inversion():
 
     pytest.importorskip('pytest_mpl')
 
-    gdirs = up_to_inversion(reset=True)
+    try:
+        # The reference image was made with an unrounded topo_smoothed
+        gdirs = up_to_inversion(reset=True, round_smoothed_dem=False)
 
-    # We prepare for the plot, which needs our own map to proceed.
-    # Lets do a local mercator grid
-    g = salem.mercator_grid(center_ll=(10.86, 46.85),
-                            extent=(27000, 21000))
-    # And a map accordingly
-    sm = salem.Map(g, countries=False)
-    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+        # We prepare for the plot, which needs our own map to proceed.
+        # Lets do a local mercator grid
+        g = salem.mercator_grid(center_ll=(10.86, 46.85),
+                                extent=(27000, 21000))
+        # And a map accordingly
+        sm = salem.Map(g, countries=False)
+        sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
-    # Give this to the plot function
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-    graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5, vmax=250)
+        # Give this to the plot function
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+        graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5,
+                                vmax=250)
 
-    # test automatic definition of larger plotting grid with extend_plot_limit
-    graphics.plot_inversion(gdirs, ax=ax2, linewidth=1.5, vmax=250,
-                            extend_plot_limit=True)
+        # test automatic definition of larger plotting grid with
+        # extend_plot_limit
+        graphics.plot_inversion(gdirs, ax=ax2, linewidth=1.5, vmax=250,
+                                extend_plot_limit=True)
 
-    fig.tight_layout()
-    return fig
+        fig.tight_layout()
+        return fig
+    finally:
+        # Don't leave the unrounded gdirs for the next tests
+        clean_dir(_TEST_DIR)
 
 
 @pytest.mark.slow
@@ -569,33 +580,39 @@ def test_plot_region_model():
 
     pytest.importorskip('pytest_mpl')
 
-    gdirs = random_for_plot()
+    try:
+        # The reference image was made with an unrounded topo_smoothed
+        gdirs = random_for_plot(round_smoothed_dem=False)
 
-    dfc = utils.compile_task_log(gdirs,
-                                 task_names=['run_random_climate_plot'])
-    assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
+        dfc = utils.compile_task_log(gdirs,
+                                     task_names=['run_random_climate_plot'])
+        assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
 
-    # We prepare for the plot, which needs our own map to proceed.
-    # Lets do a local mercator grid
-    g = salem.mercator_grid(center_ll=(10.86, 46.85),
-                            extent=(27000, 21000))
-    # And a map accordingly
-    sm = salem.Map(g, countries=False)
-    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+        # We prepare for the plot, which needs our own map to proceed.
+        # Lets do a local mercator grid
+        g = salem.mercator_grid(center_ll=(10.86, 46.85),
+                                extent=(27000, 21000))
+        # And a map accordingly
+        sm = salem.Map(g, countries=False)
+        sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
-    # Give this to the plot function
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-    graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
-                                  filesuffix='_plot', vmax=250,
-                                  modelyr=10, linewidth=1.5)
-    # test automatic definition of larger plotting grid with extend_plot_limit
-    graphics.plot_modeloutput_map(gdirs, ax=ax2,
-                                  filesuffix='_plot', vmax=250,
-                                  modelyr=10, linewidth=1.5,
-                                  extend_plot_limit=True)
+        # Give this to the plot function
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+        graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
+                                      filesuffix='_plot', vmax=250,
+                                      modelyr=10, linewidth=1.5)
+        # test automatic definition of larger plotting grid with
+        # extend_plot_limit
+        graphics.plot_modeloutput_map(gdirs, ax=ax2,
+                                      filesuffix='_plot', vmax=250,
+                                      modelyr=10, linewidth=1.5,
+                                      extend_plot_limit=True)
 
-    fig.tight_layout()
-    return fig
+        fig.tight_layout()
+        return fig
+    finally:
+        # Don't leave the unrounded gdirs for the next tests
+        clean_dir(_TEST_DIR)
 
 
 def test_rgi7_glacier_dirs():
