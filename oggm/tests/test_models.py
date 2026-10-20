@@ -7403,6 +7403,57 @@ class TestDynamicSpinup:
         # the recovery tried more than once (it stopped after one try before)
         assert diag['run_dynamic_melt_f_calibration_iterations'] > 3
 
+    def test_run_dynamic_melt_f_calibration_recovers_from_error_at_limit(
+            self, hef_gdir, case_dir):
+        # if run_function fails with melt_f at a limit, calibration
+        # should retry with a different limit instead of falling back.
+        gdir = tasks.copy_to_basedir(hef_gdir, base_dir=case_dir, setup='all')
+        melt_f_initial = gdir.settings['melt_f']
+        ref_mb = -500.
+        ref_mb_err = 100.
+
+        calls = []
+
+        def fake_run_function(gdir, melt_f=None, set_local_variables=False,
+                              **kwargs):
+            if set_local_variables:
+                return
+            define_new_melt_f_in_gdir(gdir, melt_f)
+            calls.append(melt_f)
+            if len(calls) == 1:
+                # large positive mismatch pushes the second guess above the
+                # upper melt_f limit
+                return None, ref_mb + 10 * ref_mb_err
+            elif len(calls) == 2:
+                # fail while melt_f sits at the upper limit
+                raise RuntimeError('planned error at melt_f limit')
+            return None, ref_mb
+
+        def fake_fallback_function(*args, **kwargs):
+            raise AssertionError('fallback_function must not be called')
+
+        run_dynamic_melt_f_calibration(
+            gdir, observations_filesuffix='_recovery_test',
+            ref_mb=ref_mb, ref_mb_err=ref_mb_err,
+            ref_mb_period='1980-01-01_2000-01-01',
+            ys=1980, ye=2000,
+            # with these limits, melt_f_max_step_length is 1
+            melt_f_min=1, melt_f_max=melt_f_initial + 10,
+            melt_f_max_step_length_minimum=1.,
+            run_function=fake_run_function,
+            fallback_function=fake_fallback_function,
+            output_filesuffix='_dyn_melt_f_recovery')
+
+        # first guess, failing run at the upper limit, successful retry
+        assert len(calls) == 3
+        assert np.isclose(calls[0], melt_f_initial)
+        # second guess was clipped to the upper limit
+        assert np.isclose(calls[1], melt_f_initial + 1.)
+        # retry below the failing limit in steps of melt_f_max_step_length / 10
+        assert np.isclose(calls[2], melt_f_initial + 1. - 0.1)
+        assert gdir.settings['used_spinup_option'] == \
+               'dynamic melt_f calibration (full success)'
+
 
 @pytest.mark.usefixtures('with_class_wd')
 @pytest.mark.test_env("models_dynamics")

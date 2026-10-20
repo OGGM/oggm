@@ -287,8 +287,9 @@ Bug fixes
   and added a bisection fallback for non-monotonic responses. This changes
   the calibrated melt_f of some glaciers. The new
   ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic stores why the
-  calibration stopped.
-  By `Fabien Maussion <https://github.com/fmaussion>`_
+  calibration stopped (:pull:`2005`, :pull:`1963`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
 - ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
   have origin widths > 0" when the inversion returns a trapezoid sitting
   exactly on its physical boundary (thickness = width / lambda, i.e. a zero
