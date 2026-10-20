@@ -12,10 +12,12 @@ import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 
 from oggm import cfg, tasks
+from oggm.exceptions import DownloadOutageError
 from oggm.core import flowline
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils
 from oggm.utils import mkdir
+from oggm.utils import _downloads
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 from oggm.workflow import reset_multiprocessing
 
@@ -101,6 +103,96 @@ def pytest_collection_modifyitems(config, items):
 
             if not HAS_MPL_FOR_TESTS:
                 item.add_marker(graphic_marker)
+
+
+"""
+Denote if a failure was caused by a download outage. This is then
+explicitly named in GH Actions report. If all failures were caused by
+download outages, the exit code changes to 75.
+"""
+_FAILED = pytest.StashKey[set]()
+_OUTAGES = pytest.StashKey[list]()  # (nodeid, url, detail, probable)
+
+
+def _find_outage(exc):
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        if isinstance(exc, DownloadOutageError):
+            return exc
+        seen.add(id(exc))
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    item._outages_before = len(_downloads.OUTAGES)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item, call):
+    rep = yield
+    if not rep.failed:
+        return rep
+    item.config.stash.setdefault(_FAILED, set()).add(item.nodeid)
+    if call.when not in ("setup", "call"):
+        return rep
+    err = _find_outage(call.excinfo.value)
+    if err is not None:
+        entry = (
+            item.nodeid,
+            err.url,
+            f"{err.attempts} attempts: {err.last_error}",
+            False,
+        )
+    elif len(_downloads.OUTAGES) > getattr(item, "_outages_before", 0):
+        # continue_on_error logged the outage and the test failed later
+        entry = (item.nodeid, *_downloads.OUTAGES[-1], True)
+    else:
+        return rep
+    item.config.stash.setdefault(_OUTAGES, []).append(entry)
+    rep.sections.append(("INFRA OUTAGE", _outage_line(entry)))
+    return rep
+
+
+def _outage_line(entry):
+    nodeid, url, detail, probable = entry
+    return f"{'probable: ' if probable else ''}{url}: {detail}"
+
+
+def pytest_terminal_summary(terminalreporter):
+    outages = terminalreporter.config.stash.get(_OUTAGES, [])
+    if not outages:
+        return
+    if os.environ.get("GITHUB_ACTIONS"):
+        for nodeid, url, _, _ in outages:
+            terminalreporter.write_line(
+                f"::error title=Download outage::{nodeid}: {url}"
+            )
+    else:
+        terminalreporter.section("INFRA OUTAGE")
+        for entry in outages:
+            terminalreporter.write_line(f"{entry[0]}: {_outage_line(entry)}")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a") as f:
+            f.write(
+                "\n### Download outages\n\n"
+                "| Test | URL | Detail | Probable |\n|---|---|---|---|\n"
+            )
+            for nodeid, url, detail, probable in outages:
+                detail = detail.replace("|", "\\|")
+                f.write(
+                    f"| `{nodeid}` | {url} | {detail} | "
+                    f"{'yes' if probable else 'no'} |\n"
+                )
+
+
+def pytest_sessionfinish(session, exitstatus):
+    failed = session.config.stash.get(_FAILED, set())
+    labelled = {e[0] for e in session.config.stash.get(_OUTAGES, [])}
+    if exitstatus == 1 and failed <= labelled:
+        session.exitstatus = 75  # could change to EX_UNAVAILABLE?
 
 
 @pytest.fixture(scope='function', autouse=True)

@@ -467,7 +467,9 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
         # here rather than in file_downloader, so cache hits still work
         host = urlparse(url).netloc
         if _DEAD_HOSTS.get(host, 0) > time.monotonic():
-            raise DownloadOutageError(url, 0, f"{host} failed recently")
+            err = DownloadOutageError(url, 0, f"{host} failed recently")
+            OUTAGES.append((url, str(err)))
+            raise err
         logger.info("Downloading %s to %s..." % (url, cache_path))
         try:
             _requests_urlretrieve(url, cache_path, reporthook, auth, timeout)
@@ -545,6 +547,9 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
 
 
 _DEAD_HOSTS = {}  # netloc -> time.monotonic() until which to fail fast
+# so the test suite can label failures when an outage is ignored by
+# `continue_on_error`
+OUTAGES = []
 
 
 def file_downloader(
@@ -623,7 +628,9 @@ def file_downloader(
             time.sleep(wait)
 
     _DEAD_HOSTS[urlparse(www_path).netloc] = time.monotonic() + 120
-    raise DownloadOutageError(www_path, retry_max, last) from last
+    err = DownloadOutageError(www_path, retry_max, last)
+    OUTAGES.append((www_path, str(err)))
+    raise err from last
 
 
 def locked_func(func):
