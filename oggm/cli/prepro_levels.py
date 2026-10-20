@@ -49,12 +49,22 @@ log = logging.getLogger(__name__)
 # after the glacier directory content.
 PREPRO_LEVELS = ['0', '1', '2', '3a', '3', '4a', '4', '5']
 
-# The half levels, as (integer level, name of the flag they set)
+# The (start_level, max_level) pairs which can be run in chunks. Any other
+# stage ends a full level, and therefore writes region-wide summary files.
+CHUNKABLE_STAGES = [('2', '3a'), ('3', '4a')]
+
+# The integer level each half level belongs to
 _HALF_LEVELS = {'3a': 3, '4a': 4}
 
 
 def _parse_max_level(max_level):
-    """Split `max_level` into an int and the two "stop early" flags."""
+    """Split `max_level` into an int and two "stop early" flags.
+
+    Returns
+    -------
+    (max_level, stop_before_inversion, skip_summary), where
+    `stop_before_inversion` is True for '3a' and `skip_summary` for '4a'.
+    """
 
     max_level = str(max_level)
     if max_level not in PREPRO_LEVELS[1:]:
@@ -67,11 +77,16 @@ def _parse_max_level(max_level):
 
 
 def _parse_start_level(start_level):
-    """Split `start_level` into an int and the two "resume here" flags.
+    """Split `start_level` into an int and two "resume here" flags.
 
     The integer is the level the *previous* full level block ends at, so that
     all the existing `start_level <= n` logic keeps working untouched: a run
     resuming at `3a` still has to enter the L3 block, hence start_level 2.
+
+    Returns
+    -------
+    (start_level, resume_at_inversion, summary_only), where
+    `resume_at_inversion` is True for '3a' and `summary_only` for '4a'.
     """
 
     if start_level is None:
@@ -426,7 +441,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         blocks of the RGI id space, so that several chunk jobs writing into
         the same output folder produce disjoint, complete tar files. Use
         :py:func:`oggm.workflow.count_rgi_chunks` to know how many chunks a
-        region has. Default is to process all glaciers.
+        region has. Default is to process all glaciers. Only allowed for the
+        per-glacier stages 2 -> '3a' and 3 -> '4a': all others write
+        region-wide summary files.
     chunk_size : int
         the number of glaciers per chunk: 100 or 1000 (default). These are the
         only two allowed, because they are the bundle sizes the glacier
@@ -562,12 +579,25 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             f'({start_level_name}).')
 
     if chunk_idx is not None:
-        # Fail early on a bad chunk_size, rather than after the RGI file has
-        # been read (this validates it and returns 0 on the empty list)
-        workflow.count_rgi_chunks([], chunk_size=chunk_size)
+        # Chunks have to line up with the tar bundles written by
+        # base_dir_to_tar, or two chunk jobs would write the same tar file
+        if chunk_size not in [100, 1000]:
+            raise InvalidParamsError('chunk_size must be 100 or 1000, got '
+                                     f'{chunk_size}')
         if chunk_idx < 0:
             raise InvalidParamsError('chunk_idx should be positive, got '
                                      f'{chunk_idx}')
+        # Every full level ends with region-wide summary files (and L3 with
+        # the region-wide Glen A calibration). A chunk job doing that would
+        # silently produce summaries for its own glaciers only, which the
+        # other chunks then overwrite. So a chunk job must stay within the
+        # per-glacier part of a level.
+        if (start_level_name, max_level_name) not in CHUNKABLE_STAGES:
+            raise InvalidParamsError(
+                'chunk_idx can only be used for the per-glacier stages '
+                f'{CHUNKABLE_STAGES} (start_level, max_level), got '
+                f'({start_level_name}, {max_level_name}). The other stages '
+                'need the whole RGI region at once.')
 
     # The mass balance is calibrated in L3 only - and not by a run which
     # resumes at the inversion, since that part is already done by then
@@ -706,7 +736,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 # RGI7
                 rgidf = rgidf.loc[rgidf.rgi_id.isin(test_ids)]
         else:
-            # Seeded for chucked runs
+            # Seeded, so that all the jobs of a chunked run pick the same
+            # four glaciers
             rgidf = rgidf.sample(4, random_state=0)
 
     if len(rgidf) == 0:
@@ -728,7 +759,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             # so an empty chunk is a normal thing. Stop here, but without an
             # error: on a cluster this is one task of an array job, and a
             # failure would take the dependent jobs down with it.
-            log.workflow('This chunk is empty, nothing to do.')
+            msg = 'This chunk is empty, nothing to do.'
+            if chunk_idx >= n_chunks:
+                # Not an error either (a test run has fewer chunks than the
+                # region), but often a sign of wrong array bounds
+                msg += (f' Note that it is beyond the last chunk ('
+                        f'{n_chunks - 1}): chunk indices start at 0, check '
+                        'that your job array does too.')
+            log.workflow(msg)
             _time_log()
             return
 
@@ -1253,30 +1291,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         sum_dir_L3 = sum_dir
 
     # L4 - Tasks (add historical runs (old default) and dynamic spinup runs)
+    #
+    # In three parts: the model runs are per-glacier (this is what the `4a`
+    # chunks do), the summary files need the whole region (this is what a run
+    # resuming at `4a` does), and the tar files are written by whoever ran the
+    # model.
     if start_level <= 3:
         sum_dir = Path(output_base_dir) / 'L4' / 'summary'
 
-        # The summary files are written by the whole-region part of L4, so a
-        # chunked run stopping at `4a` has nothing to do with them
-        if not skip_summary:
-            utils.mkdir(sum_dir)
-
-            # Copy L3 files for consistency
-            for bn in ['glacier_statistics', 'climate_statistics',
-                       'fixed_geometry_mass_balance']:
-                if start_level <= 2:
-                    ipath = sum_dir_L3 / f'{bn}_{rgi_reg}.csv'
-                else:
-                    ipath = _forward_summary_path(
-                        f'{bn}_{rgi_reg}.csv', start_level,
-                        start_from_dir, start_base_url, rgi_version, border)
-
-                opath = sum_dir / f'{bn}_{rgi_reg}.csv'
-                shutil.copyfile(ipath, opath)
-
-        # The runs are per-glacier: this is the part of L4 which can be run
-        # in chunks. A run resuming at `4a` has them done already and only
-        # needs to compile the summary files, which needs the whole region.
+        # The runs, per glacier
         if summary_only:
             log.workflow('Resuming L4 at the summary files: the model runs '
                          'are read from the glacier directories we started '
@@ -1321,16 +1344,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                     **kwargs_run_from_climate_data
                 )
 
-        if not skip_summary:
-            # Now compile the output
-            opath = Path(sum_dir) / f'historical_run_output_{rgi_reg}.nc'
-            utils.compile_run_output(gdirs, path=opath,
-                                     input_filesuffix='_historical')
-
-        # conduct dynamic spinup if wanted
-        if dynamic_spinup:
-
-            if not summary_only:
+            # conduct dynamic spinup if wanted
+            if dynamic_spinup:
                 minimise_for = dynamic_spinup.split('/')[0]
 
                 melt_f_max = cfg.PARAMS['melt_f_max']
@@ -1371,13 +1386,32 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                         **kwargs_run_dynamic_melt_f_calibration
                     )
 
-            if not skip_summary:
-                # Now compile the output
+        # The summary files, for the whole region
+        if not skip_summary:
+            utils.mkdir(sum_dir)
+
+            # Copy L3 files for consistency
+            for bn in ['glacier_statistics', 'climate_statistics',
+                       'fixed_geometry_mass_balance']:
+                if start_level <= 2:
+                    ipath = sum_dir_L3 / f'{bn}_{rgi_reg}.csv'
+                else:
+                    ipath = _forward_summary_path(
+                        f'{bn}_{rgi_reg}.csv', start_level,
+                        start_from_dir, start_base_url, rgi_version, border)
+
+                opath = sum_dir / f'{bn}_{rgi_reg}.csv'
+                shutil.copyfile(ipath, opath)
+
+            # Compile the run output
+            opath = sum_dir / f'historical_run_output_{rgi_reg}.nc'
+            utils.compile_run_output(gdirs, path=opath,
+                                     input_filesuffix='_historical')
+            if dynamic_spinup:
                 opath = sum_dir / f'spinup_historical_run_output_{rgi_reg}.nc'
                 utils.compile_run_output(gdirs, path=opath,
                                          input_filesuffix='_spinup_historical')
 
-        if not skip_summary:
             # Glacier statistics we recompute here for error analysis
             opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
             utils.compile_glacier_statistics(gdirs, path=opath)
@@ -1394,8 +1428,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                           path=opath)
 
         # L4 OK - compress all in output directory. A run which only added
-        # the summary files did not touch the directories, and the `4a` stage
-        # has already written them to the very same folder.
+        # the summary files did not touch the directories: the `4a` chunks
+        # have already written them to the very same folder.
         if not summary_only:
             log.workflow('L4 done. Writing to tar...')
             level_base_dir = Path(output_base_dir) / 'L4'
@@ -1504,7 +1538,8 @@ def parse_args(args):
                              'produce disjoint, complete tar files. Meant to '
                              'be set to $SLURM_ARRAY_TASK_ID. Use the '
                              'oggm_prepro_chunks command to know how many '
-                             'chunks a region has.')
+                             'chunks a region has. Only for the per-glacier '
+                             'stages 2 -> 3a and 3 -> 4a.')
     parser.add_argument('--chunk-size', type=int, default=1000,
                         choices=[100, 1000],
                         help='the number of glaciers per chunk (default '
