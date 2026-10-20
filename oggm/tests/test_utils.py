@@ -3949,6 +3949,14 @@ class TestDownloadRetries:
         assert back.url == self.URL
         assert back.attempts == 3
         assert "refused" in str(back)
+        assert back.last_error == "OSError('refused')"
+        # args must not gain a layer of quotes per round trip
+        assert back.args == err.args
+        assert pickle.loads(pickle.dumps(back)).args == err.args
+
+    def test_outage_error_keeps_message_unquoted(self):
+        err = DownloadOutageError(self.URL, 0, "h failed recently")
+        assert err.last_error == "h failed recently"
 
     def fake_dl(self, monkeypatch, *outcomes):
         """Each call to the network pops an outcome: raise it or return it."""

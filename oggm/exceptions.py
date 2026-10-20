@@ -54,14 +54,42 @@ class HttpContentTooShortError(Exception):
 
 
 class DownloadOutageError(RuntimeError):
-    """A download failed for a transient reason after every retry."""
+    """A download failed for a transient reason after every retry.
+
+    Parameters
+    ----------
+    url : str
+        The URL that failed.
+    attempts : int
+        The number of attempts made. Zero means the host failed recently
+        and the download was skipped.
+    last_error : str or Exception
+        The last error. An exception is stored as its ``repr``.
+
+    Attributes
+    ----------
+    url : str
+    attempts : int
+    last_error : str
+        The ``repr`` of the last exception, or a message. It is never the
+        exception itself, so the error pickles across pool workers.
+    """
 
     def __init__(self, url, attempts, last_error):
-        # args must match the signature, or unpickling in the main
-        # process fails when a pool worker raises this
-        super().__init__(url, attempts, repr(last_error))
+        """Initialize the DownloadOutageError.
+
+        Args must match the signature, or unpickling in the main
+        process fails if a pool worker raises this error, e.g. if a str
+        is passed through, a round trip won't repr it again.
+        """
+
+        if not isinstance(last_error, str):
+            last_error = repr(last_error)
+        super().__init__(url, attempts, last_error)
         self.url, self.attempts, self.last_error = self.args
 
     def __str__(self):
-        return (f"Download of {self.url} failed after {self.attempts} "
-                f"attempts: {self.last_error}")
+        return (
+            f"Download of {self.url} failed after {self.attempts} "
+            f"attempts: {self.last_error}"
+        )

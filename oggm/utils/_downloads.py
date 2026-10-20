@@ -547,9 +547,10 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
 
 
 _DEAD_HOSTS = {}  # netloc -> time.monotonic() until which to fail fast
-# so the test suite can label failures when an outage is ignored by
-# `continue_on_error`
-OUTAGES = []
+
+# (url, message) is appended before every `raise DownloadOutageError`,
+# so the test suite can label failures missed with `continue_on_error`.
+OUTAGES = []  # TODO(ON-125): this is currently unbounded. and should be capped
 
 
 def file_downloader(
