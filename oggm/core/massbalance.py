@@ -630,44 +630,50 @@ class MonthlyTIModel(MassBalanceModel):
         self._temp_bias = temp_bias
 
         # Read climate file
-        fpath = gdir.get_filepath(filename, filesuffix=input_filesuffix)
-        with ncDataset(fpath, mode='r') as nc:
-            time = nc.variables["time"]
-            time = cftime.num2date(time[:], time.units, calendar=time.calendar)
+        with gdir.open_group(filename, filesuffix=input_filesuffix) as ds:
+            ds = ds.load()
 
-            # only use defined years
-            years = np.array(list(map(lambda x: x.year, time)))
-            pok = slice(None)  # take all is default (optim)
-            if ys is not None:
-                pok = years >= ys
-            if ye is not None:
-                try:
-                    pok = pok & (years <= ye)
-                except TypeError:
-                    pok = years <= ye
+        # time
+        time = ds.indexes['time']
+        # time = cftime.num2date(time[:], time.units, calendar=time.calendar)
 
-            self.years = years[pok]
-            self.months = np.array(list(map(lambda x: x.month, time)))[pok]
-            self.days = np.array(list(map(lambda x: x.day, time)))[pok]
+        # only use defined years
 
-            if check_climate_data:
-                # check for full years, this is overwritten for daily
-                self._check_for_full_years()
+        years = np.array(list(map(lambda x: x.year,
+                                    time)))
+        pok = slice(None)  # take all is default (optim)
+        if ys is not None:
+            pok = years >= ys
+        if ye is not None:
+            try:
+                pok = pok & (years <= ye)
+            except TypeError:
+                pok = years <= ye
 
-            # Read timeseries and correct it
-            self.temp = nc.variables["temp"][pok].astype(np.float64) + self._temp_bias
-            self.prcp = nc.variables["prcp"][pok].astype(np.float64) * self._prcp_fac
+        self.years = years[pok]
+        self.months = np.array(list(map(lambda x: x.month, time)))[pok]
+        self.days = np.array(list(map(lambda x: x.day, time)))[pok]
 
-            grad = self.prcp * 0 + self.temp_default_gradient
-            self.grad = grad
-            self.ref_hgt = nc.ref_hgt
-            self.climate_source = nc.climate_source
-            self.ys = self.years[0]
-            self.ye = self.years[-1]
-            self.ys_float = date_to_floatyear(self.years[0], self.months[0],
-                                              self.days[0])
-            self.ye_float = date_to_floatyear(self.years[-1], self.months[-1],
-                                              self.days[-1])
+        if check_climate_data:
+            # check for full years, this is overwritten for daily
+            self._check_for_full_years()
+
+        # Read timeseries and correct it
+        self.temp = (ds["temp"].values[pok].astype(np.float64)
+                     + self._temp_bias)
+        self.prcp = (ds["prcp"].values[pok].astype(np.float64)
+                     * self._prcp_fac)
+
+        grad = self.prcp * 0 + self.temp_default_gradient
+        self.grad = grad
+        self.ref_hgt = ds.attrs['ref_hgt']
+        self.climate_source = ds.attrs['climate_source']
+        self.ys = self.years[0]
+        self.ye = self.years[-1]
+        self.ys_float = date_to_floatyear(self.years[0], self.months[0],
+                                            self.days[0])
+        self.ye_float = date_to_floatyear(self.years[-1], self.months[-1],
+                                            self.days[-1])
 
     def __repr__(self):
         """String Representation of the mass balance model"""
@@ -3158,12 +3164,18 @@ class ConstantMassBalance(MassBalanceModel):
             zminmax = np.round([np.min(h)-50, np.max(h)+2000])
         except FileNotFoundError:
             # in case we don't have them
-            with ncDataset(gdir.get_filepath('gridded_data')) as nc:
-                if np.isfinite(nc.min_h_dem):
+            with gdir.open_group('gridded_data') as ds:
+                if np.isfinite(ds.attrs['min_h_dem']):
                     # a bug sometimes led to non-finite
-                    zminmax = [nc.min_h_dem-250, nc.max_h_dem+1500]
+                    zminmax = [
+                        ds.attrs['min_h_dem'] - 250,
+                        ds.attrs['max_h_dem'] + 1500,
+                    ]
                 else:
-                    zminmax = [nc.min_h_glacier-1250, nc.max_h_glacier+1500]
+                    zminmax = [
+                        ds.attrs['min_h_glacier'] - 1250,
+                        ds.attrs['max_h_glacier'] + 1500,
+                    ]
         self.hbins = np.arange(*zminmax, step=10)
         self.valid_bounds = self.hbins[[0, -1]]
         self.y0 = y0
@@ -4042,8 +4054,7 @@ def decide_winter_precip_factor(gdir):
 
     # get non-corrected winter daily mean prcp (kg m-2 day-1)
     # it is easier to get this directly from the raw climate files
-    fp = gdir.get_filepath('climate_historical')
-    with xr.open_dataset(fp).prcp as ds_pr:
+    with gdir.open_group('climate_historical').prcp as ds_pr:
         # just select winter months
         if gdir.hemisphere == 'nh':
             m_winter = [10, 11, 12, 1, 2, 3, 4]
@@ -4275,10 +4286,11 @@ def mb_calibration_to_rmsd(gdir, *,
         # if the 2D data is used, the flowline is not needed.
         fls = None
         # get the 2D data
-        fp = gdir.get_filepath('gridded_data')
-        with xr.open_dataset(fp) as ds:
+        with gdir.open_group('gridded_data') as ds:
             # 'topo' instead of 'topo_smoothed'?
-            heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
+            heights = np.asarray(ds.topo_smoothed.data)[
+                np.asarray(ds.glacier_mask.data) == 1
+            ]
             widths = np.ones(len(heights))
 
     # Climate period
@@ -4923,10 +4935,11 @@ def mb_calibration_from_scalar_mb(gdir, *,
         # if the 2D data is used, the flowline is not needed.
         fls = None
         # get the 2D data
-        fp = gdir.get_filepath('gridded_data')
-        with xr.open_dataset(fp) as ds:
+        with gdir.open_group('gridded_data') as ds:
             # 'topo' instead of 'topo_smoothed'?
-            heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
+            heights = np.asarray(ds.topo_smoothed.data)[
+                np.asarray(ds.glacier_mask.data) == 1
+            ]
             widths = np.ones(len(heights))
 
     # handle which ref mb to use (provided or in observations file)
