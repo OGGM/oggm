@@ -3525,7 +3525,7 @@ class GlacierDirectory(object):
     def __init__(self, rgi_entity, base_dir=None, reset=False,
                  from_tar=False, delete_tar=False, settings_filesuffix='',
                  observations_filesuffix='',
-                 add_parent_values_to_settings=False):
+                 add_parent_values_to_settings=False, intersects=None):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -3550,6 +3550,11 @@ class GlacierDirectory(object):
         add_parent_values_to_settings : bool, default=False
             if True and a settings value is read from the parent settings file
             this value is also added to the current settings file
+        intersects : str or geopandas.GeoDataFrame, optional
+            the glacier intersects (used only when the directory is created
+            from an RGI entity, to write ``intersects.shp``). If None,
+            the deprecated global ``cfg.INTERSECTS_GDF`` (set with
+            ``cfg.set_intersects_db``) is used if available (#1981).
         """
 
         if base_dir is None:
@@ -3798,7 +3803,7 @@ class GlacierDirectory(object):
 
         if write_shp:
             # Write shapefile
-            self._reproject_and_write_shapefile(rgi_entity)
+            self._reproject_and_write_shapefile(rgi_entity, intersects)
 
         # Optimization
         self._mbdf = None
@@ -3842,7 +3847,7 @@ class GlacierDirectory(object):
                         str(self.grid.dy) + ')']
         return '\n'.join(summary) + '\n'
 
-    def _reproject_and_write_shapefile(self, entity):
+    def _reproject_and_write_shapefile(self, entity, intersects=None):
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
             # RGI7 ships a UTM zone; otherwise we look it up from the center
@@ -3909,7 +3914,22 @@ class GlacierDirectory(object):
         self.write_shapefile(towrite, 'outlines')
 
         # Also transform the intersects if necessary
-        gdf = cfg.INTERSECTS_GDF
+        # #1981: the intersects are an argument, not a global. The global
+        # is only kept as a (deprecated) fallback
+        explicit = intersects is not None
+        if intersects is None:
+            gdf = cfg.INTERSECTS_GDF
+            if len(gdf) > 0:
+                warnings.warn(
+                    'Setting the intersects globally with '
+                    '`cfg.set_intersects_db` is deprecated: pass them with '
+                    'the `intersects` argument of '
+                    '`workflow.init_glacier_directories` instead.',
+                    DeprecationWarning, stacklevel=2)
+        elif isinstance(intersects, (str, os.PathLike)):
+            gdf = gpd.read_file(intersects)
+        else:
+            gdf = intersects
         if len(gdf) > 0:
             try:
                 gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
@@ -3925,8 +3945,9 @@ class GlacierDirectory(object):
                     gdf.set_crs(gdf.crs.srs, allow_override=True, inplace=True)
                 self.write_shapefile(gdf, 'intersects')
         else:
-            # Sanity check
-            if cfg.PARAMS['use_intersects'] and not self.rgi_version == '70C':
+            # Sanity check (an explicit, possibly empty, argument is a choice)
+            if (not explicit and cfg.PARAMS['use_intersects'] and
+                    not self.rgi_version == '70C'):
                 raise InvalidParamsError(
                     'You seem to have forgotten to set the '
                     'intersects file for this run. OGGM '
