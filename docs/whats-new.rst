@@ -9,6 +9,20 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
+  rounded to the nearest meter before being written to ``dem.tif`` and to
+  ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
+  stored as floats (e.g. COPDEM). The data type is unchanged (float32).
+  The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the 
+  same for ``topo_smoothed``: it saves about as much space again. 
+  This changes the results slightly. Set both to ``False`` to recover 
+  the previous behavior (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``compute_downstream_line`` now also finds the domain exits located on
+  flat stretches of the domain edge (equal elevation values, more frequent
+  with rounded DEMs), which were ignored before. This changes the
+  downstream line of a few glaciers. It is also faster.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` can now store two area-weighted air temperature
   diagnostics, i.e. the downscaled temperature (temperature bias and lapse
   rate applied) which the mass balance model actually uses for melt and for
@@ -287,6 +301,15 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
+  in the wrong direction, step length ignoring ``melt_f_max``, broken
+  error recovery, swapped "part success" / "dynamic spinup only" labels)
+  and added a bisection fallback for non-monotonic responses. This changes
+  the calibrated melt_f of some glaciers. The new
+  ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic stores why the
+  calibration stopped (:pull:`2005`, :pull:`1963`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
 - The monthly hydrological output of ``run_with_hydro`` (``*_monthly``
   variables) now has the correct ``kg month-1`` unit attribute: the values
   are monthly totals, but the attribute was copied from the annual variables
@@ -481,7 +504,10 @@ Breaking changes
   glacier directory. Existing pickles from older glacier directories are still
   supported by ``read_store`` (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-
+- New ``PARAMS['round_dem']`` and ``PARAMS['round_smoothed_dem']`` params
+  changed a bit the centerlines and downstream lines results. This is most 
+  noticeable in the centerlines representation (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 v1.6.3 (April 13, 2026)
 -----------------------
