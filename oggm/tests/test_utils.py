@@ -2158,8 +2158,8 @@ class TestPreproCLI:
                       start_base_url='http://foo',
                       temp_bias_file_path='foo.csv')
 
-        for start, end in [('2', '3'), ('2', '4a'), ('2', '5'), ('0', '3a'),
-                           ('3a', '3'), ('3', '4'), ('4a', '5')]:
+        for start, end in [('2', '3'), ('2', '4a'), ('2', '5'),
+                           (None, '3a'), ('3a', '3'), ('3', '4'), ('4a', '5')]:
             with pytest.raises(InvalidParamsError, match='whole RGI region'):
                 run_prepro_levels(start_level=start, max_level=end,
                                   chunk_idx=0, **common)

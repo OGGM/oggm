@@ -32,9 +32,9 @@ from oggm.utils import get_prepro_base_url, file_downloader
 
 log = logging.getLogger(__name__)
 
-# The preprocessing levels. '0' is the start from scratch (the glacier
-# directories are built from the RGI file, there is no published L0): L1 is
-# the first level written. Besides the usual 1 to 5, two "half levels" allow
+# The preprocessing levels. Without a start level, the glacier directories
+# are built from scratch (from the RGI file), and L1 is the first level
+# written. Besides the usual 1 to 5, two "half levels" allow
 # to split L3 and L4 where the work stops being per-glacier and starts needing
 # the whole RGI region at once. This is what makes it possible to run the
 # expensive part in many small chunk jobs on a cluster:
@@ -49,7 +49,7 @@ log = logging.getLogger(__name__)
 # the other hand holds exactly the L4 directories - only the summary files are
 # missing - so it writes straight into `L4`. The rule is: the folder is named
 # after the glacier directory content.
-PREPRO_LEVELS = ['0', '1', '2', '3a', '3', '4a', '4', '5']
+PREPRO_LEVELS = ['1', '2', '3a', '3', '4a', '4', '5']
 
 # The (start_level, max_level) pairs which can be run in chunks. Any other
 # stage ends a full level, and therefore writes region-wide summary files.
@@ -69,9 +69,9 @@ def _parse_max_level(max_level):
     """
 
     max_level = str(max_level)
-    if max_level not in PREPRO_LEVELS[1:]:
+    if max_level not in PREPRO_LEVELS:
         raise InvalidParamsError('max_level should be one of {}'
-                                 ''.format(PREPRO_LEVELS[1:]))
+                                 ''.format(PREPRO_LEVELS))
     # '3a' stops before the inversion, '4a' before the L4 summaries
     if max_level in _HALF_LEVELS:
         return _HALF_LEVELS[max_level], max_level == '3a', max_level == '4a'
@@ -84,6 +84,7 @@ def _parse_start_level(start_level):
     The integer is the level the *previous* full level block ends at, so that
     all the existing `start_level <= n` logic keeps working untouched: a run
     resuming at `3a` still has to enter the L3 block, hence start_level 2.
+    No start level (None) is a start from scratch, hence start_level 0.
 
     Returns
     -------
@@ -551,9 +552,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         optional kwargs passed to the custom climate task when it is executed.
     start_level : str or int
         the pre-processed level to start from (default is to start from
-        scratch, i.e. 0). If set, you'll need to indicate start_base_url or
-        start_from_dir as well. One of 0, 1, 2, '3a', 3, '4a', 4 - see
-        `max_level` for what the half levels are.
+        scratch: the glacier directories are built from the RGI file). If
+        set, you'll need to indicate start_base_url or start_from_dir as
+        well. One of 1, 2, '3a', 3, '4a', 4 - see `max_level` for what the
+        half levels are.
     start_base_url : str
         the pre-processed base-url to fetch the data from.
     start_from_dir : str
@@ -685,7 +687,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     max_level_name = str(max_level)
     max_level, stop_before_inversion, skip_summary = _parse_max_level(max_level)
 
-    start_level_name = '0' if start_level is None else str(start_level)
+    start_level_name = None if start_level is None else str(start_level)
     start_level, resume_at_inversion, summary_only = \
         _parse_start_level(start_level)
 
@@ -694,19 +696,19 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         raise InvalidParamsError('mb_calibration_strategy not understood: '
                                  f'{mb_calibration_strategy}')
 
-    if start_level_name != '0':
+    if start_level_name is not None:
         if start_base_url is None and start_from_dir is None:
             raise InvalidParamsError('With start_level, please also indicate '
                                      'start_base_url or start_from_dir')
     # We log about this further down, once cfg.initialize() has set the
     # logging up - `log.workflow` does not exist before that
-    ignoring_intersects = start_level_name != '0' and intersects_file is not None
+    ignoring_intersects = (start_level_name is not None and
+                           intersects_file is not None)
 
-    if start_level_name == '0' and start_from_dir is not None:
+    if start_level_name is None and start_from_dir is not None:
         raise InvalidParamsError('start_from_dir needs a start_level: from '
-                                 'scratch (level 0) the glacier directories '
-                                 'are built from the RGI file, not read from '
-                                 'tars.')
+                                 'scratch the glacier directories are built '
+                                 'from the RGI file, not read from tars.')
 
     if stop_before_inversion and skip_inversion:
         # `3a` exists to hand the directories over to the whole-region job
@@ -717,7 +719,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                  'inversion so that another run can do it, '
                                  'while skip_inversion drops it altogether.')
 
-    if PREPRO_LEVELS.index(max_level_name) <= \
+    if start_level_name is not None and \
+            PREPRO_LEVELS.index(max_level_name) <= \
             PREPRO_LEVELS.index(start_level_name):
         raise InvalidParamsError(
             f'max_level ({max_level_name}) should be above start_level '
@@ -860,7 +863,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     # TODO
 
     if ignoring_intersects:
-        log.workflow('`intersects_file` is ignored with start_level > 0: '
+        log.workflow('`intersects_file` is ignored with a start_level: '
                      'the intersects are written to the glacier '
                      'directories at L1 and are already in the prepro '
                      'files we start from.')
@@ -1693,15 +1696,16 @@ def parse_args(args):
     parser.add_argument('--rgi-version', type=str,
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
-    parser.add_argument('--start-level', type=str, default='0',
+    parser.add_argument('--start-level', type=str,
                         choices=PREPRO_LEVELS[:-1],
                         help='the pre-processed level to start from (default '
-                             'is to start from scratch, 0). If set, you will need to '
-                             'indicate --start-base-url or --start-from-dir '
-                             'as well. See --max-level for the half levels.')
+                             'is to start from scratch, from the RGI file). '
+                             'If set, you will need to indicate '
+                             '--start-base-url or --start-from-dir as well. '
+                             'See --max-level for the half levels.')
     parser.add_argument('--start-base-url', type=str,
                         help='the pre-processed base-url to fetch the data '
-                             'from when starting from level > 0.')
+                             'from, with --start-level.')
     parser.add_argument('--start-from-dir', type=str,
                         help='like --start-base-url, but for glacier '
                              'directory tar files which are already on disk. '
@@ -1712,7 +1716,7 @@ def parse_args(args):
                              'then used for the summary files which are only '
                              'carried forward.')
     parser.add_argument('--max-level', type=str, default='5',
-                        choices=PREPRO_LEVELS[1:],
+                        choices=PREPRO_LEVELS,
                         help='the maximum level you want to run the '
                              'pre-processing for. Besides 1 to 5, the two '
                              'half levels 3a and 4a stop where the work stops '

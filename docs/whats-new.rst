@@ -297,7 +297,9 @@ Enhancements
   into one glacier directory so several experiments can share one set of lower
   levels. Legacy cumulative datasets can still be read, but new levels can
   only be built on incremental ones. There is no L0 anymore: L1 (outlines
-  and topography) is the root of the chain (:pull:`1951`).
+  and topography) is the root of the chain, and ``oggm_prepro`` starts from
+  scratch when no ``--start-level`` is given (``--start-level 0`` is no
+  longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
