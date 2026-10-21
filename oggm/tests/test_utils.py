@@ -2382,6 +2382,16 @@ class TestPreproCLI:
                 os.path.join(gdir.dir, f"L{lev}.manifest.json")
             )
 
+        # The grids are made at L1, so the elevation band L2 delta does
+        # not ship gridded_data.nc again
+        with open(os.path.join(gdir.dir, "L1.manifest.json")) as f:
+            m1 = json.load(f)
+        with open(os.path.join(gdir.dir, "L2.manifest.json")) as f:
+            m2 = json.load(f)
+        assert 'gridded_data.nc' in m1["files"]["added"]
+        assert 'gridded_data.nc' not in m2["files"]["added"]
+        assert 'gridded_data.nc' not in m2["files"]["updated"]
+
         # L5 is standalone: a single tar suffices
         tarf = _lev_tars(5)[0]
         assert not os.path.isfile(tarf)
@@ -2926,6 +2936,15 @@ class TestPreproCLI:
             assert os.path.isfile(
                 os.path.join(gdir.dir, f"L{lev}.manifest.json")
             )
+
+        # The grids are made at L1, but the centerline masks replace the
+        # elevation band ones, so this L2 delta ships gridded_data.nc
+        with open(os.path.join(gdir.dir, "L1.manifest.json")) as f:
+            m1 = json.load(f)
+        with open(os.path.join(gdir.dir, "L2.manifest.json")) as f:
+            m2 = json.load(f)
+        assert 'gridded_data.nc' in m1["files"]["added"]
+        assert 'gridded_data.nc' in m2["files"]["updated"]
 
         # L5 is standalone: a single tar suffices
         tarf = _lev_tars(5)[0]

@@ -296,6 +296,26 @@ def _start_state(gdir, resume_at_inversion):
     return state
 
 
+def _has_glacier_masks(gdir: GlacierDirectory) -> bool:
+    """Whether gridded_data.nc already holds the glacier masks (from L1).
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory to check.
+
+    Returns
+    -------
+    bool
+        True if ``gridded_data.nc`` exists and has a ``glacier_mask``.
+    """
+    fp = gdir.get_filepath('gridded_data')
+    if not os.path.exists(fp):
+        return False
+    with utils.ncDataset(fp) as nc:
+        return 'glacier_mask' in nc.variables
+
+
 def _parent_base_url(gdir_dir: str, parent: str) -> str | None:
     """The base url to publish in a level's link to its parent.
 
@@ -1099,6 +1119,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                      source=source)
 
+        # The grids (topography and glacier masks) only depend on the
+        # outlines and the glacier grid, so they are made here: the L2
+        # flavours built on this L1 then don't each ship their own copy
+        # of gridded_data.nc. These are the elevation band masks, the
+        # centerlines ones are written again at L2.
+        workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs)
+
         # Summaries
         sum_dir = Path(output_base_dir) / 'L1' / 'summary'
         utils.mkdir(sum_dir)
@@ -1151,8 +1178,17 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          dem_source=select_source_from_dir,
                                          keep_dem_folders=keep_dem_folders)
 
-        # HH2015 method
-        workflow.execute_entity_task(tasks.simple_glacier_masks, gdirs_band)
+        # HH2015 method. The masks usually come with L1: computing them
+        # again would rewrite gridded_data.nc, and the L2 delta would then
+        # ship it again in full. L1 trees made before that, and DEMs just
+        # selected from a multi-DEM L1, still need them computed here.
+        todo = gdirs_band
+        if select_source_from_dir is None:
+            todo = [gd for gd in gdirs_band if not _has_glacier_masks(gd)]
+            log.workflow(f'L2: reusing the L1 glacier masks of '
+                         f'{len(gdirs_band) - len(todo)} of '
+                         f'{len(gdirs_band)} glaciers.')
+        workflow.execute_entity_task(tasks.simple_glacier_masks, todo)
 
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
