@@ -15,6 +15,7 @@ import logging
 from functools import partial, wraps
 import time
 import fnmatch
+from collections.abc import Callable
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse
@@ -191,11 +192,23 @@ def _call_dl_func(dl_func, cache_path):
     return dl_func(cache_path)
 
 
-def _is_complete(path) -> bool:
+def _is_complete(path: str) -> bool:
     """Check if an archive is complete.
 
-    If truncated, the file is downloaded again.
+    Only ``.zip`` and ``.tar`` files are checked. Every other file,
+    including ``.tar.gz``, ``.gz``, and ``.tif``, is assumed complete.
+
+    Parameters
+    ----------
+    path : str
+        The path to the file.
+
+    Returns
+    -------
+    bool
+        False for a truncated zip or tar file, True otherwise.
     """
+    # TODO: extend to gzip, parquet, tif, and netCDF files.
     if path.endswith(".zip"):
         return zipfile.is_zipfile(path)
     if path.endswith(".tar"):
@@ -207,8 +220,22 @@ def _is_complete(path) -> bool:
     return True
 
 
-def _is_cache_hit(path) -> bool:
-    """True for a complete file at path, warning when it is truncated."""
+def _is_cache_hit(path: str) -> bool:
+    """Check if a cached file exists and is complete.
+
+    If a file is truncated or not cached, this will log a warning and
+    redownload the file.
+
+    Parameters
+    ----------
+    path : str
+        The path to the cached file.
+
+    Returns
+    -------
+    bool
+        True if the file exists and passes :py:func:`_is_complete`.
+    """
     if not os.path.isfile(path):
         return False
     if _is_complete(path):
@@ -217,11 +244,42 @@ def _is_cache_hit(path) -> bool:
     return False
 
 
-def _cached_download_helper(cache_obj_name, dl_func, reset=False):
-    """Helper function for downloads.
+def _cached_download_helper(
+    cache_obj_name: str,
+    dl_func: Callable[[str], str | None],
+    reset: bool = False,
+) -> str | None:
+    """Get the path to a cached file, downloading it if it isn't cached.
 
-    Takes care of checking if the file is already cached.
-    Only calls the actual download function when no cached version exists.
+    Takes care of checking if the file is already cached. Only calls the
+    actual download function when no cached version exists or if the
+    file is truncated. (see :py:func:`_is_cache_hit`).
+
+    Parameters
+    ----------
+    cache_obj_name : str
+        The file's path relative to the cache directory.
+    dl_func : callable
+        Called with the temporary path to write to. Returns the path it
+        wrote to.
+    reset : bool, default False
+        Download the file even if it's already cached.
+
+    Returns
+    -------
+    str | None
+        The path to the cached file. If ``dl_func`` returns anything
+        other than the temporary path, including ``None``, that value is
+        returned as-is and nothing is moved into the cache.
+
+    Raises
+    ------
+    InvalidParamsError
+        If no working directory is set, or if a read-only global cache
+        would be bypassed for anything but the sample data.
+    NoInternetException
+        If a download is needed and ``cfg.PARAMS['has_internet']`` is
+        False.
     """
     cache_dir = cfg.PATHS['dl_cache_dir']
     cache_ro = cfg.PARAMS['dl_cache_readonly']
@@ -287,8 +345,37 @@ def _cached_download_helper(cache_obj_name, dl_func, reset=False):
     return dl_path
 
 
-def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
-    """Implements the required features of urlretrieve on top of requests
+def _requests_urlretrieve(
+    url: str,
+    path: str,
+    reporthook: Callable[[int, int, int], None] | None,
+    auth: tuple[str, str] | None = None,
+    timeout: float | None = None,
+) -> None:
+    """Implement the required features of urlretrieve on top of requests.
+
+    Parameters
+    ----------
+    url : str
+        The URL to download.
+    path : str
+        The local path to write to.
+    reporthook : callable or None
+        Called with ``(chunk_count, chunk_size, total_size)`` after each
+        chunk. ``total_size`` is -1 if the server sends no
+        Content-Length.
+    auth : tuple of (str, str), optional
+        Username and password.
+    timeout : float, optional
+        Timeout in seconds, passed to ``requests.get``.
+
+    Raises
+    ------
+    HttpDownloadError
+            On an HTTP error status.
+    HttpContentTooShortError
+        If the body is shorter than its Content-Length or the connection
+        drops mid-body (``ChunkedEncodingError``).
     """
 
     chunk_size = 128 * 1024
@@ -324,8 +411,37 @@ def _requests_urlretrieve(url, path, reporthook, auth=None, timeout=None):
             raise HttpContentTooShortError(url)
 
 
-def _classic_urlretrieve(url, path, reporthook, auth=None, timeout=None):
-    """Thin wrapper around pythons urllib urlretrieve
+def _classic_urlretrieve(
+    url: str,
+    path: str,
+    reporthook: Callable[[int, int, int], None] | None,
+    auth: tuple[str, str] | None = None,
+    timeout: float | None = None,
+) -> None:
+    """Thin wrapper around urllib's urlretrieve.
+
+    Parameters
+    ----------
+    url : str
+        The URL to download.
+    path : str
+        The local path to write to.
+    reporthook : callable or None
+        Called with ``(chunk_count, chunk_size, total_size)`` after each
+        chunk. ``total_size`` is -1 if the server sends no
+        Content-Length.
+    auth : tuple of (str, str), optional
+        Username and password.
+    timeout : float, optional
+        Timeout in seconds, passed to ``requests.get``.
+
+    Raises
+    ------
+    HttpDownloadError
+        On an HTTP error status.
+    HttpContentTooShortError
+        If the body is shorter than its Content-Length or the connection
+        drops mid-body (``ChunkedEncodingError``).
     """
 
     ourl = url
@@ -448,14 +564,50 @@ def _assert_url_in_allowlist(url):
                              f'{url}')
 
 
-def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
-                     reporthook=None, auth=None, timeout=None):
+def oggm_urlretrieve(
+    url: str,
+    cache_obj_name: str | None = None,
+    reset: bool = False,
+    reporthook: Callable[[int, int, int], None] | None = None,
+    auth: tuple[str, str] | None = None,
+    timeout: float | None = None,
+) -> str | None:
     """Wrapper around urlretrieve, to implement our caching logic.
 
-    Instead of accepting a destination path, it decides where to store the file
-    and returns the local path.
+    Instead of accepting a destination path, it decides where to store
+    the file and returns the local path.
 
-    auth is expected to be either a tuple of ('username', 'password') or None.
+    Parameters
+    ----------
+    url : str
+        The URL to download.
+    cache_obj_name : str, optional
+        The file's path relative to the cache directory. Defaults to the
+        URL's host and path.
+    reset : bool, default False
+        Download the file even if it is cached.
+    reporthook : callable, optional
+        Progress callback, see :py:func:`_requests_urlretrieve`.
+    auth : tuple of (str, str), optional
+        Username and password.
+    timeout : float, optional
+        Timeout in seconds.
+
+    Returns
+    -------
+    str | None
+        The local path to the file.
+
+    Raises
+    ------
+    InvalidParamsError
+        If the URL is not in ``cfg.PARAMS['download_url_allowlist']``.
+    DownloadOutageError
+        If the URL's host failed within the last 120 s (see
+        ``_DEAD_HOSTS``).
+    HttpDownloadError, HttpContentTooShortError
+        From the underlying download, see
+        :py:func:`_requests_urlretrieve`.
     """
 
     _assert_url_in_allowlist(url)
@@ -464,9 +616,11 @@ def oggm_urlretrieve(url, cache_obj_name=None, reset=False,
         cache_obj_name = _get_url_cache_name(url)
 
     def _dlf(cache_path):
-        # here rather than in file_downloader, so cache hits still work
+        # here rather than in file_downloader, so cache hits still work.
+        # The fast-fail is an outage too, so it is recorded in OUTAGES.
         host = urlparse(url).netloc
         if _DEAD_HOSTS.get(host, 0) > time.monotonic():
+            # If the host is dead, raise an error
             err = DownloadOutageError(url, 0, f"{host} failed recently")
             OUTAGES.append((url, str(err)))
             raise err
@@ -546,34 +700,66 @@ def _aws_file_download_unlocked(aws_path, cache_name=None, reset=False):
     return _cached_download_helper(cache_obj_name, _dlf, reset)
 
 
-_DEAD_HOSTS = {}  # netloc -> time.monotonic() until which to fail fast
+_DEAD_HOSTS = {} # netloc -> time.monotonic() until which to fail fast
 
-# (url, message) is appended before every `raise DownloadOutageError`,
-# so the test suite can label failures missed with `continue_on_error`.
+# (url, message) is appended per-process before every
+# `raise DownloadOutageError`, so the test suite can label failures
+# missed with `continue_on_error`.
 OUTAGES = []  # TODO(ON-125): this is currently unbounded. and should be capped
 
 
 def file_downloader(
     www_path: str,
     retry_max: int = 3,
-    sleep_on_retry: int = 5,
-    cache_name: str = None,
+    sleep_on_retry: float = 5,
+    cache_name: str | None = None,
     reset: bool = False,
-    auth=None,
-    timeout: int = 60,
-):
+    auth: tuple[str, str] | None = None,
+    timeout: float = 60,
+) -> str | None:
     """A slightly better downloader: it tries more than once.
+    
+    Downloads a file, retrying transient errors and signalling outages.
+    Transient errors (5xx, connection errors, timeouts, truncated bodies,
+    and FTPS errors) are retried. Once the retries are exhausted, the
+    host is marked dead for 120 s and a :py:class:`DownloadOutageError`
+    is raised. Until then, any download from that host fails at once.
+
+    Parameters
+    ----------
+    www_path : str
+        The URL of the file to download.
+    retry_max : int, default 3
+        The maximum number of attempts.
+    sleep_on_retry : float, default 5
+        The backoff base in seconds. Attempt ``n`` waits
+        ``sleep_on_retry * 3**(n - 1)`` before the next one, i.e. 5 then
+        15 s with the defaults.
+    cache_name : str, optional
+        The file's path relative to the cache directory. Defaults to the
+        URL's host and path.
+    reset : bool, default False
+        Download the file even if it is cached.
+    auth : tuple of (str, str), optional
+        Username and password.
+    timeout : float, default 60
+        Timeout in seconds, per request.
 
     Returns
     -------
     str | None
-        The path to the downloaded file, or ``None`` for 404 or 300
-        errors.
+        The path to the downloaded file, or ``None`` for a 404 or 300
+        response.
 
     Raises
     ------
-    ``DownloadOutageError`` when a transient error (5xx, connection,
-    timeout, truncation) persists over the ``retry_max`` attempts.
+    DownloadOutageError
+        If a transient error persists over ``retry_max`` attempts, or
+        (with ``attempts=0``) if the host failed within the last 120 s.
+    HttpDownloadError
+        On any other 4xx response, without retrying.
+    InvalidParamsError
+        If the URL is not in ``cfg.PARAMS['download_url_allowlist']``.
     """
 
     last = None

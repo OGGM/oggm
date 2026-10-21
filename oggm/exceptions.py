@@ -1,4 +1,3 @@
-
 class InvalidParamsError(ValueError):
     pass
 
@@ -49,14 +48,22 @@ class FTPSDownloadError(Exception):
 
 
 class HttpContentTooShortError(Exception):
-    def __init__(self, url):
+    """A download ended before its Content-Length was reached.
+
+    Attributes
+    ----------
+    url : str
+        The URL that was being downloaded.
+    """
+
+    def __init__(self, url: str):
         self.url = url
 
 
 class DownloadOutageError(RuntimeError):
     """A download failed for a transient reason after every retry.
 
-    Parameters
+    Attributes
     ----------
     url : str
         The URL that failed.
@@ -65,22 +72,15 @@ class DownloadOutageError(RuntimeError):
         and the download was skipped.
     last_error : str or Exception
         The last error. An exception is stored as its ``repr``.
-
-    Attributes
-    ----------
-    url : str
-    attempts : int
-    last_error : str
-        The ``repr`` of the last exception, or a message. It is never the
-        exception itself, so the error pickles across pool workers.
     """
 
-    def __init__(self, url, attempts, last_error):
-        """Initialize the DownloadOutageError.
+    def __init__(
+        self, url: str, attempts: int, last_error: str | BaseException | None
+    ):
+        """Initialise the DownloadOutageError.
 
-        Args must match the signature, or unpickling in the main
-        process fails if a pool worker raises this error, e.g. if a str
-        is passed through, a round trip won't repr it again.
+        ``args`` must match the signature, or unpickling in the main
+        process fails when a pool worker raises this error.
         """
 
         if not isinstance(last_error, str):

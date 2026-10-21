@@ -3720,6 +3720,8 @@ def make_fake_zipdir(dir_path, fakefile=None, base_dir=None,
 
 
 class TestDownloadCacheAtomicity:
+    """`_cached_download_helper` writes to a temp file and never caches a
+    truncated or partial download."""
 
     @pytest.fixture(autouse=True)
     def setup(self, tmp_path):
@@ -3820,6 +3822,7 @@ class TestDownloadCacheAtomicity:
 
     @staticmethod
     def _archive_bytes(ext, tmp_path):
+        """Return the bytes of a complete ``ext`` archive (zip or tar)."""
         src = tmp_path / "member.bin"
         src.write_bytes(os.urandom(20000))
         out = tmp_path / f"src.{ext}"
@@ -3861,6 +3864,8 @@ class TestDownloadCacheAtomicity:
         assert len(calls) == 1
 
     def test_truncated_readonly_cache_hit_uses_fallback(self, tmp_path):
+        """A truncated file in the read-only global cache is downloaded
+        again into the fallback, i.e. the working directory's cache."""
         name = "example.com/bundle.tar"
         data = self._archive_bytes("tar", tmp_path)
         ro = os.path.join(cfg.PATHS["dl_cache_dir"], name)
@@ -3919,13 +3924,16 @@ class TestDownloadCacheAtomicity:
         assert not os.path.exists(cached) or os.listdir(cached) == []
 
     def test_probe_dl_func_returning_none(self):
-        # no file may be created
+        """A probe, i.e. a `dl_func` that finds nothing and returns
+        None, gets None back and leaves nothing in the cache."""
         out = _downloads._cached_download_helper(self.name, lambda p: None)
         assert out is None
         assert not os.path.exists(self.final)
 
 
 class TestDownloadRetries:
+    """`file_downloader` retries transient errors, then raises
+    `DownloadOutageError` and fails fast for the dead host."""
 
     URL = "https://example.com/dir/file.txt"
 
