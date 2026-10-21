@@ -800,12 +800,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.base_dir_to_tar(level_base_dir)
 
     def _write_root_tars(gdirs):
-        """Tar the L1 directories, the root of the delta chain: every file
-        is shipped, and the next levels are deltas on this state."""
+        """Tar the L1 directories, the root of the delta chain: a
+        standalone level shipping every file, and the next levels are
+        deltas on this state."""
         if not temp_bias_run:
             for gdir in gdirs:
                 utils.write_level_manifest(gdir, label='L1', prev_state={},
-                                           border=border,
+                                           kind='standalone', border=border,
                                            rgi_version=rgi_version)
                 manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(
                     gdir.dir)

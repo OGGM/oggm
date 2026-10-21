@@ -5824,8 +5824,8 @@ def write_level_manifest(
         which ships every file.
     parent : str | None, optional
         Label of the artefact this one was built on. Required for a
-        ``'delta'`` other than the root (``L1``), and kept for provenance by a
-        ``'standalone'``.
+        ``'delta'``, and optional for a ``'standalone'``, which keeps it
+        for provenance only.
     parent_base_url : str | None, optional
         Base URL of the tree holding the parent. None means the same tree
         as this manifest.
@@ -5834,7 +5834,7 @@ def write_level_manifest(
         glacier directory.
     kind : str, default ``'delta'``
         ``'delta'`` (changes against its parent) or ``'standalone'``
-        (only what it needs to run, e.g. the L5 bundle).
+        (every file it needs, e.g. the L1 root or the L5 bundle).
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
@@ -5854,9 +5854,10 @@ def write_level_manifest(
             f"Invalid manifest kind: {kind!r}. "
             f"Must be one of {_MANIFEST_KINDS}."
         )
-    if kind == "delta" and parent is None and label != "L1":
+    if kind == "delta" and parent is None:
         raise ValueError(
-            f"A delta other than the root needs a parent, got label={label!r}."
+            f"A delta needs a parent, got label={label!r}. The root of a "
+            "chain is a 'standalone'."
         )
     if kind != "delta":
         prev_state = {}  # self-sufficient: ship every file

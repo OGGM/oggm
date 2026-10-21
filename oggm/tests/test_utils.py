@@ -3363,7 +3363,7 @@ class TestPreproCLI:
         assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
         with open(os.path.join(gdir.dir, 'L1.manifest.json')) as f:
             m1 = json.load(f)
-        assert m1['kind'] == 'delta'
+        assert m1['kind'] == 'standalone'
         assert m1['parent'] is None
         assert 'USER/dem.tif' in m1['files']['added']
 

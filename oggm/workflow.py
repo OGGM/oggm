@@ -331,9 +331,9 @@ def _layered_level_tars(
     """Gets the bundle tars to layer for a glacier, root first.
 
     A delta names its parent, which may live in another tree. This
-    method walks through links until it reaches the root or a
-    non-delta. A legacy (cumulative) bundle has no manifest, so it is
-    the only tar.
+    method walks through links until it reaches a standalone level
+    (e.g. the L1 root). A legacy (cumulative) bundle has no manifest, so
+    it is the only tar.
 
     .. important::
         This doesn't check artefact ids. `_finalize_merged_dir` does

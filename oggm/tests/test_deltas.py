@@ -315,7 +315,8 @@ def test_write_level_manifest_standalone_ships_every_file(tmp_path):
 @pytest.mark.parametrize(
     "label, parent, kind",
     [
-        ("L3", None, "delta"),  # only the root delta has no parent
+        ("L3", None, "delta"),  # a delta always has a parent
+        ("L1", None, "delta"),  # the root too: it is a standalone
         ("L3", None, "unknown"),
     ],
 )
@@ -330,7 +331,9 @@ def test_write_level_manifest_invalid_kind(tmp_path, label, parent, kind):
 
 def test_write_level_manifest_root_and_free_label(tmp_path):
     gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
-    path, _ = utils.write_level_manifest(gdir_dir, "L1", {}, **_DS)
+    path, _ = utils.write_level_manifest(
+        gdir_dir, "L1", {}, kind="standalone", **_DS
+    )
     assert _manifest(path)["parent"] is None
 
     # A free-form label is its own manifest name and is never diffed
@@ -490,7 +493,7 @@ class TestLayeredGdir:
         assert os.path.isfile(os.path.join(workdir, "inversion_flowlines.npz"))
 
         # L1 root: every file in one tar
-        utils.write_level_manifest(workdir, "L1", {}, **_DS)
+        utils.write_level_manifest(workdir, "L1", {}, kind="standalone", **_DS)
         root_tar = utils.gdir_to_tar.unwrapped(
             _FakeGdir(workdir, workbase), delete=False
         )
@@ -632,7 +635,7 @@ class TestDeltaServer:
             os.remove(member_tar)
 
         # L1 root: every file
-        utils.write_level_manifest(workdir, "L1", {}, **_DS)
+        utils.write_level_manifest(workdir, "L1", {}, kind="standalone", **_DS)
         publish(
             1,
             utils.gdir_to_tar.unwrapped(
@@ -845,7 +848,13 @@ class TestParentChain:
             for name in rm:
                 os.remove(wdir / name)
             _, changed = utils.write_level_manifest(
-                wdir, label, prev, parent=parent, parent_base_url=url, **_DS
+                wdir,
+                label,
+                prev,
+                parent=parent,
+                parent_base_url=url,
+                kind="delta" if parent else "standalone",
+                **_DS,
             )
             return changed
 
@@ -1049,13 +1058,13 @@ def test_level_consistency_mismatch(tmp_path):
         )
         return shutil.move(path, str(tmp_path / name))
 
-    utils.write_level_manifest(gdir_dir, "L1", {}, **_DS)
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     l0_a = tar("l0_a.tar.gz")
 
     # A level-2 delta built on a *different* L1
     with open(os.path.join(gdir_dir, "dem_source.txt"), "w") as f:
         f.write("other DEM")
-    utils.write_level_manifest(gdir_dir, "L1", {}, **_DS)
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     prev = utils.snapshot_gdir_state(gdir_dir)
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
         json.dump({"melt_f": 6.0}, f)
@@ -1088,7 +1097,7 @@ def _raw_manifest(gdir_dir, **overrides):
 
 def test_finalize_rejects_unknown_kind(tmp_path):
     gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
-    utils.write_level_manifest(gdir_dir, "L1", {}, **_DS)
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     _raw_manifest(gdir_dir, kind="unknown", label="extra")
     with pytest.raises(InvalidWorkflowError, match="'unknown'"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
@@ -1096,7 +1105,7 @@ def test_finalize_rejects_unknown_kind(tmp_path):
 
 def test_finalize_rejects_two_chains(tmp_path):
     gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
-    utils.write_level_manifest(gdir_dir, "L1", {}, **_DS)
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     _raw_manifest(gdir_dir)  # an L2 that is not built on L1
     with pytest.raises(InvalidWorkflowError, match="one chain"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
@@ -1105,7 +1114,7 @@ def test_finalize_rejects_two_chains(tmp_path):
 @pytest.mark.parametrize("version", ["2.0", 2])
 def test_finalize_rejects_newer_major(tmp_path, version):
     gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
-    utils.write_level_manifest(gdir_dir, "L1", {}, **_DS)
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     _raw_manifest(gdir_dir, schema_version=version)
     with pytest.raises(InvalidWorkflowError, match="schema 2"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
