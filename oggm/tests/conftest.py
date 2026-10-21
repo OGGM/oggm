@@ -12,10 +12,12 @@ import shapely.geometry as shpg
 import matplotlib.pyplot as plt
 
 from oggm import cfg, tasks
+from oggm.exceptions import DownloadOutageError
 from oggm.core import flowline
 from oggm.tests.funcs import init_hef, get_test_dir
 from oggm import utils
 from oggm.utils import mkdir
+from oggm.utils import _downloads
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 from oggm.workflow import reset_multiprocessing
 
@@ -101,6 +103,130 @@ def pytest_collection_modifyitems(config, items):
 
             if not HAS_MPL_FOR_TESTS:
                 item.add_marker(graphic_marker)
+
+
+"""
+Label failures caused by a download outage and name them in the
+terminal summary and the GitHub Actions report. If every failure was an
+outage, the exit code changes to 75. This is piped to GitHub Actions to
+distinguish infrastructure outages from test failures.
+"""
+_FAILED = pytest.StashKey[set]()  # nodeids of every failed test
+_OUTAGES = pytest.StashKey[list]()  # (nodeid, url, detail, probable)
+
+
+def _find_outage(exc: BaseException | None) -> DownloadOutageError | None:
+    """Return the first DownloadOutageError in an exception's chain.
+
+    Follows ``__cause__``, then ``__context__``. Exceptions already seen
+    are tracked by ``id`` so a cyclic chain cannot loop forever.
+    """
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        if isinstance(exc, DownloadOutageError):
+            return exc
+        seen.add(id(exc))
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Record the size of ``_downloads.OUTAGES`` before the test starts.
+
+    ``pytest_runtest_makereport`` reads ``item._outages_before`` to tell
+    whether the test appended an outage.
+    """
+    item._outages_before = len(_downloads.OUTAGES)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Label a failed test as a download outage.
+
+    Every failure is recorded under ``_FAILED``, but only failures in
+    setup or call are labelled, so a teardown failure keeps the run's
+    exit code at 1. A failure is a direct outage if a
+    ``DownloadOutageError`` is in its exception chain, and a probable
+    outage if ``_downloads.OUTAGES`` grew during the test, e.g. when
+    ``continue_on_error`` swallowed the error and the test failed later.
+    """
+    rep = yield
+    if not rep.failed:
+        return rep
+    item.config.stash.setdefault(_FAILED, set()).add(item.nodeid)
+    if call.when not in ("setup", "call"):
+        return rep
+    err = _find_outage(call.excinfo.value)
+    if err is not None:
+        entry = (
+            item.nodeid,
+            err.url,
+            f"{err.attempts} attempts: {err.last_error}",
+            False,
+        )
+    elif len(_downloads.OUTAGES) > getattr(item, "_outages_before", 0):
+        # continue_on_error logged the outage and the test failed later
+        entry = (item.nodeid, *_downloads.OUTAGES[-1], True)
+    else:
+        return rep
+    item.config.stash.setdefault(_OUTAGES, []).append(entry)
+    rep.sections.append(("INFRA OUTAGE", _outage_line(entry)))
+    return rep
+
+
+def _outage_line(entry: tuple[str, str, str, bool]) -> str:
+    """Format an ``_OUTAGES`` entry as ``[probable: ]url: detail``."""
+    nodeid, url, detail, probable = entry
+    return f"{'probable: ' if probable else ''}{url}: {detail}"
+
+
+def pytest_terminal_summary(terminalreporter):
+    """Report labelled outages at the end of the run.
+
+    Under ``GITHUB_ACTIONS``, each outage is written as an ``::error``
+    annotation, otherwise as an ``INFRA OUTAGE`` section. If
+``GITHUB_STEP_SUMMARY`` is set, a table of outages is appended to
+    that file as well.
+    """
+    outages = terminalreporter.config.stash.get(_OUTAGES, [])
+    if not outages:
+        return
+    if os.environ.get("GITHUB_ACTIONS"):
+        for nodeid, url, _, _ in outages:
+            terminalreporter.write_line(
+                f"::error title=Download outage::{nodeid}: {url}"
+            )
+    else:
+        terminalreporter.section("INFRA OUTAGE")
+        for entry in outages:
+            terminalreporter.write_line(f"{entry[0]}: {_outage_line(entry)}")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a") as f:
+            f.write(
+                "\n### Download outages\n\n"
+                "| Test | URL | Detail | Probable |\n|---|---|---|---|\n"
+            )
+            for nodeid, url, detail, probable in outages:
+                detail = detail.replace("|", "\\|")
+                f.write(
+                    f"| `{nodeid}` | {url} | {detail} | "
+                    f"{'yes' if probable else 'no'} |\n"
+                )
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Exit with ``os.EX_TEMPFAIL`` (75) if every failure was an outage.
+
+    The run still fails, but CI can tell an infrastructure outage from a
+    test failure. Any other exit status is left alone. 
+    """
+    failed = session.config.stash.get(_FAILED, set())
+    labelled = {e[0] for e in session.config.stash.get(_OUTAGES, [])}
+    if exitstatus == 1 and failed <= labelled:
+        # 75, if this is changed, also change the check in ci/run_tests.sh
+        session.exitstatus = os.EX_TEMPFAIL
 
 
 @pytest.fixture(scope='function', autouse=True)

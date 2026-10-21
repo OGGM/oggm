@@ -32,7 +32,9 @@ from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              InvalidWorkflowError,
-                             DownloadVerificationFailedException)
+                             DownloadVerificationFailedException,
+                             DownloadOutageError, HttpDownloadError,
+                             HttpContentTooShortError)
 from oggm.core import flowline
 
 salem = pytest.importorskip('salem')
@@ -3715,6 +3717,378 @@ def make_fake_zipdir(dir_path, fakefile=None, base_dir=None,
         touch(os.path.join(dir_path, fakefile))
     shutil.make_archive(dir_path, archive, dir_path, base_dir)
     return dir_path + extension
+
+
+class TestDownloadCacheAtomicity:
+    """`_cached_download_helper` writes to a temp file and never caches a
+    truncated or partial download."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_path):
+        cfg.initialize()
+        cfg.PATHS["dl_cache_dir"] = str(tmp_path / "dl_cache")
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        utils.mkdir(cfg.PATHS["dl_cache_dir"])
+        utils.mkdir(cfg.PATHS["working_dir"])
+        self.name = "example.com/atomic_test.txt"
+        self.final = os.path.join(cfg.PATHS["dl_cache_dir"], self.name)
+
+    def test_dl_func_never_sees_the_final_path(self):
+        seen = {}
+
+        def dl(path):
+            seen["path"] = path
+            assert not os.path.exists(self.final)
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, dl)
+        assert out == self.final
+        assert seen["path"] != self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+        # nothing but the finished file may remain in the cache dir
+        assert os.listdir(os.path.dirname(self.final)) == [
+            os.path.basename(self.final)
+        ]
+
+    def test_failed_download_leaves_no_cache_entry(self):
+
+        def bad(path):
+            with open(path, "w") as f:
+                f.write("parti")
+            raise OSError("connection lost")
+
+        with pytest.raises(OSError):
+            _downloads._cached_download_helper(self.name, bad)
+        assert not os.path.exists(self.final)
+
+        # the next attempt self-heals
+        def good(path):
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, good)
+        assert out == self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+
+    def test_stale_tmp_from_hard_kill_is_never_served(self):
+        # a hard-killed process left a partial tmp behind
+        utils.mkdir(os.path.dirname(self.final))
+        with open(f"{self.final}.tmp{os.getpid() + 1}", "w") as f:
+            f.write("garbage")
+
+        def good(path):
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, good)
+        assert out == self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+
+    def test_two_writers_one_entry(self, monkeypatch):
+        """Check concurrent downloads don't write to the same file."""
+        pid = os.getpid()
+
+        def second(path):
+            with open(path, "w") as f:
+                f.write("complete")
+            return path
+
+        def first(path):
+            with open(path, "w") as f:
+                f.write("comp")
+                f.flush()
+                monkeypatch.setattr(os, "getpid", lambda: pid + 1)
+                _downloads._cached_download_helper(
+                    self.name, second, reset=True
+                )
+                monkeypatch.setattr(os, "getpid", lambda: pid)
+                f.write("lete")
+            return path
+
+        out = _downloads._cached_download_helper(self.name, first)
+        assert out == self.final
+        with open(out) as f:
+            assert f.read() == "complete"
+        assert os.listdir(os.path.dirname(self.final)) == [
+            os.path.basename(self.final)
+        ]
+
+    @staticmethod
+    def _archive_bytes(ext, tmp_path):
+        """Return the bytes of a complete ``ext`` archive (zip or tar)."""
+        src = tmp_path / "member.bin"
+        src.write_bytes(os.urandom(20000))
+        out = tmp_path / f"src.{ext}"
+        if ext == "zip":
+            import zipfile
+
+            with zipfile.ZipFile(out, "w") as zf:
+                zf.write(src, "member.bin")
+        else:
+            with tarfile.open(out, "w") as tf:
+                tf.add(src, "member.bin")
+        return out.read_bytes()
+
+    @pytest.mark.parametrize("ext", ["zip", "tar"])
+    def test_truncated_archive_hit_is_downloaded_again(self, ext, tmp_path):
+        name = f"example.com/bundle.{ext}"
+        final = os.path.join(cfg.PATHS["dl_cache_dir"], name)
+        data = self._archive_bytes(ext, tmp_path)
+        calls = []
+
+        def dl(path):
+            calls.append(path)
+            with open(path, "wb") as f:
+                f.write(data)
+            return path
+
+        # a truncated file left by an older OGGM
+        utils.mkdir(os.path.dirname(final))
+        with open(final, "wb") as f:
+            f.write(data[: len(data) * 2 // 3])
+
+        assert _downloads._cached_download_helper(name, dl) == final
+        assert len(calls) == 1
+        with open(final, "rb") as f:
+            assert f.read() == data
+
+        # a complete file is served from cache
+        assert _downloads._cached_download_helper(name, dl) == final
+        assert len(calls) == 1
+
+    def test_truncated_readonly_cache_hit_uses_fallback(self, tmp_path):
+        """A truncated file in the read-only global cache is downloaded
+        again into the fallback, i.e. the working directory's cache."""
+        name = "example.com/bundle.tar"
+        data = self._archive_bytes("tar", tmp_path)
+        ro = os.path.join(cfg.PATHS["dl_cache_dir"], name)
+        utils.mkdir(os.path.dirname(ro))
+        with open(ro, "wb") as f:
+            f.write(data[: len(data) // 2])
+        cfg.PARAMS["dl_cache_readonly"] = True
+
+        def dl(path):
+            with open(path, "wb") as f:
+                f.write(data)
+            return path
+
+        out = _downloads._cached_download_helper(name, dl)
+        assert out == os.path.join(cfg.PATHS["working_dir"], "cache", name)
+        with open(out, "rb") as f:
+            assert f.read() == data
+        # the read-only cache is left as it was
+        assert os.path.getsize(ro) == len(data) // 2
+
+    def test_truncated_transfer_is_retried_and_not_cached(self, monkeypatch):
+        import http.server
+        import threading
+
+        requests_seen = []
+
+        class ShortBody(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests_seen.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "1000000")
+                self.end_headers()
+                self.wfile.write(bytes(300000))
+                self.close_connection = True
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ShortBody)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        cfg.PARAMS["has_internet"] = True
+        cfg.PARAMS["download_url_allowlist"] = []
+        monkeypatch.setattr(_downloads.time, "sleep", lambda s: None)
+        monkeypatch.setattr(_downloads, "_DEAD_HOSTS", {})
+        url = f"http://127.0.0.1:{server.server_port}/short.bin"
+        try:
+            with pytest.raises(DownloadOutageError):
+                utils.file_downloader(url, retry_max=3)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+        assert len(requests_seen) == 3
+        cached = os.path.join(cfg.PATHS["dl_cache_dir"], "127.0.0.1")
+        assert not os.path.exists(cached) or os.listdir(cached) == []
+
+    def test_probe_dl_func_returning_none(self):
+        """A probe, i.e. a `dl_func` that finds nothing and returns
+        None, gets None back and leaves nothing in the cache."""
+        out = _downloads._cached_download_helper(self.name, lambda p: None)
+        assert out is None
+        assert not os.path.exists(self.final)
+
+
+class TestDownloadRetries:
+    """`file_downloader` retries transient errors, then raises
+    `DownloadOutageError` and fails fast for the dead host."""
+
+    URL = "https://example.com/dir/file.txt"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_path, monkeypatch):
+        cfg.initialize()
+        cfg.PATHS["dl_cache_dir"] = str(tmp_path / "dl_cache")
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        utils.mkdir(cfg.PATHS["dl_cache_dir"])
+        utils.mkdir(cfg.PATHS["working_dir"])
+        monkeypatch.setattr(_downloads, "_DEAD_HOSTS", {})
+        self.sleeps = []
+        monkeypatch.setattr(_downloads.time, "sleep", self.sleeps.append)
+
+    def test_outage_error_survives_pickling(self):
+        import pickle
+
+        err = DownloadOutageError(self.URL, 3, OSError("refused"))
+        back = pickle.loads(pickle.dumps(err))
+        assert isinstance(back, RuntimeError)
+        assert back.url == self.URL
+        assert back.attempts == 3
+        assert "refused" in str(back)
+        assert back.last_error == "OSError('refused')"
+        # args must not gain a layer of quotes per round trip
+        assert back.args == err.args
+        assert pickle.loads(pickle.dumps(back)).args == err.args
+
+    def test_outage_error_keeps_message_unquoted(self):
+        err = DownloadOutageError(self.URL, 0, "h failed recently")
+        assert err.last_error == "h failed recently"
+
+    def fake_dl(self, monkeypatch, *outcomes):
+        """Each call to the network pops an outcome: raise it or return it."""
+        outcomes = list(outcomes)
+        calls = []
+
+        def fake(url, **kwargs):
+            calls.append(url)
+            out = outcomes.pop(0) if len(outcomes) > 1 else outcomes[0]
+            if isinstance(out, BaseException):
+                raise out
+            return out
+
+        monkeypatch.setattr(_downloads, "_progress_urlretrieve", fake)
+        return calls
+
+    def test_connection_outage_is_retried_then_raises(self, monkeypatch):
+        import requests
+        from urllib3.exceptions import MaxRetryError, NewConnectionError
+
+        err = requests.ConnectionError(
+            MaxRetryError(None, self.URL, NewConnectionError(None, "refused"))
+        )
+        calls = self.fake_dl(monkeypatch, err)
+        with pytest.raises(DownloadOutageError) as exc:
+            utils.file_downloader(self.URL)
+        assert len(calls) == 3
+        assert self.sleeps == [5, 15]
+        assert exc.value.url == self.URL
+        assert exc.value.attempts == 3
+        assert exc.value.__cause__ is err
+
+    def test_recovers_after_two_failures(self, monkeypatch):
+        import requests
+
+        calls = self.fake_dl(
+            monkeypatch,
+            requests.ConnectionError("a"),
+            requests.ConnectionError("b"),
+            "/tmp/ok",
+        )
+        assert utils.file_downloader(self.URL) == "/tmp/ok"
+        assert len(calls) == 3
+        assert self.sleeps == [5, 15]
+
+    def test_404_is_a_miss_and_403_is_permanent(self, monkeypatch):
+        calls = self.fake_dl(monkeypatch, HttpDownloadError(404, self.URL))
+        assert utils.file_downloader(self.URL) is None
+        assert len(calls) == 1
+
+        calls = self.fake_dl(monkeypatch, HttpDownloadError(403, self.URL))
+        with pytest.raises(HttpDownloadError):
+            utils.file_downloader(self.URL)
+        assert len(calls) == 1
+        assert self.sleeps == []
+
+    @pytest.mark.parametrize(
+        "make_err",
+        [
+            lambda url: __import__("requests").ReadTimeout("slow"),
+            lambda url: HttpContentTooShortError(url),
+            lambda url: HttpDownloadError(503, url),
+            # a certificate failure is a ConnectionError too, so it ends up
+            # labelled an outage (accepted misclassification)
+            lambda url: __import__("requests").exceptions.SSLError("cert"),
+        ],
+    )
+    def test_transient_errors_are_retried(self, monkeypatch, make_err):
+        calls = self.fake_dl(monkeypatch, make_err(self.URL))
+        with pytest.raises(DownloadOutageError):
+            utils.file_downloader(self.URL)
+        assert len(calls) == 3
+
+    def test_dead_host_fails_fast_but_serves_cache(self, monkeypatch):
+        import requests
+
+        cfg.PARAMS["has_internet"] = True
+        cfg.PARAMS["download_url_allowlist"] = []
+        calls = []
+
+        def net(url, *args):
+            calls.append(url)
+            raise requests.ConnectionError("down")
+
+        monkeypatch.setattr(_downloads, "_requests_urlretrieve", net)
+        with pytest.raises(DownloadOutageError):
+            utils.file_downloader(self.URL)
+        assert len(calls) == 3
+
+        other = "https://example.com/dir/other.txt"
+        with pytest.raises(DownloadOutageError):
+            utils.file_downloader(other)
+        assert len(calls) == 3
+
+        cached = os.path.join(
+            cfg.PATHS["dl_cache_dir"], "example.com/dir/cached.txt"
+        )
+        utils.mkdir(os.path.dirname(cached))
+        with open(cached, "w") as f:
+            f.write("cached")
+        url = "https://example.com/dir/cached.txt"
+        assert utils.file_downloader(url) == cached
+        assert len(calls) == 3
+
+    def test_classic_urlretrieve_takes_the_default_timeout(
+        self, tmp_path, monkeypatch
+    ):
+        import inspect
+
+        timeout = (
+            inspect.signature(utils.file_downloader)
+            .parameters["timeout"]
+            .default
+        )
+        seen = []
+        monkeypatch.setattr(
+            _downloads.urllib.request,
+            "urlretrieve",
+            lambda *a: seen.append(_downloads.socket.getdefaulttimeout()),
+        )
+        _downloads._classic_urlretrieve(
+            self.URL, str(tmp_path / "f"), None, timeout=timeout
+        )
+        assert seen == [60]
 
 
 class FakeDownloadManager():
