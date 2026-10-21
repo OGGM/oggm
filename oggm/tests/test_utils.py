@@ -1,5 +1,4 @@
 import unittest
-import json
 import glob
 import json
 import logging
@@ -2567,7 +2566,7 @@ class TestPreproCLI:
             assert ref == new
             assert len(new) > 1
 
-        # same deltas, not materialisations of all levels below
+        # Both runs write the same deltas
         def manifest(root, lev, rgi_id):
             bundle = glob.glob(
                 os.path.join(
@@ -3262,19 +3261,34 @@ class TestPreproCLI:
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
-                    'oggm_v1.1/')
-
         # Read in the RGI file
         inter, rgidf = _read_shp()
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      is_test=True, rgi_file=rgidf, intersects_file=inter)
+
+        # Legacy (cumulative) directories can still be read, but new levels
+        # can not be built on them
+        legacy_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
+                      'oggm_v1.1/')
+        with pytest.raises(InvalidWorkflowError, match='legacy'):
+            run_prepro_levels(output_folder=tmpdir.mkdir("legacy_levs"),
+                              working_dir=tmpdir.mkdir("legacy_wd"),
+                              start_level=1, start_base_url=legacy_url,
+                              max_level=2, disable_mp=True, **common)
+
+        # The L1 to start from, made here. It is read from disk, since the
+        # spawned workers below could not use a fake download url.
+        l1_dir = tmpdir.mkdir("l1_levs")
+        run_prepro_levels(output_folder=l1_dir, working_dir=tmpdir.mkdir("l1_wd"),
+                          test_topofile=utils.get_demo_file('srtm_oetztal.tif'),
+                          max_level=1, disable_mp=True, **common)
+
         wdir = tmpdir.mkdir("wd")
         odir = tmpdir.mkdir("my_levs")
         np.random.seed(0)
         ref_mb_period = '2000-01-01_2010-01-01'
-        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
-                          output_folder=odir, working_dir=wdir, is_test=True,
-                          rgi_file=rgidf, intersects_file=inter,
-                          start_level=1, start_base_url=base_url,
+        run_prepro_levels(output_folder=odir, working_dir=wdir,
+                          start_level=1, start_from_dir=str(l1_dir), **common,
                           mb_calibration_strategy='melt_temp',
                           disable_mp=False,
                           inversion_volume_dataset='consensus',
@@ -3339,13 +3353,20 @@ class TestPreproCLI:
         )
         assert os.path.isfile(tarf)
 
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
+        # L1 is a delta on L0, like with a single DEM
+        tarf = [os.path.join(odir, 'RGI61', 'b_020', f'L{lev}',
+                             rid[:8], rid[:11], rid + '.tar.gz')
+                for lev in [0, 1]]
+        assert not os.path.isfile(tarf[-1])
 
         entity = rgidf.iloc[0]
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
+        with open(os.path.join(gdir.dir, 'L1.manifest.json')) as f:
+            m1 = json.load(f)
+        assert m1['kind'] == 'delta'
+        assert m1['parent']['label'] == 'L0'
+        assert 'USER/dem.tif' in m1['files']['added']
 
 
 def _fake_glacier_statistics(grid_points, reg='11', dlon=0.5, dlat=0.5,

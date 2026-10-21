@@ -295,7 +295,8 @@ Enhancements
   only the files it added, changed or removed relative to its parent, plus a
   manifest file recording build information. Clients layer the levels they need
   into one glacier directory so several experiments can share one set of lower
-  levels. Legacy cumulative datasets still work (:pull:`1951`).
+  levels. Legacy cumulative datasets can still be read, but new levels can
+  only be built on incremental ones (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
@@ -508,6 +509,9 @@ Breaking changes
   changed a bit the centerlines and downstream lines results. This is most 
   noticeable in the centerlines representation (:pull:`2014`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- OGGM now requires Python 3.12 or newer (:pull:`1951`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 
 v1.6.3 (April 13, 2026)
 -----------------------

@@ -275,20 +275,16 @@ def _start_state(gdir, resume_at_inversion):
     """The state the first level written by this run is a delta against.
 
     Normally this is the current initialised directory, except at `3a`,
-    where it is the L2 state left by the `3a` stage. Returns None if
-    that state is missing (e.g. an L3a written before it was added), so
-    the level is then shipped as a materialisation.
+    where it is the L2 state left by the `3a` stage.
     """
     if not resume_at_inversion:
         return utils.snapshot_gdir_state(gdir.dir)
     fp = os.path.join(gdir.dir, _L2_STATE)
     if not os.path.exists(fp):
-        log.warning(
-            "(%s) no %s in the L3a directory: the L3 tar will " "be a materialisation.",
-            gdir.rgi_id,
-            _L2_STATE,
+        raise InvalidWorkflowError(
+            f"({gdir.rgi_id}) no {_L2_STATE} in the L3a directory: "
+            "rerun the `3a` stage."
         )
-        return None
     with open(fp) as f:
         state = json.load(f)
     # Not an L3 file: it must not end up in the L3 tar
@@ -296,24 +292,33 @@ def _start_state(gdir, resume_at_inversion):
     return state
 
 
-def _has_glacier_masks(gdir: GlacierDirectory) -> bool:
-    """Whether gridded_data.nc already holds the glacier masks (from L1).
+def _check_start_manifests(gdirs: list[GlacierDirectory], label: str):
+    """Check that the directories we start from carry a level manifest.
+
+    New levels are deltas on the level they start from, so they can't be
+    built on legacy (cumulative) directories, which have no manifest.
 
     Parameters
     ----------
-    gdir : GlacierDirectory
-        The glacier directory to check.
+    gdirs : list of GlacierDirectory
+        The glacier directories this run starts from.
+    label : str
+        The label of the level the first written level is built on,
+        e.g. ``"L2"``.
 
-    Returns
-    -------
-    bool
-        True if ``gridded_data.nc`` exists and has a ``glacier_mask``.
+    Raises
+    ------
+    InvalidWorkflowError
+        If any of the directories has no ``{label}.manifest.json``.
     """
-    fp = gdir.get_filepath('gridded_data')
-    if not os.path.exists(fp):
-        return False
-    with utils.ncDataset(fp) as nc:
-        return 'glacier_mask' in nc.variables
+    missing = [gdir.rgi_id for gdir in gdirs if not os.path.exists(
+        os.path.join(gdir.dir, f'{label}.manifest.json'))]
+    if missing:
+        raise InvalidWorkflowError(
+            f'{len(missing)} of the {len(gdirs)} glacier directories to '
+            f'start from (e.g. {missing[0]}) have no {label}.manifest.json: '
+            'new levels can not be built on legacy (cumulative) '
+            'directories. Start from a tree made by this OGGM version.')
 
 
 def _parent_base_url(gdir_dir: str, parent: str) -> str | None:
@@ -372,49 +377,26 @@ def _delta_tar_entries(
         The RGI version.
 
     Returns
-    --------
+    -------
     list
         A list of ``(gdir, {'include': changed_paths})`` entries for
         ``execute_entity_task(utils.gdir_to_tar, entries, ...)``, so
-        each level tar ships only what the level changed. Glaciers whose
-        manifest cannot be written (e.g. errored directories) fall back
-        to a full, manifest-less (legacy) tar.
+        each level tar ships only what the level changed.
     """
+    parent = f"L{level - 1}"
     entries = []
     for gdir in gdirs:
-        try:
-            parent = f"L{level - 1}"
-            if gdir.rgi_id in states and os.path.exists(
-                os.path.join(gdir.dir, f"{parent}.manifest.json")
-            ):
-                layers = dict(
-                    parent=parent,
-                    parent_base_url=_parent_base_url(gdir.dir, parent),
-                )
-            else:
-                # Nothing to diff against, or a legacy (manifest-less)
-                # parent we must not build on: ship every file
-                layers = dict(kind="materialisation")
-            _, changed = utils.write_level_manifest(
-                gdir,
-                label=f"L{level}",
-                prev_state=states.get(gdir.rgi_id, {}),
-                border=border,
-                rgi_version=rgi_version,
-                **layers,
-            )
-            states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
-            entries.append((gdir, {"include": changed}))
-        except Exception as err:
-            log.warning(
-                "(%s) could not write the L%d manifest (%s: %s); "
-                "writing a full tar instead.",
-                gdir.rgi_id,
-                level,
-                type(err).__name__,
-                err,
-            )
-            entries.append((gdir, {"include": None}))
+        _, changed = utils.write_level_manifest(
+            gdir,
+            label=f"L{level}",
+            prev_state=states[gdir.rgi_id],
+            parent=parent,
+            parent_base_url=_parent_base_url(gdir.dir, parent),
+            border=border,
+            rgi_version=rgi_version,
+        )
+        states[gdir.rgi_id] = utils.snapshot_gdir_state(gdir.dir)
+        entries.append((gdir, {"include": changed}))
     return entries
 
 
@@ -791,7 +773,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         With `deltas`, the per-glacier delta manifests are written first and
         each tar ships only what the level changed. `deltas=False` tars the
         directories whole (L0 and L5, whose manifests are written by their
-        caller, and the multi-DEM L1 branch, which has none).
+        caller).
 
         A `temp_bias_run` ships no glacier directories at all, so this is
         then a no-op.
@@ -1002,7 +984,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # L0 OK - compress all in output directory
         if not temp_bias_run:
             for gdir in gdirs:
-                # L0 is the root artifact so fully shipped
+                # L0 is the root artefact so fully shipped
                 utils.write_level_manifest(
                     gdir,
                     label="L0",
@@ -1045,12 +1027,14 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                   prepro_base_url=start_base_url
                                                   )
 
-    if start_level > 0:
-        # The first level produced is a delta against the loaded state
+    if start_level > 0 and not temp_bias_run:
+        # The first level produced is a delta against the loaded state.
+        # `4a` writes L5 only, on top of the L4 it reads.
+        _check_start_manifests(
+            gdirs, 'L4' if summary_only else f'L{start_level}')
         for gdir in gdirs:
-            state = _start_state(gdir, resume_at_inversion)
-            if state is not None:
-                manifest_states[gdir.rgi_id] = state
+            manifest_states[gdir.rgi_id] = _start_state(gdir,
+                                                        resume_at_inversion)
 
     # L1 - Add dem files
     if start_level == 0:
@@ -1067,11 +1051,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                 sources = ['COPDEM30', 'COPDEM90', 'NASADEM']
 
             log.workflow('Running prepro on several sources')
-            for i, s in enumerate(sources):
-                rs = i == 0
+            for s in sources:
                 log.workflow('Running prepro on sources: {}'.format(s))
-                gdirs = workflow.init_glacier_directories(rgidf, reset=rs,
-                                                          force=rs)
+                # The L0 directories are already there
+                gdirs = workflow.init_glacier_directories(rgidf)
                 workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                              source=s)
                 workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)
@@ -1107,7 +1090,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs, source=dem_source)
 
             # L1 OK - compress all in output directory
-            _write_level_tars(1, gdirs, deltas=False)
+            _write_level_tars(1, gdirs)
 
             _time_log()
             return
@@ -1178,17 +1161,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                          dem_source=select_source_from_dir,
                                          keep_dem_folders=keep_dem_folders)
 
-        # HH2015 method. The masks usually come with L1: computing them
-        # again would rewrite gridded_data.nc, and the L2 delta would then
-        # ship it again in full. L1 trees made before that, and DEMs just
-        # selected from a multi-DEM L1, still need them computed here.
-        todo = gdirs_band
-        if select_source_from_dir is None:
-            todo = [gd for gd in gdirs_band if not _has_glacier_masks(gd)]
-            log.workflow(f'L2: reusing the L1 glacier masks of '
-                         f'{len(gdirs_band) - len(todo)} of '
-                         f'{len(gdirs_band)} glaciers.')
-        workflow.execute_entity_task(tasks.simple_glacier_masks, todo)
+        # HH2015 method. The masks come with L1: computing them again
+        # would rewrite gridded_data.nc, and the L2 delta would then ship
+        # it again in full. Only a DEM just selected from a multi-DEM L1
+        # needs them computed here.
+        if select_source_from_dir is not None:
+            workflow.execute_entity_task(tasks.simple_glacier_masks,
+                                         gdirs_band)
 
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
@@ -1692,24 +1671,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # The mini run bundle is self-sufficient, so shipped as standalone.
         # Its parent L4 has the necessary manifest.
         full_dir = full_dirs[gdir.rgi_id]
-        if os.path.exists(os.path.join(full_dir, 'L4.manifest.json')):
-            parent = dict(
-                parent='L4',
-                parent_base_url=_parent_base_url(full_dir, 'L4'),
-                parent_dir=full_dir,
-            )
-        else:
-            # e.g. an errored glacier whose L4 went out as a full tar
-            log.warning("(%s) no L4 manifest: L5 has no parent.", gdir.rgi_id)
-            parent = {}
         utils.write_level_manifest(
             gdir,
             label='L5',
             prev_state={},
             kind='standalone',
+            parent='L4',
+            parent_base_url=_parent_base_url(full_dir, 'L4'),
+            parent_dir=full_dir,
             border=border,
             rgi_version=rgi_version,
-            **parent,
         )
     _write_level_tars(5, mini_gdirs, deltas=False)
 

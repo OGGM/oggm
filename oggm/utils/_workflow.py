@@ -3575,9 +3575,8 @@ class GlacierDirectory(object):
         from_tar : str, list of str or bool, default=False
             path to a tar file to extract the gdir data from. If set to
             `True`, will check for a tar file at the expected location
-            in `base_dir`. A list of paths (one materialisation plus any
-            level deltas) are layered into the directory in ascending
-            order.
+            in `base_dir`. A list of paths (the level tars of a chain, root
+            first) are layered into the directory in ascending order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
@@ -5636,10 +5635,10 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
-# Readers compare the major part only: a minor bump (e.g. a new kind) stays
-# readable, a major bump raises in `_finalize_merged_dir`.
+# Readers compare the major part only: a minor bump stays readable, a major
+# bump raises in `_finalize_merged_dir`.
 _MANIFEST_SCHEMA = "1.0"
-_MANIFEST_KINDS = ("delta", "materialisation", "standalone")
+_MANIFEST_KINDS = ("delta", "standalone")
 
 
 def manifest_id(manifest: dict) -> str:
@@ -5681,10 +5680,6 @@ def _finalize_merged_dir(dirpath: str):
         A file removed by one level and written again by a later one
         stays.
 
-    .. note::
-        Manifests of a kind this version does not know, e.g. an add-on
-        written by a newer minor schema, are skipped with a warning.
-
     Parameters
     ----------
     dirpath : str
@@ -5693,12 +5688,13 @@ def _finalize_merged_dir(dirpath: str):
     Raises
     ------
     InvalidWorkflowError
-        If a manifest's schema major version is newer than what this
-        OGGM version can read. Also raised if a parent manifest is
-        missing, or its ``id`` differs from the child's ``parent.id``.
-        This happens with a stale download cache, a regenerated parent,
-        or a legacy cumulative parent. Either way the directory is left
-        as the tars extracted it, without the removal pass.
+        If a manifest's schema major version or its kind is unknown to
+        this OGGM version, or if the manifests do not form one chain.
+        Also raised if a parent manifest is missing, or its ``id``
+        differs from the child's ``parent.id``. This happens with a
+        stale download cache or a regenerated parent. Either way the
+        directory is left as the tars extracted it, without the removal
+        pass.
     """
     manifests = {}
     for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
@@ -5712,22 +5708,25 @@ def _finalize_merged_dir(dirpath: str):
                 "Upgrade OGGM, or rebuild the level."
             )
         if m.get("kind") not in _MANIFEST_KINDS:
-            log.warning(
-                "Skipping %s: unknown manifest kind %r. A newer OGGM "
-                "version may use it.",
-                os.path.basename(fp),
-                m.get("kind"),
+            raise InvalidWorkflowError(
+                f"{os.path.basename(fp)} has the manifest kind "
+                f"{m.get('kind')!r}, unknown to this OGGM version. "
+                "Upgrade OGGM."
             )
-            continue
         manifests[m["label"]] = m
     if not manifests:
         return
 
-    # This is a tie-breaker for instances where a full tar carries stale
-    # lower manifests (a `3a` start without L2.state.json).
+    # The tars are layered from the root to the requested level, so only
+    # the requested level is no other level's parent
     named = {(m.get("parent") or {}).get("label") for m in manifests.values()}
     leaves = [m for lbl, m in manifests.items() if lbl not in named]
-    chain = [max(leaves or manifests.values(), key=lambda m: m["created"])]
+    if len(leaves) != 1:
+        raise InvalidWorkflowError(
+            f"The manifests layered in {dirpath} "
+            f"({', '.join(sorted(manifests))}) do not form one chain."
+        )
+    chain = leaves
     while (
         chain[-1]["kind"] == "delta"
         and chain[-1].get("parent")
@@ -5810,9 +5809,8 @@ def write_level_manifest(
     directory. Per-label file names mean a layered directory
     self-documents every artefact applied to it.
 
-    The parent's id is read from its manifest. Legacy directories will
-    therefore raise an error instead of producing a broken chain. Users
-    should convert legacy directories into the new format instead.
+    The parent's id is read from its manifest, so a level can't be built
+    on a legacy (cumulative) directory, which has none.
 
     Parameters
     ----------
@@ -5820,14 +5818,14 @@ def write_level_manifest(
         The glacier directory or its path.
     label : str
         The artefact's label, which is also its folder name in the
-        published tree, e.g. ``"L3"`` or ``"L3a"``.
+        published tree, e.g. ``"L3"``.
     prev_state : dict
-        Snapshot of the parent's state. Ignored for the non-delta kinds,
-        which ship every file.
+        Snapshot of the parent's state. Ignored for a ``'standalone'``,
+        which ships every file.
     parent : str | None, optional
         Label of the artefact this one was built on. Required for a
-        ``'delta'`` other than the root, kept for provenance by a
-        ``'standalone'``, and forbidden for a ``'materialisation'``.
+        ``'delta'`` other than the root, and kept for provenance by a
+        ``'standalone'``.
     parent_base_url : str | None, optional
         Base URL of the tree holding the parent. None means the same tree
         as this manifest.
@@ -5835,9 +5833,8 @@ def write_level_manifest(
         Directory holding ``{parent}.manifest.json``. Defaults to the
         glacier directory.
     kind : str, default ``'delta'``
-        ``'delta'`` (changes against its parent), ``'materialisation'``
-        (every file, cumulative, no parent) or ``'standalone'`` (only what
-        it needs to run, e.g. the L5 bundle).
+        ``'delta'`` (changes against its parent) or ``'standalone'``
+        (only what it needs to run, e.g. the L5 bundle).
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
@@ -5857,14 +5854,9 @@ def write_level_manifest(
             f"Invalid manifest kind: {kind!r}. "
             f"Must be one of {_MANIFEST_KINDS}."
         )
-    if kind == "materialisation" and parent is not None:
-        raise ValueError(
-            f"A materialisation has no parent, got parent={parent!r}."
-        )
     if kind == "delta" and parent is None and label != "L0":
         raise ValueError(
-            f"A delta other than the root needs a parent, got label={label!r}. "
-            "Pass kind='materialisation' to ship every file instead."
+            f"A delta other than the root needs a parent, got label={label!r}."
         )
     if kind != "delta":
         prev_state = {}  # self-sufficient: ship every file

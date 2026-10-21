@@ -17,7 +17,9 @@ START_LEVEL=2            # the level read from START_URL
 END_LEVEL=5              # the last level to produce
 
 # Where to start from: a tree holding RGI{version}/b_{border}/L{START_LEVEL}/
-START_URL=https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/L1-L2_files/2025.6/elev_bands/
+# It must be an incremental (delta) tree: new levels can not be built on the
+# legacy cumulative ones (e.g. oggm_v1.6/L1-L2_files/2025.6).
+START_URL=https://your.server/path/to/L1-L2_files/
 
 # The temperature bias prior needed by the informed_threestep calibration.
 # It must match your setup (RGI version, climate, mass balance model).
