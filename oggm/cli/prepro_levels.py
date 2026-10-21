@@ -32,7 +32,9 @@ from oggm.utils import get_prepro_base_url, file_downloader
 
 log = logging.getLogger(__name__)
 
-# The preprocessing levels. Besides the usual 0 to 5, two "half levels" allow
+# The preprocessing levels. '0' is the start from scratch (the glacier
+# directories are built from the RGI file, there is no published L0): L1 is
+# the first level written. Besides the usual 1 to 5, two "half levels" allow
 # to split L3 and L4 where the work stops being per-glacier and starts needing
 # the whole RGI region at once. This is what makes it possible to run the
 # expensive part in many small chunk jobs on a cluster:
@@ -549,7 +551,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         optional kwargs passed to the custom climate task when it is executed.
     start_level : str or int
         the pre-processed level to start from (default is to start from
-        scratch). If set, you'll need to indicate start_base_url or
+        scratch, i.e. 0). If set, you'll need to indicate start_base_url or
         start_from_dir as well. One of 0, 1, 2, '3a', 3, '4a', 4 - see
         `max_level` for what the half levels are.
     start_base_url : str
@@ -701,9 +703,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     ignoring_intersects = start_level_name != '0' and intersects_file is not None
 
     if start_level_name == '0' and start_from_dir is not None:
-        raise InvalidParamsError('start_from_dir needs a start_level: with '
-                                 'level 0 the glacier directories are built '
-                                 'from the RGI file, not read from tars.')
+        raise InvalidParamsError('start_from_dir needs a start_level: from '
+                                 'scratch (level 0) the glacier directories '
+                                 'are built from the RGI file, not read from '
+                                 'tars.')
 
     if stop_before_inversion and skip_inversion:
         # `3a` exists to hand the directories over to the whole-region job
@@ -772,8 +775,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
         With `deltas`, the per-glacier delta manifests are written first and
         each tar ships only what the level changed. `deltas=False` tars the
-        directories whole (L0 and L5, whose manifests are written by their
-        caller).
+        directories whole (L1, the root, and L5, whose manifests are
+        written by their caller).
 
         A `temp_bias_run` ships no glacier directories at all, so this is
         then a no-op.
@@ -795,6 +798,18 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
         )
         utils.base_dir_to_tar(level_base_dir)
+
+    def _write_root_tars(gdirs):
+        """Tar the L1 directories, the root of the delta chain: every file
+        is shipped, and the next levels are deltas on this state."""
+        if not temp_bias_run:
+            for gdir in gdirs:
+                utils.write_level_manifest(gdir, label='L1', prev_state={},
+                                           border=border,
+                                           rgi_version=rgi_version)
+                manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(
+                    gdir.dir)
+        _write_level_tars(1, gdirs, deltas=False)
 
     # Local paths
     if override_params is None:
@@ -846,7 +861,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     if ignoring_intersects:
         log.workflow('`intersects_file` is ignored with start_level > 0: '
                      'the intersects are written to the glacier '
-                     'directories at L0 and are already in the prepro '
+                     'directories at L1 and are already in the prepro '
                      'files we start from.')
 
     if temp_bias_run:
@@ -883,7 +898,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
         # We use intersects. They are only needed to build the glacier
-        # directories from the RGI (L0): from L1 on, each directory has its
+        # directories from the RGI: from L1 on, each directory has its
         # own intersects.shp and the region wide file is never read again
         if rgi_version != '70C' and start_level == 0:
             if intersects_file is None:
@@ -971,34 +986,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             dfs = pd.read_csv(fs, index_col=0)
             rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
-    # L0 - go
+    # The glacier directories, from the RGI outlines
     if start_level == 0:
         gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
-
-        # Glacier stats
-        sum_dir = Path(output_base_dir) / 'L0' / 'summary'
-        utils.mkdir(sum_dir)
-        opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
-        utils.compile_glacier_statistics(gdirs, path=opath)
-
-        # L0 OK - compress all in output directory
-        if not temp_bias_run:
-            for gdir in gdirs:
-                # L0 is the root artefact so fully shipped
-                utils.write_level_manifest(
-                    gdir,
-                    label="L0",
-                    prev_state={},
-                    border=border,
-                    rgi_version=rgi_version,
-                )
-                manifest_states[gdir.rgi_id] = utils.snapshot_gdir_state(
-                    gdir.dir
-                )
-        _write_level_tars(0, gdirs, deltas=False)
-        if max_level == 0:
-            _time_log()
-            return
     elif start_from_dir is not None:
         # The tar files are already on disk (this is how the stages of a
         # chunked run are chained together)
@@ -1053,7 +1043,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             log.workflow('Running prepro on several sources')
             for s in sources:
                 log.workflow('Running prepro on sources: {}'.format(s))
-                # The L0 directories are already there
                 gdirs = workflow.init_glacier_directories(rgidf)
                 workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                              source=s)
@@ -1090,7 +1079,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                                                  gdirs, source=dem_source)
 
             # L1 OK - compress all in output directory
-            _write_level_tars(1, gdirs)
+            _write_root_tars(gdirs)
 
             _time_log()
             return
@@ -1128,7 +1117,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.compile_glacier_statistics(gdirs, path=opath)
 
         # L1 OK - compress all in output directory
-        _write_level_tars(1, gdirs)
+        _write_root_tars(gdirs)
         if max_level == 1:
             _time_log()
             return
@@ -1706,7 +1695,7 @@ def parse_args(args):
     parser.add_argument('--start-level', type=str, default='0',
                         choices=PREPRO_LEVELS[:-1],
                         help='the pre-processed level to start from (default '
-                             'is to start from 0). If set, you will need to '
+                             'is to start from scratch, 0). If set, you will need to '
                              'indicate --start-base-url or --start-from-dir '
                              'as well. See --max-level for the half levels.')
     parser.add_argument('--start-base-url', type=str,

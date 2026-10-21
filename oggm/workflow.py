@@ -458,7 +458,7 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
     tar_base = locate(from_tar)
     # A parent in this local tree (so a null link) is a sibling folder,
     # otherwise it comes from `base_url`. A chunked run writes L3 and L4
-    # to disk, whilst only L0 to L2 are published.
+    # to disk, whilst only L1 and L2 are published.
     root, name = os.path.split(os.path.normpath(from_tar))
     # A `<tree>/RGIxx/b_yyy/<label>` layout is recorded as `<tree>`, so
     # that it reads like a `base_url`. Other layouts keep `root`.

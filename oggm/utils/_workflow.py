@@ -5824,7 +5824,7 @@ def write_level_manifest(
         which ships every file.
     parent : str | None, optional
         Label of the artefact this one was built on. Required for a
-        ``'delta'`` other than the root, and kept for provenance by a
+        ``'delta'`` other than the root (``L1``), and kept for provenance by a
         ``'standalone'``.
     parent_base_url : str | None, optional
         Base URL of the tree holding the parent. None means the same tree
@@ -5854,7 +5854,7 @@ def write_level_manifest(
             f"Invalid manifest kind: {kind!r}. "
             f"Must be one of {_MANIFEST_KINDS}."
         )
-    if kind == "delta" and parent is None and label != "L0":
+    if kind == "delta" and parent is None and label != "L1":
         raise ValueError(
             f"A delta other than the root needs a parent, got label={label!r}."
         )

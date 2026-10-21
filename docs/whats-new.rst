@@ -296,7 +296,8 @@ Enhancements
   manifest file recording build information. Clients layer the levels they need
   into one glacier directory so several experiments can share one set of lower
   levels. Legacy cumulative datasets can still be read, but new levels can
-  only be built on incremental ones (:pull:`1951`).
+  only be built on incremental ones. There is no L0 anymore: L1 (outlines
+  and topography) is the root of the chain (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
