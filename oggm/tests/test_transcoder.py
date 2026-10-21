@@ -428,7 +428,8 @@ class TestNpzStore:
     """The npz store as it is written into a glacier directory."""
 
     def test_write_and_read_npz(self, tmp_path, hef_gdir):
-        """A group is written under data_store and read back verbatim."""
+        """A group is written into the glacier directory and read back
+        verbatim."""
         cfg.initialize()
         cfg.PATHS["working_dir"] = str(tmp_path)
         gdir = hef_gdir
@@ -436,9 +437,7 @@ class TestNpzStore:
 
         gdir.write_npz(data, "inversion_output", filesuffix="_test")
 
-        expected = os.path.join(
-            gdir.dir, "data_store", "inversion_output_test.npz"
-        )
+        expected = os.path.join(gdir.dir, "inversion_output_test.npz")
         assert os.path.isfile(expected)
         back = gdir.read_npz("inversion_output", filesuffix="_test")
         assert_allclose(back["flux"], data["flux"])
@@ -456,7 +455,7 @@ class TestNpzStore:
 
         gdir.write_store(data, "inversion_input", filesuffix="_historical")
 
-        store_dir = os.path.join(gdir.dir, "data_store")
+        store_dir = gdir.dir
         assert os.path.isfile(
             os.path.join(store_dir, "inversion_input_historical.npz")
         )

@@ -2,9 +2,11 @@
 
 # Builtins
 import glob
+import io
 import os
 import tempfile
 import gzip
+import hashlib
 import json
 import time
 import random
@@ -879,8 +881,10 @@ def _write_shape_to_disk(
     if os.path.exists(fpath):
         os.remove(fpath)
 
-    # List all files that were written as shape
-    fs = glob.glob(fpath.replace('.gz', '').replace('.tar', '.*'))
+    # bare `<stem>.*` glob would catch unrelated siblings like `<stem>.parquet`
+    stem = fpath.replace('.gz', '').replace('.tar', '')
+    side_exts = ('.shp', '.shx', '.dbf', '.prj', '.cpg', '.properties')
+    fs = [stem + ext for ext in side_exts if os.path.exists(stem + ext)]
     # Add them to tar
     with tarfile.open(fpath, mode=mode) as tf:
         for ff in fs:
@@ -3405,6 +3409,29 @@ def robust_tar_extract(
         os.remove(from_tar)
 
 
+def _extract_tars(from_tar: str, to_dir: str, delete_tar: bool = False):
+    """Extract one tar or layer several level tars into a directory.
+
+    Lists are extracted in order (root first), later members overwriting
+    earlier ones, after which the merged directory is finalised by
+    checking the level manifests.
+
+    Parameters
+    ----------
+    from_tar : str or list of str
+        Path(s) to the tar file(s) to extract.
+    to_dir : str
+        Path to the directory where to extract the tar file(s).
+    delete_tar : bool, default False
+        Whether to delete the tar file(s) after extraction.
+    """
+    tars = from_tar if isinstance(from_tar, (list, tuple)) else [from_tar]
+    for ft in tars:
+        robust_tar_extract(ft, to_dir, delete_tar=delete_tar)
+    if len(tars) > 1:
+        _finalize_merged_dir(to_dir)
+
+
 def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
     """Find the UTM projection covering a given point on the globe.
 
@@ -3522,10 +3549,17 @@ class GlacierDirectory(object):
     rgi_area_km2
     """
 
-    def __init__(self, rgi_entity, base_dir=None, reset=False,
-                 from_tar=False, delete_tar=False, settings_filesuffix='',
-                 observations_filesuffix='',
-                 add_parent_values_to_settings=False):
+    def __init__(
+        self,
+        rgi_entity,
+        base_dir=None,
+        reset=False,
+        from_tar=False,
+        delete_tar=False,
+        settings_filesuffix='',
+        observations_filesuffix='',
+        add_parent_values_to_settings=False,
+    ):
         """Creates a new directory or opens an existing one.
 
         Parameters
@@ -3538,9 +3572,12 @@ class GlacierDirectory(object):
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
         reset : bool, default=False
             empties the directory at construction (careful!)
-        from_tar : str or bool, default=False
-            path to a tar file to extract the gdir data from. If set to `True`,
-            will check for a tar file at the expected location in `base_dir`.
+        from_tar : str, list of str or bool, default=False
+            path to a tar file to extract the gdir data from. If set to
+            `True`, will check for a tar file at the expected location
+            in `base_dir`. A list of paths (one materialisation plus any
+            level deltas) are layered into the directory in ascending
+            order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
@@ -3568,7 +3605,7 @@ class GlacierDirectory(object):
                     shutil.rmtree(_dir)
                 if from_tar is True:
                     from_tar = _dir + '.tar.gz'
-                robust_tar_extract(from_tar, _dir, delete_tar=delete_tar)
+                _extract_tars(from_tar, _dir, delete_tar=delete_tar)
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
@@ -3608,13 +3645,14 @@ class GlacierDirectory(object):
                                 self.rgi_id[:-3], self.rgi_id)
 
         # Do we have to extract the files first?
+        # This has to happen before the settings are read below.
         if (reset or from_tar) and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
 
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
-            robust_tar_extract(from_tar, self.dir, delete_tar=delete_tar)
+            _extract_tars(from_tar, self.dir, delete_tar=delete_tar)
             write_shp = False
         else:
             mkdir(self.dir)
@@ -4153,9 +4191,10 @@ class GlacierDirectory(object):
     def get_store_filepath(self, filename: str, filesuffix: str = "") -> str:
         """Absolute path to a group of the npz data store.
 
-        Each group of the store is one npz file, named after the
-        filename and its suffix, so that a group can be written or
-        replaced without touching the rest of the store.
+        Each group of the store is one npz file at the top level of the
+        glacier directory, named after the filename and its suffix, so
+        that a group can be written or replaced without touching the rest
+        of the store.
 
         Parameters
         ----------
@@ -4169,9 +4208,7 @@ class GlacierDirectory(object):
         str
             The absolute path to the group's npz file.
         """
-        return os.path.join(
-            self.get_filepath("data_store"), f"{filename}{filesuffix}.npz"
-        )
+        return os.path.join(self.dir, f"{filename}{filesuffix}.npz")
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
         """Reads an npz file located in the directory.
@@ -4202,7 +4239,7 @@ class GlacierDirectory(object):
         """Reads a data store located in the glacier directory.
 
         Supports npz and pickle. Each group of the npz store is one file
-        under ``data_store``, named after the filename and its suffix.
+        in the glacier directory, named after the filename and its suffix.
         If the group is not found, falls back to reading a pickle file
         with the same name and suffix.
 
@@ -4286,7 +4323,6 @@ class GlacierDirectory(object):
         group = f"{filename}{filesuffix}"
         arrays, meta = transcoder.encode_npz(var, group)
         fp = self.get_store_filepath(filename, filesuffix=filesuffix)
-        mkdir(os.path.dirname(fp))
         # Write beside the target and move it into place, so that an
         # interrupted write cannot leave a half-written group behind.
         tmp_fp = f"{fp}.tmp{os.getpid()}"
@@ -5600,8 +5636,323 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
+# Readers compare the major part only: a minor bump (e.g. a new kind) stays
+# readable, a major bump raises in `_finalize_merged_dir`.
+_MANIFEST_SCHEMA = "1.0"
+_MANIFEST_KINDS = ("delta", "materialisation", "standalone")
+
+
+def manifest_id(manifest: dict) -> str:
+    """Content id of one artefact, chained to its parent's id.
+
+    Hashes the content fields only, so two identical builds share an id
+    whatever their ``created`` time or ``oggm_version``. The parent's
+    ``base_url`` is left out, so a mirror serves the same id.
+
+    .. caution::
+        Regenerating a parent changes the id recorded by every child
+        built upon it.
+
+    Parameters
+    ----------
+    manifest : dict
+        A level manifest, as written by :func:`write_level_manifest`.
+
+    Returns
+    -------
+    str
+        A sha256 hex digest.
+    """
+    fields = ("rgi_id", "label", "border", "rgi_version", "files")
+    key = {k: manifest[k] for k in fields}
+    key["parent"] = (manifest.get("parent") or {}).get("id")
+    blob = json.dumps(key, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _finalize_merged_dir(dirpath: str):
+    """Reconstruct a directory after layering level tars into it.
+
+    This orders layered manifests by following a leaf's links to its
+    root, checking each parent is the one its child was built on and
+    deleting files removed by the delta encoding chain.
+
+    .. note::
+        A file removed by one level and written again by a later one
+        stays.
+
+    .. note::
+        Manifests of a kind this version does not know, e.g. an add-on
+        written by a newer minor schema, are skipped with a warning.
+
+    Parameters
+    ----------
+    dirpath : str
+        Path to the merged glacier directory.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If a manifest's schema major version is newer than what this
+        OGGM version can read. Also raised if a parent manifest is
+        missing, or its ``id`` differs from the child's ``parent.id``.
+        This happens with a stale download cache, a regenerated parent,
+        or a legacy cumulative parent. Either way the directory is left
+        as the tars extracted it, without the removal pass.
+    """
+    manifests = {}
+    for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
+        with open(fp) as f:
+            m = json.load(f)
+        version = str(m.get("schema_version", 1))
+        if int(version.split(".")[0]) > int(_MANIFEST_SCHEMA.split(".")[0]):
+            raise InvalidWorkflowError(
+                f"{os.path.basename(fp)} uses manifest schema {version}, "
+                f"but this OGGM version reads schema {_MANIFEST_SCHEMA}. "
+                "Upgrade OGGM, or rebuild the level."
+            )
+        if m.get("kind") not in _MANIFEST_KINDS:
+            log.warning(
+                "Skipping %s: unknown manifest kind %r. A newer OGGM "
+                "version may use it.",
+                os.path.basename(fp),
+                m.get("kind"),
+            )
+            continue
+        manifests[m["label"]] = m
+    if not manifests:
+        return
+
+    # This is a tie-breaker for instances where a full tar carries stale
+    # lower manifests (a `3a` start without L2.state.json).
+    named = {(m.get("parent") or {}).get("label") for m in manifests.values()}
+    leaves = [m for lbl, m in manifests.items() if lbl not in named]
+    chain = [max(leaves or manifests.values(), key=lambda m: m["created"])]
+    while (
+        chain[-1]["kind"] == "delta"
+        and chain[-1].get("parent")
+        and len(chain) <= len(manifests)
+    ):
+        child, ref = chain[-1], chain[-1]["parent"]
+        found = manifests.get(ref["label"])
+        if found is None or found["id"] != ref["id"]:
+            raise InvalidWorkflowError(
+                f"({child['rgi_id']}) {child['label']} was built on "
+                f"{ref['label']} id {ref['id'][:8]} at "
+                f"{ref['base_url'] or 'the same tree'}, but the layered "
+                f"{ref['label']} has "
+                + (f"id {found['id'][:8]}" if found else "no manifest")
+                + ". Clear the download cache, or rebuild "
+                f"{child['label']}."
+            )
+        chain.append(found)
+
+    alive = {}
+    for m in reversed(chain):
+        for rel in m["files"].get("removed", []):
+            alive[rel] = False
+        for rel in [*m["files"]["added"], *m["files"]["updated"]]:
+            alive[rel] = True
+    for rel, keep in alive.items():
+        fp = os.path.join(dirpath, rel)
+        if not keep and os.path.exists(fp):
+            os.remove(fp)
+
+
+def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
+    """Content hashes of a glacier directory, for computing level deltas.
+
+    Maps each relative file path to a sha256 hex digest of its content.
+    Each group of the data store is one npz file, so a group added or
+    rewritten by a prepro level shows up as its own key, e.g.
+    ``inversion_flowlines.npz``.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory (or its path) to snapshot.
+
+    Returns
+    -------
+    dict
+        Mapping of relative file path to sha256 hex digest.
+    """
+
+    root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
+    state = {}
+    for cur, _, files in os.walk(root):
+        for fname in files:
+            if regexp.search(r"\.tmp\d+$", fname):
+                continue  # remove partial write_npz outputs
+            fpath = os.path.join(cur, fname)
+            rel = os.path.relpath(fpath, root).replace(os.sep, "/")
+            with open(fpath, "rb") as f:
+                state[rel] = hashlib.file_digest(f, "sha256").hexdigest()
+    return state
+
+
+def write_level_manifest(
+    gdir_or_dir: GlacierDirectory | str,
+    label: str,
+    prev_state: dict,
+    parent: str | None = None,
+    parent_base_url: str | None = None,
+    parent_dir: str | None = None,
+    kind: str = "delta",
+    border: int | None = None,
+    rgi_version: str | None = None,
+) -> tuple[str, list[str]]:
+    """Diffs a glacier directory against a snapshot and writes a manifest.
+
+    Compares the current state (see :func:`snapshot_gdir_state`) with
+    ``prev_state`` and records what this artefact added, changed, or
+    removed in a ``{label}.manifest.json`` file inside the glacier
+    directory. Per-label file names mean a layered directory
+    self-documents every artefact applied to it.
+
+    The parent's id is read from its manifest. Legacy directories will
+    therefore raise an error instead of producing a broken chain. Users
+    should convert legacy directories into the new format instead.
+
+    Parameters
+    ----------
+    gdir_or_dir : GlacierDirectory | str
+        The glacier directory or its path.
+    label : str
+        The artefact's label, which is also its folder name in the
+        published tree, e.g. ``"L3"`` or ``"L3a"``.
+    prev_state : dict
+        Snapshot of the parent's state. Ignored for the non-delta kinds,
+        which ship every file.
+    parent : str | None, optional
+        Label of the artefact this one was built on. Required for a
+        ``'delta'`` other than the root, kept for provenance by a
+        ``'standalone'``, and forbidden for a ``'materialisation'``.
+    parent_base_url : str | None, optional
+        Base URL of the tree holding the parent. None means the same tree
+        as this manifest.
+    parent_dir : str | None, optional
+        Directory holding ``{parent}.manifest.json``. Defaults to the
+        glacier directory.
+    kind : str, default ``'delta'``
+        ``'delta'`` (changes against its parent), ``'materialisation'``
+        (every file, cumulative, no parent) or ``'standalone'`` (only what
+        it needs to run, e.g. the L5 bundle).
+    border : int | None, optional
+        Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
+    rgi_version : str | None, optional
+        RGI version of the dataset; defaults to
+        ``cfg.PARAMS['rgi_version']``.
+
+    Returns
+    -------
+    tuple[str, list[str]]
+        Path to the written manifest and the list of changed relative
+        paths, including the manifest itself, passed to
+        ``gdir_to_tar(include=...)``.
+    """
+
+    if kind not in _MANIFEST_KINDS:
+        raise ValueError(
+            f"Invalid manifest kind: {kind!r}. "
+            f"Must be one of {_MANIFEST_KINDS}."
+        )
+    if kind == "materialisation" and parent is not None:
+        raise ValueError(
+            f"A materialisation has no parent, got parent={parent!r}."
+        )
+    if kind == "delta" and parent is None and label != "L0":
+        raise ValueError(
+            f"A delta other than the root needs a parent, got label={label!r}. "
+            "Pass kind='materialisation' to ship every file instead."
+        )
+    if kind != "delta":
+        prev_state = {}  # self-sufficient: ship every file
+
+    root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
+    rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
+    if border is None:
+        border = int(cfg.PARAMS["border"])
+    if rgi_version is None:
+        rgi_version = cfg.PARAMS["rgi_version"]
+
+    parent_ref = None
+    if parent is not None:
+        fp = os.path.join(parent_dir or root, f"{parent}.manifest.json")
+        with open(fp) as f:
+            parent_ref = {
+                "base_url": parent_base_url,
+                "label": parent,
+                "id": json.load(f)["id"],
+            }
+
+    def is_manifest(rel):
+        return "/" not in rel and rel.endswith(".manifest.json")
+
+    state = snapshot_gdir_state(root)
+    added, updated = {}, {}
+    for rel, digest in sorted(state.items()):
+        if is_manifest(rel) or prev_state.get(rel) == digest:
+            continue
+        if rel in prev_state:
+            updated[rel] = digest
+        else:
+            added[rel] = digest
+    removed = sorted(
+        r for r in set(prev_state) - set(state) if not is_manifest(r)
+    )
+
+    manifest_name = f"{label}.manifest.json"
+    manifest = {
+        "schema_version": _MANIFEST_SCHEMA,
+        "kind": kind,
+        "rgi_id": rgi_id,
+        "label": label,
+        "parent": parent_ref,
+        "border": int(border),
+        "rgi_version": str(rgi_version),
+        "oggm_version": __version__,
+        "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "files": {"added": added, "updated": updated, "removed": removed},
+    }
+    manifest["id"] = manifest_id(manifest)
+    manifest_path = os.path.join(root, manifest_name)
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    changed_paths = list(added) + list(updated) + [manifest_name]
+    return manifest_path, changed_paths
+
+
+def _tar_add_unstamped(tar: tarfile.TarFile, path: str, arcname: str):
+    """Adds a path to a tar, dropping a manifest's ``fetched_from``.
+
+    The ``fetched_from`` field shows which layer a tar is linked from,
+    which may be a local path. For security reasons, this field is
+    removed before adding the tar to published archives. Other paths,
+    and manifests without the field, are added unchanged.
+    """
+    m = None
+    if path.endswith(".manifest.json") and os.path.isfile(path):
+        with open(path) as f:
+            m = json.load(f)
+    if not isinstance(m, dict) or "fetched_from" not in m:
+        tar.add(path, arcname=arcname)
+        return
+    del m["fetched_from"]
+    data = json.dumps(m, indent=2).encode()  # as `write_level_manifest`
+    ti = tar.gettarinfo(path, arcname=arcname)
+    ti.size = len(data)
+    tar.addfile(ti, io.BytesIO(data))
+
+
 @entity_task(log)
-def gdir_to_tar(gdir, base_dir=None, delete=True):
+def gdir_to_tar(
+    gdir: GlacierDirectory,
+    base_dir: str = None,
+    delete: bool = True,
+    include: list = None,
+) -> str:
     """Writes the content of a glacier directory to a tar file.
 
     The tar file is located at the same location of the original directory.
@@ -5609,15 +5960,24 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
 
     Parameters
     ----------
-    base_dir : str
-        path to the basedir where to write the directory (defaults to the
-        same location of the original directory)
-    delete : bool
-        delete the original directory afterwards (default)
+    gdir : :py:class:`oggm.GlacierDirectory`
+        The glacier directory to write to a tar file.
+    base_dir : str, optional
+        Path to the basedir where to write the directory (defaults to
+        the same location of the original directory).
+    delete : bool, default True
+        Delete the original directory afterwards.
+    include : list of str, optional
+        Only add these paths (relative to the glacier directory) to the
+        tar file, e.g. the changed paths from ``write_level_manifest``
+        when building a per-level delta, such as
+        ``<group>.npz``. Directories are added recursively.
+        The default adds the whole directory.
 
     Returns
     -------
-    the path to the tar file
+    str
+        The path to the tar file.
     """
 
     source_dir = os.path.normpath(gdir.dir)
@@ -5626,8 +5986,25 @@ def gdir_to_tar(gdir, base_dir=None, delete=True):
         opath = os.path.join(base_dir, os.path.relpath(opath, gdir.base_dir))
         mkdir(os.path.dirname(opath))
 
+    arcbase = os.path.basename(source_dir)
+
+    def skip_manifests(ti):
+        top = ti.name.count("/") == 1
+        return None if top and ti.name.endswith(".manifest.json") else ti
+
     with tarfile.open(opath, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
+        if include is None:
+            tar.add(source_dir, arcname=arcbase, filter=skip_manifests)
+            include = [
+                os.path.basename(fp)
+                for fp in glob.glob(os.path.join(source_dir, "*.manifest.json"))
+            ]
+        for rel in sorted(set(include)):
+            _tar_add_unstamped(
+                tar,
+                os.path.join(source_dir, rel),
+                arcname=os.path.join(arcbase, rel),
+            )
 
     if delete:
         shutil.rmtree(source_dir)
