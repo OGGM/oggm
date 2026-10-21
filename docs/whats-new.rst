@@ -277,6 +277,11 @@ Enhancements
   to the glacier state of a given simulation year, instead of the default
   largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Adds a new ``DownloadOutageError`` exception, with a corresponding workflow to
+  indicate when this happens in pytest/GitHub Actions. This exception is raised
+  when a download fails due to a network outage, rather than a logic error
+  (:pull:`2012`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -367,6 +372,13 @@ Bug fixes
   ``error_during_run`` flags of the latter. Both files' attributes are now
   kept, the first file still winning on the keys they share (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Truncated downloads of tar files are now detected and redownloaded. This
+  would cause silent failures that could only be resolved by deleting OGGM's
+  cache (:pull:`2012`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Fixed a urllib3 change which prevented downloads from retrying correctly
+  (:pull:`2012`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
