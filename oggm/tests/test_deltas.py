@@ -1,4 +1,10 @@
-"""Tests for incremental (delta-per-level) glacier directory creation."""
+"""Tests for incremental (delta-per-level) glacier directory creation.
+
+Note there are occasional references to `data_store`, these were part of
+an interim implementation and are no longer used. The tests remain to
+make sure snapshotting doesn't accidentally pick up any stray
+`data_store` sections.
+"""
 
 import io
 import json
@@ -15,6 +21,7 @@ import pytest
 
 import oggm
 from oggm import cfg, utils, workflow
+from oggm.exceptions import InvalidWorkflowError
 from oggm.utils import _compat, _downloads
 from oggm.utils.transcoder import encode_npz
 
@@ -47,7 +54,7 @@ def _write_npz_store(
 ):
     """Write a minimal npz data store to disk."""
 
-    store = Path(path) / "data_store"
+    store = Path(path)
     store.mkdir(parents=True, exist_ok=True)
     # avoid double suffixes
     fp = store / f"{name.removesuffix(".npz")}.npz"
@@ -67,7 +74,7 @@ def _write_npz_store(
 def _make_fake_gdir(path, extra_file=None):
     """A minimal on-disk stand-in for a glacier directory.
 
-    Contains regular files plus a data_store with an npz, in a structure
+    Contains regular files plus an npz store group, in a structure
     readable by `snapshot_gdir_state`.
     """
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -94,9 +101,9 @@ def test_make_fake_dir(tmp_path):
     assert (gdir_dir / "diagnostics.json").is_file()
     assert (gdir_dir / "log.txt").is_file()
     assert (gdir_dir / "dem.tif").is_file()
-    assert (gdir_dir / "data_store").is_dir()
-    assert (gdir_dir / "data_store" / "inversion_flowlines.npz").is_file()
-    test_npz = np.load(gdir_dir / "data_store" / "inversion_flowlines.npz")
+    assert not (gdir_dir / "data_store").exists()  # check no traces of zarr
+    assert (gdir_dir / "inversion_flowlines.npz").is_file()
+    test_npz = np.load(gdir_dir / "inversion_flowlines.npz")
     assert "flux" in test_npz
     test_flux = test_npz["flux"]
     assert test_flux.shape == (20,)
@@ -111,9 +118,8 @@ def test_snapshot_gdir_state(tmp_path):
     # Regular files are keyed by relative path
     assert "diagnostics.json" in state
     assert "log.txt" in state
-    group_key = "data_store/inversion_flowlines.npz"
+    group_key = "inversion_flowlines.npz"
     assert group_key in state
-    assert "data_store" not in state
 
     # Unchanged directory -> identical snapshot
     assert utils.snapshot_gdir_state(gdir_dir) == state
@@ -127,10 +133,10 @@ def test_snapshot_gdir_state(tmp_path):
     assert new_state[group_key] == state[group_key]
 
     # Adding an npz group gives a new key, the existing group is unchanged
-    store = gdir_dir / "data_store"
+    store = gdir_dir
     np.savez(store / "model_flowlines.npz", w=np.ones(3), allow_pickle=False)
     grown = utils.snapshot_gdir_state(gdir_dir)
-    assert "data_store/model_flowlines.npz" in grown
+    assert "model_flowlines.npz" in grown
     assert grown[group_key] == state[group_key]
 
     # Rewriting a group changes its digest
@@ -142,7 +148,7 @@ def test_snapshot_gdir_state(tmp_path):
 
     # ensure partial npz left by interrupted write_npz is never snapshotted
     (store / "x.npz.tmp123").write_bytes(b"partial")
-    assert "data_store/x.npz.tmp123" not in utils.snapshot_gdir_state(gdir_dir)
+    assert "x.npz.tmp123" not in utils.snapshot_gdir_state(gdir_dir)
 
 
 def _write_parent_manifest(gdir_dir, label="L2", mid="parent-l2-id"):
@@ -165,11 +171,11 @@ def test_write_level_manifest_schema(tmp_path):
         json.dump({"melt_f": 5.0}, f)
 
     np.savez(
-        gdir_dir / "data_store" / "model_flowlines",
+        gdir_dir / "model_flowlines",
         w=np.ones(3),
         allow_pickle=False,
     )
-    assert (gdir_dir / "data_store" / "model_flowlines.npz").is_file()
+    assert (gdir_dir / "model_flowlines.npz").is_file()
 
     manifest_path, changed = utils.write_level_manifest(
         gdir_dir,
@@ -186,7 +192,8 @@ def test_write_level_manifest_schema(tmp_path):
         manifest = json.load(f)
 
     state = utils.snapshot_gdir_state(gdir_dir)
-    assert manifest["schema_version"] == 2
+    # this needs to be updated whenever the schema changes
+    assert manifest["schema_version"] == "1.0"
     assert manifest["kind"] == "delta"
     assert manifest["rgi_id"] == "RGI60-11.00897"
     assert manifest["label"] == "L3"
@@ -200,15 +207,15 @@ def test_write_level_manifest_schema(tmp_path):
     assert manifest["oggm_version"]
     assert manifest["created"]
     assert len(manifest["id"]) == 64
+    # store groups are plain files, with no section of their own
     assert manifest["files"]["added"] == {
-        "mb_calib.json": state["mb_calib.json"]
+        "mb_calib.json": state["mb_calib.json"],
+        "model_flowlines.npz": state["model_flowlines.npz"],
     }
     assert manifest["files"]["updated"] == {"log.txt": state["log.txt"]}
     assert manifest["files"]["removed"] == []
-    assert manifest["data_store"] == {
-        "model_flowlines.npz": state["data_store/model_flowlines.npz"]
-    }
     for key in (
+        "data_store",
         "level",
         "requires",
         "includes_levels",
@@ -222,7 +229,7 @@ def test_write_level_manifest_schema(tmp_path):
     assert set(changed) == {
         "mb_calib.json",
         "log.txt",
-        "data_store/model_flowlines.npz",
+        "model_flowlines.npz",
         "L3.manifest.json",
     }
 
@@ -271,7 +278,7 @@ def test_write_level_manifest_removed(tmp_path):
     _write_parent_manifest(gdir_dir)
     prev_state = utils.snapshot_gdir_state(gdir_dir)
     os.remove(gdir_dir / "x.txt")
-    os.remove(gdir_dir / "data_store" / "inversion_flowlines.npz")
+    os.remove(gdir_dir / "inversion_flowlines.npz")
     os.remove(gdir_dir / "L2.manifest.json")  # manifests are never diffed
 
     _write_parent_manifest(gdir_dir)
@@ -279,7 +286,7 @@ def test_write_level_manifest_removed(tmp_path):
         gdir_dir, "L3", prev_state, parent="L2", **_DS
     )
     files = _manifest(path)["files"]
-    assert files["removed"] == ["data_store/inversion_flowlines.npz", "x.txt"]
+    assert files["removed"] == ["inversion_flowlines.npz", "x.txt"]
     assert files["added"] == {} and files["updated"] == {}
     assert changed == ["L3.manifest.json"]
 
@@ -311,6 +318,8 @@ def test_manifest_id(tmp_path):
     assert build("content", extra="!")["id"] != ref["id"]
     assert build("border", border=40)["id"] != ref["id"]
     assert build("parent", parent_id="regenerated")["id"] != ref["id"]
+    # a stray data_store section is not part of the id
+    assert utils.manifest_id({**ref, "data_store": {"x.npz": "0"}}) == ref["id"]
 
 
 @pytest.mark.parametrize("kind", ["materialisation", "standalone"])
@@ -324,8 +333,12 @@ def test_write_level_manifest_ships_every_file(tmp_path, kind):
     )
     m = _manifest(path)
     assert m["kind"] == kind
-    assert set(m["files"]["added"]) == {"diagnostics.json", "log.txt"}
-    assert set(m["data_store"]) == {"inversion_flowlines.npz"}
+    assert set(m["files"]["added"]) == {
+        "diagnostics.json",
+        "log.txt",
+        "inversion_flowlines.npz",
+    }
+    assert "data_store" not in m
     assert (m["parent"] or {}).get("label") == parent
     assert "L4.manifest.json" not in changed
 
@@ -335,7 +348,7 @@ def test_write_level_manifest_ships_every_file(tmp_path, kind):
     [
         ("L3", None, "delta"),  # only the root delta has no parent
         ("L3", "L2", "materialisation"),  # a materialisation has no parent
-        ("L3", None, "patch"),  # unknown kind
+        ("L3", None, "addon"),  # unknown kind
     ],
 )
 def test_write_level_manifest_invalid_kind(tmp_path, label, parent, kind):
@@ -406,7 +419,7 @@ def test_simulate_level(tmp_path):
     assert set(changed) == {
         "mb_calib.json",
         "log.txt",
-        "data_store/model_flowlines.npz",
+        "model_flowlines.npz",
         "L3.manifest.json",
     }
 
@@ -427,12 +440,10 @@ def test_gdir_to_tar_include(tmp_path):
     assert f"{rid}/log.txt" in files
     assert f"{rid}/L3.manifest.json" in files
     # npz group is included
-    assert any(n.startswith(f"{rid}/data_store/model_flowlines") for n in files)
+    assert f"{rid}/model_flowlines.npz" in files
     # unchanged files are not shipped
     assert not any("dem.tif" in n or "diagnostics.json" in n for n in files)
-    assert not any(
-        n.startswith(f"{rid}/data_store/inversion_flowlines") for n in files
-    )
+    assert f"{rid}/inversion_flowlines.npz" not in files
     os.remove(opath)
 
     # include=None keeps the full-directory behavior
@@ -508,7 +519,7 @@ class TestLayeredGdir:
         workbase = str(tmp_path / "work")
         workdir = os.path.join(workbase, rid[:-6], rid[:-3], rid)
         shutil.copytree(hef_gdir.dir, workdir)
-        assert os.path.isdir(os.path.join(workdir, "data_store"))
+        assert os.path.isfile(os.path.join(workdir, "inversion_flowlines.npz"))
 
         # Materialisation artifact: everything up to L3 in one tar
         utils.write_level_manifest(
@@ -572,20 +583,65 @@ class TestLayeredGdir:
         for n in names:
             gdir._write_pickle(original[n], n)
             assert Path(gdir.dir, f"{n}.pkl").is_file()
-            assert not Path(gdir.dir, "data_store", n).is_dir()
+            assert not Path(gdir.dir, f"{n}.npz").exists()
 
         _compat.convert_pickles_to_npz(gdir, delete=arg_delete)
 
         # check the pickles are gone
         for n in names:
-            assert Path(gdir.dir, "data_store").is_dir()
-            assert Path(gdir.dir, "data_store", f"{n}.npz").is_file()
+            assert Path(gdir.dir, f"{n}.npz").is_file()
             if arg_delete:
                 assert not Path(gdir.dir, f"{n}.pkl").is_file()
             else:
                 assert Path(gdir.dir, f"{n}.pkl").is_file()
 
             assert len(gdir.read_store(n)) == len(original[n])
+
+    def test_convert_pickles_to_npz_suffixes(self, tmp_path, hef_gdir):
+        """Each suffixed pickle maps to its own group, and an npz sharing
+        the stem is never read as a pickle."""
+        from oggm.utils import _compat
+
+        rid = hef_gdir.rgi_id
+        workbase = Path(tmp_path / "work")
+        shutil.copytree(hef_gdir.dir, workbase / rid[:-6] / rid[:-3] / rid)
+        gdir = oggm.GlacierDirectory(rid, base_dir=workbase)
+
+        fls = gdir.read_store("model_flowlines")
+        assert len(fls) > 1
+        gdir._write_pickle(fls, "model_flowlines")
+        gdir._write_pickle(
+            fls[-1:], "model_flowlines", filesuffix="_historical"
+        )
+        # a stale group beside the pickle, holding something else
+        np.savez(Path(gdir.dir, "model_flowlines.npz"), v=-np.ones(2))
+
+        _compat.convert_pickles_to_npz(gdir)
+
+        npz = sorted(p.name for p in Path(gdir.dir).glob("model_flowlines*"))
+        assert npz == ["model_flowlines.npz", "model_flowlines_historical.npz"]
+        assert len(gdir.read_store("model_flowlines")) == len(fls)
+        assert len(gdir.read_store("model_flowlines", "_historical")) == 1
+
+
+def _assert_matches_build(loaded, built):
+    """A loaded gdir equals its build, except for the `fetched_from` stamps.
+    
+    Since this uses tmp paths, the stamps keep changing so we can't
+    really check the `fetched_from` values.
+    """
+
+    def split(d):
+        state = utils.snapshot_gdir_state(str(d))
+        manifests = {}
+        for k in [k for k in state if k.endswith(".manifest.json")]:
+            del state[k]
+            m = json.loads(Path(d, k).read_text())
+            m.pop("fetched_from", None)
+            manifests[k] = m
+        return state, manifests
+
+    assert split(loaded) == split(built)
 
 
 class TestDeltaServer:
@@ -746,6 +802,41 @@ class TestDeltaServer:
         mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
         assert mb_calib["melt_f"] == 6.0
 
+    @staticmethod
+    def fetched_from(gdir, label):
+        m = json.loads(Path(gdir.dir, f"{label}.manifest.json").read_text())
+        assert utils.manifest_id(m) == m["id"]
+        return m["fetched_from"]
+
+    def test_url_load_records_fetched_from(self, served_calls):
+        _, rid = served_calls
+        for level, labels in ((4, ("L4", "L3")), (5, ("L5",))):
+            gdir = workflow.init_glacier_directories(
+                [rid],
+                from_prepro_level=level,
+                prepro_border=80,
+                prepro_base_url=self.BASE_URL,
+            )[0]
+            for label in labels:
+                assert self.fetched_from(gdir, label) == self.BASE_URL
+
+    def test_local_tree_records_tree_root(self, delta_server, served_calls):
+        server, rid = delta_server
+        gdir = workflow.gdir_from_tar(
+            rid, os.path.join(server, "RGI62", "b_080", "L4")
+        )
+        for label in ("L4", "L3"):
+            assert self.fetched_from(gdir, label) == server
+
+    def test_fallback_level_records_base_url(self, served_calls, local_l4_only):
+        _, rid = served_calls
+        gdir = workflow.gdir_from_tar(
+            rid, local_l4_only, base_url=self.BASE_URL, prepro_border=80
+        )
+        local_root = str(Path(local_l4_only).parents[2])
+        assert self.fetched_from(gdir, "L4") == local_root
+        assert self.fetched_from(gdir, "L3") == self.BASE_URL
+
     def test_local_tree_missing_level_without_base_url(
         self, served_calls, local_l4_only
     ):
@@ -839,7 +930,7 @@ class TestParentChain:
                 "L3",
                 "L2",
                 self.url("base"),
-                rm=["l2.txt", "data_store/inversion_flowlines.npz"],
+                rm=["l2.txt", "inversion_flowlines.npz"],
             ),
         )
         publish(
@@ -891,23 +982,42 @@ class TestParentChain:
                 c.split("b_080/")[1][:2] for c in chain.calls
             ]
             states[exp] = utils.snapshot_gdir_state(gdir.dir)
-            built = utils.snapshot_gdir_state(chain.workdir(exp))
-            assert states[exp] == built
+            _assert_matches_build(gdir.dir, chain.workdir(exp))
         diff = {
             k for k in states["w5e5"] if states["w5e5"][k] != states["era5"][k]
         }
         assert diff == {"climate.txt", "L3.manifest.json"}
 
+    def test_layers_record_fetched_from(self, chain):
+        gdir = self.load(chain, "w5e5", 3)
+        expected = {
+            "L3": self.url("w5e5"),
+            "L2": self.url("base"),
+            "L1": self.url("base"),
+            "L0": self.url("base"),
+        }
+        for label, url in expected.items():
+            m = json.loads(Path(gdir.dir, f"{label}.manifest.json").read_text())
+            assert m["fetched_from"] == url
+            assert utils.manifest_id(m) == m["id"]
+
+    def test_full_archive_strips_fetched_from(self, chain):
+        gdir = self.load(chain, "w5e5", 3)
+        opath = utils.gdir_to_tar.unwrapped(gdir, delete=False)
+        built = chain.workdir("w5e5")
+        with tarfile.open(opath, "r:gz") as tar:
+            for label in ("L0", "L1", "L2", "L3"):
+                name = f"{label}.manifest.json"
+                with tar.extractfile(f"{chain.rid}/{name}") as f:
+                    assert f.read() == (built / name).read_bytes()
+
     def test_removal_then_readdition(self, chain):
         gdir = self.load(chain, "rm", 4)
         assert Path(gdir.dir, "l2.txt").read_text() == "back"
-        assert not Path(
-            gdir.dir, "data_store", "inversion_flowlines.npz"
-        ).exists()
-        built = utils.snapshot_gdir_state(chain.workdir("rm"))
-        assert utils.snapshot_gdir_state(gdir.dir) == built
+        assert not Path(gdir.dir, "inversion_flowlines.npz").exists()
+        _assert_matches_build(gdir.dir, chain.workdir("rm"))
 
-    def test_regenerated_parent_warns(self, chain):
+    def test_regenerated_parent_raises(self, chain):
         wdir = chain.workdir("base_l1")
         chain.publish(
             "base",
@@ -920,26 +1030,21 @@ class TestParentChain:
         with open(chain.workdir("w5e5") / "L2.manifest.json") as f:
             old_id = json.load(f)["id"]
 
-        with pytest.warns(RuntimeWarning) as rec:
-            gdir = self.load(chain, "w5e5", 3)
-        msgs = [str(w.message) for w in rec if "L3" in str(w.message)]
-        assert len(msgs) == 1
-        assert old_id[:8] in msgs[0] and new_id[:8] in msgs[0]
-        assert self.url("base") in msgs[0]
-        # A warning, not an error: the directory still loads
-        assert Path(gdir.dir, "l2.txt").read_text() == "regenerated"
+        with pytest.raises(InvalidWorkflowError, match="L3") as exc:
+            self.load(chain, "w5e5", 3)
+        msg = str(exc.value)
+        assert old_id[:8] in msg and new_id[:8] in msg
+        assert self.url("base") in msg
 
-    def test_parent_without_manifest_warns(self, chain):
+    def test_parent_without_manifest_raises(self, chain):
         # A legacy, cumulative L2: every file, no manifests
         wdir = chain.fork("base", "legacy")
         for fp in wdir.glob("*.manifest.json"):
             fp.unlink()
         chain.publish("base", "L2", wdir, None)
-        with pytest.warns(RuntimeWarning, match="no manifest"):
-            gdir = self.load(chain, "w5e5", 3)
+        with pytest.raises(InvalidWorkflowError, match="no manifest"):
+            self.load(chain, "w5e5", 3)
         assert len(chain.calls) == 2
-        assert Path(gdir.dir, "climate.txt").read_text() == "w5e5"
-        assert Path(gdir.dir, "l1.txt").is_file()
 
     def test_legacy_tree_is_one_fetch(self, chain):
         wdir = chain.fork("w5e5", "old")
@@ -949,6 +1054,7 @@ class TestParentChain:
         gdir = self.load(chain, "old", 3)
         assert len(chain.calls) == 1
         assert Path(gdir.dir, "climate.txt").read_text() == "w5e5"
+        assert not list(Path(gdir.dir).glob("*.manifest.json"))
 
 
 class TestStartState:
@@ -1200,9 +1306,8 @@ def test_level_consistency_mismatch(tmp_path):
     l4_on_b = tar("l4.tar.gz", changed)
 
     layered = tmp_path / "layered"
-    with pytest.warns(RuntimeWarning, match="L4 was built on L3"):
+    with pytest.raises(InvalidWorkflowError, match="L4 was built on L3"):
         utils._workflow._extract_tars([l3_a, l4_on_b], str(layered / rid))
-    assert (layered / rid / "mb_calib.json").is_file()
 
 
 def test_finalize_ignores_stale_lower_manifests(tmp_path):
@@ -1246,175 +1351,43 @@ def test_finalize_ignores_stale_lower_manifests(tmp_path):
     )
 
 
-class TestAddons:
-    """Add-ons: optional data matched to a gdir by its grid, not its chain."""
+def _addon_manifest(gdir_dir, **overrides):
+    """Writes a manifest of a kind this OGGM version does not know."""
+    m = {
+        "schema_version": "1.1",
+        "kind": "addon",
+        "rgi_id": "RGI60-11.00897",
+        "label": "itslive",
+        "id": "0" * 64,
+        "parent": None,
+        "created": "2999-01-01T00:00:00+00:00",
+        "files": {"added": {"itslive.nc": "0" * 64}, "updated": {}},
+    }
+    m.update(overrides)
+    with open(os.path.join(gdir_dir, f"{m['label']}.manifest.json"), "w") as f:
+        json.dump(m, f)
 
-    @staticmethod
-    def shifted(grid, dx=0.0, x0=0.0):
-        import salem
 
-        return salem.Grid(
-            proj=grid.proj,
-            nxny=(grid.nx, grid.ny),
-            dxdy=(grid.dx + dx, grid.dy - dx),
-            x0y0=(grid.x0 + x0, grid.y0),
-            pixel_ref=grid.pixel_ref,
-        )
+def test_finalize_skips_unknown_kind(tmp_path, caplog):
+    """A newer manifest kind (e.g. an add-on) must not hide the chain."""
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
+    prev = utils.snapshot_gdir_state(gdir_dir)
+    os.remove(gdir_dir / "log.txt")
+    utils.write_level_manifest(gdir_dir, "L1", prev, parent="L0", **_DS)
+    (gdir_dir / "log.txt").write_text("restored by the L0 tar\n")
+    _addon_manifest(gdir_dir)
 
-    def test_grid_id(self, tmp_path, hef_gdir):
-        import salem
+    with caplog.at_level(logging.WARNING, logger="oggm.utils"):
+        utils._workflow._finalize_merged_dir(str(gdir_dir))
+    assert not (gdir_dir / "log.txt").exists()
+    assert "'addon'" in caplog.text
 
-        grid = hef_gdir.grid
-        fp = str(tmp_path / "grid.json")
-        grid.to_json(fp)
-        assert utils.grid_id(salem.Grid.from_json(fp)) == utils.grid_id(grid)
-        assert utils.grid_id(self.shifted(grid, x0=grid.dx)) != utils.grid_id(
-            grid
-        )
-        assert utils.grid_id(self.shifted(grid, dx=1.0)) != utils.grid_id(grid)
 
-    def test_manifest_id_unchanged_without_grid_id(self):
-        # Pinned before add-ons existed as published ids must not move
-        m = {
-            "rgi_id": "RGI60-11.00897",
-            "label": "L1",
-            "border": 80,
-            "rgi_version": "62",
-            "files": {
-                "added": {"a.txt": "0" * 64},
-                "updated": {},
-                "removed": [],
-            },
-            "data_store": {},
-            "parent": {"base_url": None, "label": "L0", "id": "p"},
-        }
-        assert utils.manifest_id(m) == (
-            "46aa220a49425c014953897520599e1d77bd5752a500b7b8a9752c2d427bb9d9"
-        )
-        addon = {**m, "parent": None, "grid_id": "g1"}
-        assert utils.manifest_id(addon) != utils.manifest_id(
-            {**addon, "grid_id": "g2"}
-        )
-
-    def test_write_addon_manifest(self, tmp_path):
-        d = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
-        with pytest.raises(ValueError, match="grid_id"):
-            utils.write_level_manifest(d, "itslive", {}, kind="addon", **_DS)
-        with pytest.raises(ValueError, match="parent"):
-            utils.write_level_manifest(
-                d, "itslive", {}, kind="addon", parent="L2", grid_id="g", **_DS
-            )
-        _, changed = utils.write_level_manifest(
-            d, "itslive", {"log.txt": "x"}, kind="addon", grid_id="g", **_DS
-        )
-        m = _manifest(d / "itslive.manifest.json")
-        assert m["kind"] == "addon"
-        assert m["grid_id"] == "g"
-        assert m["parent"] is None
-        assert "log.txt" in m["files"]["added"]  # ships every file
-        assert "itslive.manifest.json" in changed
-        _, _ = utils.write_level_manifest(d, "L0", {}, **_DS)
-        assert "grid_id" not in _manifest(d / "L0.manifest.json")
-
-    def test_layering_ignores_addon_manifest(self, tmp_path):
-        """An add-on manifest newer than the leaf level must not replace it
-        as the leaf, or the level removals are skipped."""
-        rid = "RGI60-11.00897"
-        base = str(tmp_path / "src")
-        gdir_dir = _make_fake_gdir(os.path.join(base, rid))
-        utils.write_level_manifest(
-            gdir_dir, "L3", {}, kind="materialisation", **_DS
-        )
-        l3 = utils.gdir_to_tar.unwrapped(
-            _FakeGdir(str(gdir_dir), base), delete=False
-        )
-        l3 = shutil.move(l3, str(tmp_path / "l3.tar.gz"))
-
-        prev = utils.snapshot_gdir_state(gdir_dir)
-        os.remove(gdir_dir / "log.txt")
-        _, changed = utils.write_level_manifest(
-            gdir_dir, "L4", prev, parent="L3", **_DS
-        )
-        utils.write_level_manifest(
-            gdir_dir, "itslive", {}, kind="addon", grid_id="g", **_DS
-        )
-        l4 = utils.gdir_to_tar.unwrapped(
-            _FakeGdir(str(gdir_dir), base),
-            delete=False,
-            include=changed + ["itslive.manifest.json"],
-        )
-
-        layered = tmp_path / "layered" / rid
-        utils._workflow._extract_tars([l3, l4], str(layered))
-        assert not (layered / "log.txt").exists()
-
-    @pytest.fixture
-    def addon(self, tmp_path, hef_gdir):
-        """An `itslive` add-on built from one copy of HEF, and a second copy
-        to apply it to."""
-        import xarray as xr
-
-        rid = hef_gdir.rgi_id
-
-        def copy(name):
-            workdir = tmp_path / name / rid[:-6] / rid[:-3] / rid
-            shutil.copytree(hef_gdir.dir, workdir)
-            return oggm.GlacierDirectory(rid, base_dir=tmp_path / name)
-
-        src, dst = copy("src"), copy("dst")
-        with src.open_group("gridded_data") as ds:
-            v = xr.full_like(ds["topo"], 3.5).rename("itslive_v")
-        src.write_group(v.to_dataset(), "gridded_data", mode="a")
-
-        out = tmp_path / "addons" / "itslive"
-        utils.write_addon(
-            src, label="itslive", variables=["itslive_v"], output_dir=str(out)
-        )
-        utils.base_dir_to_tar(str(out))
-        return SimpleNamespace(src=src, dst=dst, out=out)
-
-    def test_apply_addon_from_local_dir(self, addon):
-        with addon.dst.open_group("gridded_data") as ds:
-            before = ds.load()
-        assert "itslive_v" not in before
-
-        utils.apply_addon(addon.dst, base_url=str(addon.out))
-
-        with addon.dst.open_group("gridded_data") as ds:
-            after = ds.load()
-        np.testing.assert_array_equal(after["itslive_v"], 3.5)
-        for var in before.data_vars:
-            np.testing.assert_array_equal(after[var], before[var])
-        m = _manifest(Path(addon.dst.dir) / "itslive.manifest.json")
-        assert m["kind"] == "addon"
-
-    def test_apply_addon_from_url(self, addon, monkeypatch):
-        host = "https://addons.invalid/"
-        calls = []
-
-        def fake_file_downloader(www_path, **kwargs):
-            calls.append(www_path)
-            local = addon.out.parent / www_path.replace(host, "")
-            return str(local) if local.is_file() else None
-
-        monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
-        utils.apply_addon(addon.dst, base_url=host + "itslive")
-        assert calls == [host + "itslive/RGI50-11/RGI50-11.008.tar"]
-        with addon.dst.open_group("gridded_data") as ds:
-            assert "itslive_v" in ds
-
-    def test_apply_addon_refuses_other_grid(self, addon):
-        from oggm.exceptions import InvalidWorkflowError
-
-        self.shifted(addon.dst.grid, x0=addon.dst.grid.dx).to_json(
-            addon.dst.get_filepath("glacier_grid")
-        )
-        dst = oggm.GlacierDirectory(
-            addon.dst.rgi_id, base_dir=addon.dst.base_dir
-        )
-        fp = Path(dst.get_filepath("gridded_data"))
-        before = fp.read_bytes()
-        with pytest.raises(InvalidWorkflowError, match="grid"):
-            utils.apply_addon(dst, base_url=str(addon.out))
-        assert fp.read_bytes() == before
-        assert not (Path(dst.dir) / "itslive.manifest.json").exists()
+@pytest.mark.parametrize("version", ["2.0", 2])
+def test_finalize_rejects_newer_major(tmp_path, version):
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
+    _addon_manifest(gdir_dir, kind="delta", label="L1", schema_version=version)
+    with pytest.raises(InvalidWorkflowError, match="schema 2"):
+        utils._workflow._finalize_merged_dir(str(gdir_dir))
