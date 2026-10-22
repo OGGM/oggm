@@ -1171,7 +1171,9 @@ class TestStoreWorkflow:
             "inversion_input", filesuffix=arg_filesuffix
         )
         assert os.path.isfile(fp)
-        assert os.path.dirname(fp) == os.path.join(gdir.dir, "data_store")
+        assert fp == os.path.join(
+            gdir.dir, f"inversion_input{arg_filesuffix}.npz"
+        )
 
         back = gdir.read_npz("inversion_input", filesuffix=arg_filesuffix)
         np.testing.assert_array_equal(back["temperature"], [1.0, 2.0, 3.0])

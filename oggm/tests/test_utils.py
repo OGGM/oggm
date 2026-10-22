@@ -1580,6 +1580,24 @@ class TestStartFromTar:
             assert gdir.rgi_area_km2 > 0
         workflow.execute_entity_task(tasks.glacier_masks, gdirs)
 
+    def _entity_gdir_tar(self):
+        entity = self.rgidf.iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        return entity, utils.gdir_to_tar(gdir)
+
+    def test_from_entity_from_tar_delete_tar(self):
+        entity, tarf = self._entity_gdir_tar()
+
+        gdir = oggm.GlacierDirectory(entity, from_tar=True, delete_tar=True)
+        assert gdir.rgi_area_km2 > 0
+        assert not os.path.exists(tarf)
+
+    def test_from_entity_from_tar_list(self):
+        entity, tarf = self._entity_gdir_tar()
+
+        gdir = oggm.GlacierDirectory(entity, from_tar=[tarf])
+        assert gdir.rgi_area_km2 > 0
+
     def test_to_and_from_tar_string(self):
 
         test_dir = cfg.PATHS["working_dir"]
@@ -2140,8 +2158,8 @@ class TestPreproCLI:
                       start_base_url='http://foo',
                       temp_bias_file_path='foo.csv')
 
-        for start, end in [('2', '3'), ('2', '4a'), ('2', '5'), ('0', '3a'),
-                           ('3a', '3'), ('3', '4'), ('4a', '5')]:
+        for start, end in [('2', '3'), ('2', '4a'), ('2', '5'),
+                           (None, '3a'), ('3a', '3'), ('3', '4'), ('4a', '5')]:
             with pytest.raises(InvalidParamsError, match='whole RGI region'):
                 run_prepro_levels(start_level=start, max_level=end,
                                   chunk_idx=0, **common)
@@ -2251,7 +2269,7 @@ class TestPreproCLI:
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
         assert '1980-2010_avg_prcp' in df
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'glacier_type' in df
 
@@ -2305,48 +2323,80 @@ class TestPreproCLI:
         rid = df.index[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
+        # L1 is the root and the levels above are deltas: layering the
+        # level tars up to N reproduces a full L{N} dir
+        def _lev_tars(*levels):
+            return [
+                os.path.join(
+                    odir,
+                    "RGI61",
+                    "b_020",
+                    f"L{lev}",
+                    rid[:8],
+                    rid[:11],
+                    rid + ".tar.gz",
+                )
+                for lev in levels
+            ]
+
         # L1
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
+        tarf = _lev_tars(1)
+        assert not os.path.isfile(tarf[-1])
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         tasks.glacier_masks(gdir)
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
 
         # L2
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L2',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2))
         assert gdir.has_file('inversion_flowlines')
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
 
         # L3
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2, 3))
         model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
 
         # L4
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2, 3, 4))
         model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             # cannot be the same after tuning
             assert ds.glen_a != cfg.PARAMS['glen_a']
 
-        # L5
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
-                            rid[:8], rid[:11], rid + '.tar.gz')
+        # Layered dir documents its levels, L4 delta only ships what L4 produced
+        with open(os.path.join(gdir.dir, "L4.manifest.json")) as f:
+            m4 = json.load(f)
+        with open(os.path.join(gdir.dir, "L3.manifest.json")) as f:
+            m3 = json.load(f)
+        assert m4["kind"] == "delta"
+        assert m4["label"] == "L4"
+        # Whole-region run: the parent sits in the same tree
+        assert m4["parent"] == {"base_url": None, "label": "L3", "id": m3["id"]}
+        assert not any("gridded_data" in fn for fn in m4["files"]["added"])
+        for lev in range(1, 4):
+            assert os.path.isfile(
+                os.path.join(gdir.dir, f"L{lev}.manifest.json")
+            )
+
+        # The grids are made at L1, so the elevation band L2 delta does
+        # not ship gridded_data.nc again
+        with open(os.path.join(gdir.dir, "L1.manifest.json")) as f:
+            m1 = json.load(f)
+        with open(os.path.join(gdir.dir, "L2.manifest.json")) as f:
+            m2 = json.load(f)
+        assert 'gridded_data.nc' in m1["files"]["added"]
+        assert 'gridded_data.nc' not in m2["files"]["added"]
+        assert 'gridded_data.nc' not in m2["files"]["updated"]
+
+        # L5 is standalone: a single tar suffices
+        tarf = _lev_tars(5)[0]
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        with open(os.path.join(gdir.dir, "L5.manifest.json")) as f:
+            assert json.load(f)["kind"] == "standalone"
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
         assert model.y0 == 1979
@@ -2386,7 +2436,7 @@ class TestPreproCLI:
                 np.testing.assert_allclose(ods[vn].sel(time=1990), 0)
 
     @pytest.mark.slow
-    def test_full_run_chunked(self):
+    def test_full_run_chunked(self, monkeypatch):
         # The point of chunking: running the four stages of a chunked run
         # has to give exactly what a single whole-region run gives.
 
@@ -2438,13 +2488,31 @@ class TestPreproCLI:
         # And now the four stages. L2 comes from the reference run here; on a
         # cluster it comes from the published L2 base url.
         out_dir = os.path.join(self.testdir, 'chunked_out')
+
+        # L1 and L2 aren't in out_dir, so must come from the base url
+        # served by ref_dir.
+        base_url = 'https://fake.oggm/chunked/'
+        real_downloader = _downloads.file_downloader
+
+        def fake_downloader(www_path, **kwargs):
+            if not www_path.startswith(base_url):
+                return real_downloader(www_path, **kwargs)
+            local = os.path.join(ref_dir, www_path[len(base_url) :])
+            return local if os.path.isfile(local) else None
+
+        monkeypatch.setattr(_downloads, 'file_downloader', fake_downloader)
+        monkeypatch.setattr(_downloads, '_prepro_bundle_format', {})
+        # The fake urls exist, for the check before fetching a prepro level
+        real_url_exists = utils.url_exists
+        monkeypatch.setattr(utils, 'url_exists', lambda url: (
+            url.startswith('https://fake.oggm/') or real_url_exists(url)))
         scratch = os.path.join(self.testdir, 'scratch')
 
         # 1 - the chunkable part of L3
         for i in chunks:
             run_prepro_levels(output_folder=scratch,
                               working_dir=wd(f'wd_s1_{i}'),
-                              start_level='2', start_from_dir=ref_dir,
+                              start_level='2', start_base_url=base_url,
                               max_level='3a',
                               chunk_idx=i, chunk_size=chunk_size, **common)
 
@@ -2458,13 +2526,14 @@ class TestPreproCLI:
             run_prepro_levels(output_folder=out_dir,
                               working_dir=wd(f'wd_s3_{i}'),
                               start_level='3', start_from_dir=out_dir,
-                              max_level='4a',
+                              start_base_url=base_url, max_level='4a',
                               chunk_idx=i, chunk_size=chunk_size, **common)
 
         # 4 - the L4 summaries and L5, whole region
         run_prepro_levels(output_folder=out_dir, working_dir=wd('wd_s4'),
                           start_level='4a', start_from_dir=out_dir,
-                          max_level='5', **common)
+                          start_base_url=base_url, max_level='5',
+                          **common)
 
         def summary(root, lev, name):
             return os.path.join(root, 'RGI61', 'b_020', lev, 'summary', name)
@@ -2496,6 +2565,36 @@ class TestPreproCLI:
                                                  lev, 'RGI60-11')))
             assert ref == new
             assert len(new) > 1
+
+        # Both runs write the same deltas
+        def manifest(root, lev, rgi_id):
+            bundle = glob.glob(
+                os.path.join(
+                    root, 'RGI61', 'b_020', f'L{lev}', 'RGI60-11', '*.tar'
+                )
+            )
+            for tar_base in bundle:
+                m = workflow._peek_level_manifest(tar_base, rgi_id, f'L{lev}')
+                if m is not None:
+                    return m
+            raise AssertionError(f'No L{lev} manifest for {rgi_id} in {root}')
+
+        for lev in [3, 4]:
+            for rgi_id in test_ids:
+                ref = manifest(ref_dir, lev, rgi_id)
+                new = manifest(out_dir, lev, rgi_id)
+                assert ref['kind'] == new['kind'] == 'delta'
+                # The ids differ (log files). The links point to the same
+                # labels, but the chunked L3 sits on the published L2
+                assert ref['parent']['label'] == new['parent']['label']
+                assert ref['parent']['label'] == f'L{lev - 1}'
+                assert ref['parent']['base_url'] is None
+                assert new['parent']['base_url'] == (
+                    base_url if lev == 3 else None), (lev, rgi_id)
+                for key in ['added', 'updated', 'removed']:
+                    assert sorted(ref['files'][key]) == sorted(
+                        new['files'][key]
+                    ), (lev, rgi_id, key)
 
         # An empty chunk is a normal thing (the RGI ids have gaps) and has
         # to return quietly: on a cluster it is one task of an array job, and
@@ -2533,6 +2632,50 @@ class TestPreproCLI:
         new = pd.read_csv(summary(redo_dir, 'L3', 'glacier_statistics_11.csv'),
                           index_col=0).sort_index()
         assert_allclose(ref['inv_volume_km3'], new['inv_volume_km3'])
+
+        # The same stages as the cluster script runs them: each job writes
+        # to its own output folder, which is then copied into one shared
+        # tree, and every stage after the first also gets the L2 url.
+        shared = os.path.join(self.testdir, 'shared_out')
+
+        def job(name, **kwargs):
+            job_out = os.path.join(self.testdir, name)
+            run_prepro_levels(output_folder=job_out, working_dir=wd(f'wd_{name}'),
+                              start_base_url=base_url, **kwargs, **common)
+            shutil.copytree(job_out, shared, dirs_exist_ok=True)
+
+        job('job_s2', start_level='3a', start_from_dir=scratch, max_level='3')
+        for i in chunks:
+            job(f'job_s3_{i}', start_level='3', start_from_dir=shared,
+                max_level='4a', chunk_idx=i, chunk_size=chunk_size)
+        job('job_s4', start_level='4a', start_from_dir=shared, max_level='5')
+
+        # Both trees, once published, load like any prepro url: L3 and L4
+        # find L2 at the L1-L2 url, and L5 is standalone
+        for name, tree in [('docs', out_dir), ('script', shared)]:
+            tree_url = 'https://fake.oggm/experiment/'
+
+            def tree_downloader(www_path, **kwargs):
+                if not www_path.startswith(tree_url):
+                    return fake_downloader(www_path, **kwargs)
+                local = os.path.join(tree, www_path[len(tree_url):])
+                return local if os.path.isfile(local) else None
+
+            monkeypatch.setattr(_downloads, 'file_downloader', tree_downloader)
+            for lev in [3, 4, 5]:
+                monkeypatch.setattr(_downloads, '_prepro_bundle_format', {})
+                cfg.PATHS['working_dir'] = wd(f'wd_user_{name}_{lev}')
+                gdirs = workflow.init_glacier_directories(
+                    test_ids, from_prepro_level=lev, prepro_border=20,
+                    prepro_rgi_version='61', prepro_base_url=tree_url)
+                assert len(gdirs) == len(test_ids)
+                for gdir in gdirs:
+                    if lev < 5:
+                        assert gdir.has_file('climate_historical')
+                        assert gdir.has_file('inversion_flowlines')
+                    if lev > 3:
+                        assert gdir.has_file('model_geometry',
+                                             filesuffix='_historical')
 
     @pytest.mark.slow
     def test_distributed_thickness_and_geotiff_export(self, tmpdir):
@@ -2674,7 +2817,7 @@ class TestPreproCLI:
         df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L3', 'summary',
                                       'climate_statistics_11.csv'))
         assert '1980-2010_avg_prcp' in df
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'glacier_type' in df
 
@@ -2735,48 +2878,79 @@ class TestPreproCLI:
         rid = df.index[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
+        # L1 is the root and the levels above are deltas: layering the
+        # level tars up to N reproduces a full L{N} dir
+        def _lev_tars(*levels):
+            return [
+                os.path.join(
+                    odir,
+                    "RGI61",
+                    "b_020",
+                    f"L{lev}",
+                    rid[:8],
+                    rid[:11],
+                    rid + ".tar.gz",
+                )
+                for lev in levels
+            ]
+
         # L1
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
+        tarf = _lev_tars(1)
+        assert not os.path.isfile(tarf[-1])
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         tasks.glacier_masks(gdir)
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
 
         # L2
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L2',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2))
         assert gdir.has_file('inversion_flowlines')
         with pytest.raises(FileNotFoundError):
             tasks.init_present_time_glacier(gdir)
 
         # L3
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2, 3))
         model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
 
         # L4
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2, 3, 4))
         model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
         assert isinstance(model, FlowlineModel)
         with xr.open_dataset(gdir.get_filepath('model_diagnostics')) as ds:
             # cannot be the same after tuning
             assert ds.glen_a != cfg.PARAMS['glen_a']
 
-        # L5
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
-                            rid[:8], rid[:11], rid + '.tar.gz')
+        # Layered dir documents its levels, L4 delta only ships what L4 produced
+        with open(os.path.join(gdir.dir, "L4.manifest.json")) as f:
+            m4 = json.load(f)
+        with open(os.path.join(gdir.dir, "L3.manifest.json")) as f:
+            m3 = json.load(f)
+        assert m4["kind"] == "delta"
+        assert m4["label"] == "L4"
+        # Whole-region run with parent in the same tree
+        assert m4["parent"] == {"base_url": None, "label": "L3", "id": m3["id"]}
+        assert not any("gridded_data" in fn for fn in m4["files"]["added"])
+        for lev in range(1, 4):
+            assert os.path.isfile(
+                os.path.join(gdir.dir, f"L{lev}.manifest.json")
+            )
+
+        # The grids are made at L1, but the centerline masks replace the
+        # elevation band ones, so this L2 delta ships gridded_data.nc
+        with open(os.path.join(gdir.dir, "L1.manifest.json")) as f:
+            m1 = json.load(f)
+        with open(os.path.join(gdir.dir, "L2.manifest.json")) as f:
+            m2 = json.load(f)
+        assert 'gridded_data.nc' in m1["files"]["added"]
+        assert 'gridded_data.nc' in m2["files"]["updated"]
+
+        # L5 is standalone: a single tar suffices
+        tarf = _lev_tars(5)[0]
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        with open(os.path.join(gdir.dir, "L5.manifest.json")) as f:
+            assert json.load(f)["kind"] == "standalone"
         model = FileModel(gdir.get_filepath('model_geometry',
                                             filesuffix='_historical'))
         assert model.y0 == 1979
@@ -2841,7 +3015,7 @@ class TestPreproCLI:
                                                'use_mp_spawn': True,
                                                })
 
-            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L0', 'summary',
+            df = pd.read_csv(os.path.join(odir, 'RGI61', bstr, 'L1', 'summary',
                                           'glacier_statistics_11.csv'))
             assert 'glacier_type' in df
 
@@ -2874,19 +3048,31 @@ class TestPreproCLI:
             rid = df.rgi_id.iloc[0]
             entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
-            # L3
-            tarf = os.path.join(odir, 'RGI61', bstr, 'L3',
-                                rid[:8], rid[:11], rid + '.tar.gz')
-            assert not os.path.isfile(tarf)
+            def _lev_tars(*levels):
+                return [
+                    os.path.join(
+                        odir,
+                        "RGI61",
+                        bstr,
+                        f"L{lev}",
+                        rid[:8],
+                        rid[:11],
+                        rid + ".tar.gz",
+                    )
+                    for lev in levels
+                ]
+
+            # L3 (delta levels are layered on top of the ones below)
+            tarf = _lev_tars(1, 2, 3)
+            assert not os.path.isfile(tarf[-1])
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
             model = tasks.run_random_climate(gdir, nyears=10, y0=1985)
             assert isinstance(model, FlowlineModel)
 
             # L4
-            tarf = os.path.join(odir, 'RGI61', bstr, 'L4',
-                                rid[:8], rid[:11], rid + '.tar.gz')
-            assert not os.path.isfile(tarf)
-            gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+            gdir = oggm.GlacierDirectory(
+                entity, from_tar=_lev_tars(1, 2, 3, 4)
+            )
 
             fp = gdir.get_filepath('fl_diagnostics', filesuffix='_spinup_historical')
             with xr.open_dataset(fp, group='fl_0') as ds:
@@ -2904,9 +3090,8 @@ class TestPreproCLI:
             assert model.y0 == 1979
             assert model.last_yr == 2015
 
-            # L5
-            tarf = os.path.join(odir, 'RGI61', bstr, 'L5',
-                                rid[:8], rid[:11], rid + '.tar.gz')
+            # L5 is standalone
+            tarf = _lev_tars(5)[0]
             assert not os.path.isfile(tarf)
             gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
             with pytest.raises(FileNotFoundError):
@@ -2991,7 +3176,7 @@ class TestPreproCLI:
                           inversion_volume_dataset='consensus',
                           test_topofile=topof, elev_bands=True)
 
-        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L0', 'summary',
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L1', 'summary',
                                       'glacier_statistics_11.csv'))
         assert 'glacier_type' in df
 
@@ -3025,25 +3210,34 @@ class TestPreproCLI:
         rid = df.rgi_id.iloc[0]
         entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
 
-        # L3
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L3',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
+        def _lev_tars(*levels):
+            return [
+                os.path.join(
+                    odir,
+                    "RGI61",
+                    "b_020",
+                    f"L{lev}",
+                    rid[:8],
+                    rid[:11],
+                    rid + ".tar.gz",
+                )
+                for lev in levels
+            ]
+
+        # L3 (delta levels are layered on top of the ones below)
+        tarf = _lev_tars(1, 2, 3)
+        assert not os.path.isfile(tarf[-1])
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = tasks.run_random_climate(gdir, y0=1990, nyears=10)
         assert isinstance(model, FlowlineModel)
 
         # L4
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L4',
-                            rid[:8], rid[:11], rid + '.tar.gz')
-        assert not os.path.isfile(tarf)
-        gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
+        gdir = oggm.GlacierDirectory(entity, from_tar=_lev_tars(1, 2, 3, 4))
         model = tasks.run_random_climate(gdir, y0=1990, nyears=10)
         assert isinstance(model, FlowlineModel)
 
-        # L5
-        tarf = os.path.join(odir, 'RGI61', 'b_020', 'L5',
-                            rid[:8], rid[:11], rid + '.tar.gz')
+        # L5 is standalone
+        tarf = _lev_tars(5)[0]
         assert not os.path.isfile(tarf)
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         model = FileModel(gdir.get_filepath('model_geometry',
@@ -3067,19 +3261,34 @@ class TestPreproCLI:
 
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
-                    'oggm_v1.1/')
-
         # Read in the RGI file
         inter, rgidf = _read_shp()
+        common = dict(rgi_version='61', rgi_reg='11', border=20,
+                      is_test=True, rgi_file=rgidf, intersects_file=inter)
+
+        # Legacy (cumulative) directories can still be read, but new levels
+        # can not be built on them
+        legacy_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_gdirs/'
+                      'oggm_v1.1/')
+        with pytest.raises(InvalidWorkflowError, match='legacy'):
+            run_prepro_levels(output_folder=tmpdir.mkdir("legacy_levs"),
+                              working_dir=tmpdir.mkdir("legacy_wd"),
+                              start_level=1, start_base_url=legacy_url,
+                              max_level=2, disable_mp=True, **common)
+
+        # The L1 to start from, made here. It is read from disk, since the
+        # spawned workers below could not use a fake download url.
+        l1_dir = tmpdir.mkdir("l1_levs")
+        run_prepro_levels(output_folder=l1_dir, working_dir=tmpdir.mkdir("l1_wd"),
+                          test_topofile=utils.get_demo_file('srtm_oetztal.tif'),
+                          max_level=1, disable_mp=True, **common)
+
         wdir = tmpdir.mkdir("wd")
         odir = tmpdir.mkdir("my_levs")
         np.random.seed(0)
         ref_mb_period = '2000-01-01_2010-01-01'
-        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
-                          output_folder=odir, working_dir=wdir, is_test=True,
-                          rgi_file=rgidf, intersects_file=inter,
-                          start_level=1, start_base_url=base_url,
+        run_prepro_levels(output_folder=odir, working_dir=wdir,
+                          start_level=1, start_from_dir=str(l1_dir), **common,
                           mb_calibration_strategy='melt_temp',
                           disable_mp=False,
                           inversion_volume_dataset='consensus',
@@ -3144,6 +3353,7 @@ class TestPreproCLI:
         )
         assert os.path.isfile(tarf)
 
+        # L1 is the root, like with a single DEM
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
                             rid[:8], rid[:11], rid + '.tar.gz')
         assert not os.path.isfile(tarf)
@@ -3151,6 +3361,11 @@ class TestPreproCLI:
         entity = rgidf.iloc[0]
         gdir = oggm.GlacierDirectory(entity, from_tar=tarf)
         assert os.path.isfile(os.path.join(gdir.dir, 'USER', 'dem.tif'))
+        with open(os.path.join(gdir.dir, 'L1.manifest.json')) as f:
+            m1 = json.load(f)
+        assert m1['kind'] == 'standalone'
+        assert m1['parent'] is None
+        assert 'USER/dem.tif' in m1['files']['added']
 
 
 def _fake_glacier_statistics(grid_points, reg='11', dlon=0.5, dlat=0.5,
@@ -3495,7 +3710,7 @@ class TestTempBiasCLI:
                                                'climate_statistics_11.csv'))
 
         # The gdirs are not copied back, and we stopped at L3
-        for lev in ['L0', 'L1', 'L2', 'L3']:
+        for lev in ['L1', 'L2', 'L3']:
             base = os.path.join(odir, 'RGI61', 'b_020', lev)
             assert len(glob.glob(os.path.join(base, '*.tar*'))) == 0
             assert len(glob.glob(os.path.join(base, 'RGI*'))) == 0
@@ -4921,3 +5136,29 @@ class TestELAComputation(unittest.TestCase):
         ela2 = pd.read_parquet(fpath.replace('.csv', '.parquet'))
 
         assert_allclose(ela1, ela2, rtol=1e-3)
+
+
+class TestShapefileTar:
+
+    def test_keeps_siblings(self, tmp_path, hef_gdir):
+        """Tarring a shapefile leaves same-stem files of other types alone."""
+        rid = hef_gdir.rgi_id
+        shutil.copytree(hef_gdir.dir, tmp_path / rid[:-6] / rid[:-3] / rid)
+        gdir = oggm.GlacierDirectory(rid, base_dir=str(tmp_path))
+        outlines = gdir.read_shapefile('outlines')
+        for ext in ('.npz', '.parquet'):
+            with open(os.path.join(gdir.dir, 'outlines' + ext), 'w') as f:
+                f.write('sibling')
+
+        with mock.patch.dict(cfg.PARAMS, {'use_tar_shapefiles': True}):
+            gdir.write_shapefile(outlines, 'outlines')
+
+        for ext in ('.npz', '.parquet'):
+            assert os.path.isfile(os.path.join(gdir.dir, 'outlines' + ext))
+        tpath = gdir.get_filepath('outlines').replace('.shp', '.tar')
+        if cfg.PARAMS['use_compression']:
+            tpath += '.gz'
+        with tarfile.open(tpath) as tf:
+            exts = {os.path.splitext(n)[1] for n in tf.getnames()}
+        assert exts <= {'.shp', '.shx', '.dbf', '.prj', '.cpg', '.properties'}
+        assert '.shp' in exts
