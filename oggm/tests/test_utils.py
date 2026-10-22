@@ -3734,6 +3734,44 @@ class FakeDownloadManager():
         setattr(_downloads, self.func_name, self._store)
 
 
+@pytest.mark.parametrize('version', ['62', '70G'])
+def test_rgi_glacier_entities_order(tmp_path, monkeypatch, version):
+    # The entities are returned in the order of the input list (#1005)
+    gpd = pytest.importorskip('geopandas')
+    shpg = pytest.importorskip('shapely.geometry')
+
+    if version == '62':
+        col = 'RGIId'
+        ids = {'11': ['RGI60-11.00001', 'RGI60-11.00002', 'RGI60-11.00003'],
+               '01': ['RGI60-01.00001', 'RGI60-01.00002']}
+    else:
+        col = 'rgi_id'
+        ids = {'11': [f'RGI2000-v7.0-G-11-0000{i}' for i in range(1, 4)],
+               '01': [f'RGI2000-v7.0-G-01-0000{i}' for i in range(1, 3)]}
+
+    files = {}
+    for reg, reg_ids in ids.items():
+        geoms = [shpg.Point(i, i).buffer(0.1) for i in range(len(reg_ids))]
+        df = gpd.GeoDataFrame({col: reg_ids}, geometry=geoms, crs='EPSG:4326')
+        files[reg] = str(tmp_path / f'{reg}_region.shp')
+        df.to_file(files[reg])
+
+    def fake_region_file(region, version=None, reset=False):
+        return files[region]
+
+    monkeypatch.setattr(_downloads, 'get_rgi_region_file', fake_region_file)
+
+    # Across regions and not sorted within a region
+    rgi_ids = [ids['11'][2], ids['01'][1], ids['11'][0], ids['01'][0]]
+    out = utils.get_rgi_glacier_entities(rgi_ids, version=version)
+    assert out[col].tolist() == rgi_ids
+    assert out.crs == 'EPSG:4326'
+
+    with pytest.raises(RuntimeError):
+        utils.get_rgi_glacier_entities(rgi_ids + [ids['11'][1][:-1] + '9'],
+                                       version=version)
+
+
 class TestFakeDownloads(unittest.TestCase):
 
     def setUp(self):

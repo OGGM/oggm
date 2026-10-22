@@ -295,6 +295,10 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
+  in the same order as the input list of RGI ids. They were previously
+  sorted by RGI region and by their order in the RGI files (:issue:`1005`).
+  By `monsterlag <https://github.com/monsterlag>`_
 - Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
   in the wrong direction, step length ignoring ``melt_f_max``, broken
   error recovery, swapped "part success" / "dynamic spinup only" labels)
