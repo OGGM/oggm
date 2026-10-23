@@ -2426,8 +2426,9 @@ class TestPreproCLI:
             ref = ods.volume
             new = ods.volume_fixed_geom
             # SfcTypeTIModel's snow tracking makes the fixed-geometry
-            # approximation less accurate than for MonthlyTIModel
-            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.15
+            # approximation less accurate than for MonthlyTIModel (and the
+            # glaciers are thinner, since the firn is part of the volume)
+            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.2
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
                                        rtol=rtol)
