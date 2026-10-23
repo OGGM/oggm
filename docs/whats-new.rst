@@ -305,6 +305,19 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- With ``SfcTypeTIModel``, the volume calibration of the inversion now
+  matches ice + snow/firn to the reference volume. Before, only the ice was
+  matched, and the dynamical model then added the snow/firn buckets on top
+  (in ``volume_m3`` and ``mass_kg``), which overestimated the glacier volume
+  at the RGI date by several percent (more for thin glaciers).
+  ``apparent_mb_from_any_mb`` now stores the snow/firn volume at
+  the RGI date (on the inversion flowlines) as ``inversion_firn_volume_m3``
+  (zero for other mass balance models), which
+  ``calibrate_inversion_from_ref_table`` and
+  ``calibrate_inversion_from_volume`` subtract from the reference volume.
+  The ``ref_volume_m3`` observation is ice + firn. Results with other mass
+  balance models are unchanged.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
   in the wrong direction, step length ignoring ``melt_f_max``, broken
   error recovery, swapped "part success" / "dynamic spinup only" labels)

@@ -1060,6 +1060,19 @@ def _resolve_ref_volume_table(gdirs, ref_table):
     return df, ref_col
 
 
+def _get_inversion_firn_volume(gdir, settings_filesuffix=''):
+    """The snow/firn volume on top of the ice at the RGI date (m3).
+
+    Stored by `apparent_mb_from_any_mb` for mass balance models with a
+    snow/firn bucket system (e.g. SfcTypeTIModel), zero otherwise.
+    """
+    gdir.settings_filesuffix = settings_filesuffix
+    try:
+        return gdir.settings['inversion_firn_volume_m3']
+    except KeyError:
+        return 0.
+
+
 @global_task(log)
 def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                                        observations_filesuffix='',
@@ -1237,6 +1250,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         df = pd.DataFrame(index=rids_use)
         ref_col = None
 
+    # Mass balance models with a snow/firn bucket system (e.g.
+    # SfcTypeTIModel) have a firn layer on top of the ice: the reference
+    # volume (e.g. from GPR measurements) includes it, so we match ice + firn
+    firn_vol = pd.Series([_get_inversion_firn_volume(gdir, settings_filesuffix)
+                          for gdir in gdirs], index=rids)
+
     # Optimize the diff to ref, using the settings of the first gdir
     gdirs_use[0].settings_filesuffix = settings_filesuffix
     def_a = gdirs_use[0].settings['inversion_glen_a']
@@ -1252,6 +1271,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs_use,
                                           input_filesuffix=output_filesuffix,
                                           add_to_log_file=add_to_log_file)
+        odf['oggm'] += firn_vol.loc[rids_use].values
         # if the user provides a glacier volume all glaciers are considered,
         # dropna() below excludes glaciers with no reference volume available
         if ref_volume_m3 is None:
@@ -1266,7 +1286,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                      'fs={}.'.format(glen_a_factor, fs))
         out_fac = glen_a_factor
         return _apply_inversion_a_factor(
-            gdirs, df, out_fac, def_a, fs,
+            gdirs, df, out_fac, def_a, fs, firn_vol,
             settings_filesuffix=settings_filesuffix,
             observations_filesuffix=observations_filesuffix,
             input_filesuffix=input_filesuffix,
@@ -1340,7 +1360,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                      ''.format(out_fac, fs))
 
     return _apply_inversion_a_factor(
-        gdirs, df, out_fac, def_a, fs,
+        gdirs, df, out_fac, def_a, fs, firn_vol,
         settings_filesuffix=settings_filesuffix,
         observations_filesuffix=observations_filesuffix,
         input_filesuffix=input_filesuffix,
@@ -1351,7 +1371,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         add_to_log_file=add_to_log_file)
 
 
-def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, *,
+def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, firn_vol, *,
                               settings_filesuffix, observations_filesuffix,
                               input_filesuffix, output_filesuffix,
                               ref_volume_year, rids, rids_use,
@@ -1374,12 +1394,14 @@ def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, *,
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             input_filesuffix=output_filesuffix,
                                             add_to_log_file=add_to_log_file)
-    # add the actually derived volume to the observations file
+    df['vol_firn_m3'] = firn_vol.loc[rids].values
+    # add the actually derived volume (ice + firn) to the observations file
     for gdir in gdirs:
         # ensure the observation is written into the correct file
         gdir.observations_filesuffix = observations_filesuffix
 
-        vol_single = df.vol_oggm_m3.loc[gdir.rgi_id]
+        vol_single = (df.vol_oggm_m3.loc[gdir.rgi_id] +
+                      df.vol_firn_m3.loc[gdir.rgi_id])
         if ref_volume_year is None:
             year_single = gdir.rgi_date + 1
         else:
@@ -1641,11 +1663,16 @@ def calibrate_inversion_from_volume(gdir,
                                          add_to_log_file=False)
         return vol
 
+    # Mass balance models with a snow/firn bucket system (e.g.
+    # SfcTypeTIModel) have a firn layer on top of the ice: the reference
+    # volume (e.g. from GPR measurements) includes it, so we match ice + firn
+    firn_vol = _get_inversion_firn_volume(gdir, settings_filesuffix)
+
     def to_minimize(x):
         log.info(f'Volume calibration for {gdir.rgi_id} with '
                  f'A factor: {x} and fs: {fs}')
         vol = compute_vol(x)
-        return ref_volume_m3 - vol
+        return ref_volume_m3 - (vol + firn_vol)
 
     try:
         out_fac, r = optimization.brentq(to_minimize, *a_bounds,
@@ -1680,8 +1707,8 @@ def calibrate_inversion_from_volume(gdir,
         if error_on_mismatch:
             raise ValueError(msg)
 
-        out_fac = a_bounds[int(abs(ref_volume_m3 - vol1) >
-                               abs(ref_volume_m3 - vol2))]
+        out_fac = a_bounds[int(abs(ref_volume_m3 - vol1 - firn_vol) >
+                               abs(ref_volume_m3 - vol2 - firn_vol))]
         log.info(msg)
         log.info(f'We use A factor = {out_fac} and fs = {fs} and move on.')
 
@@ -1709,14 +1736,15 @@ def calibrate_inversion_from_volume(gdir,
                                            input_filesuffix=output_filesuffix,
                                            )
 
-    # save in observation file
+    # save in observation file (ice + firn)
     gdir.observations['ref_volume_m3'] = {
-        'value': final_vol,
+        'value': final_vol + firn_vol,
         'year': gdir.rgi_date + 1 if ref_volume_year is None else ref_volume_year,
     }
 
     return {
         'vol_oggm_m3': final_vol,
+        'vol_firn_m3': firn_vol,
         'glen_a': out_fac * def_a,
         'fs': fs,
         'a_factor': out_fac
