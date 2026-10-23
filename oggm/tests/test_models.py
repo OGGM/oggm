@@ -1948,6 +1948,10 @@ class TestMassBalanceModels:
         assert out['vol_firn_m3'] == firn_vol
         assert_allclose(out['vol_oggm_m3'] + firn_vol, ref_vol, rtol=1e-2)
         assert out['vol_oggm_m3'] < ref_vol - firn_vol / 2
+        # the observation is ice + firn, in the requested observations file
+        gdir.observations_filesuffix = sfx
+        assert_allclose(gdir.observations['ref_volume_m3']['value'],
+                        out['vol_oggm_m3'] + firn_vol)
 
         # global task version
         df = workflow.calibrate_inversion_from_ref_table(

@@ -1736,7 +1736,9 @@ def calibrate_inversion_from_volume(gdir,
                                            input_filesuffix=output_filesuffix,
                                            )
 
-    # save in observation file (ice + firn)
+    # save in observation file (ice + firn). The tasks above reset the
+    # observations filesuffix to the default, so set it again
+    gdir.observations_filesuffix = observations_filesuffix
     gdir.observations['ref_volume_m3'] = {
         'value': final_vol + firn_vol,
         'year': gdir.rgi_date + 1 if ref_volume_year is None else ref_volume_year,
