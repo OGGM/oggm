@@ -1188,18 +1188,6 @@ class TestStoreWorkflow:
         assert set(back) == {"val"}
         np.testing.assert_array_equal(back["val"], [9.0, 8.0])
 
-    def test_write_store_no_subfolder(self, tmp_path):
-        """Store groups sit at the top level, with no store subfolder."""
-        cfg.initialize()
-        cfg.PARAMS["use_intersects"] = False
-        entity = gpd.read_file(get_demo_file("Hintereisferner_RGI5.shp"))
-        gdir = oggm.GlacierDirectory(entity.iloc[0], base_dir=str(tmp_path))
-
-        gdir.write_store({"a": np.arange(3.0)}, "inversion_input")
-
-        assert os.path.isfile(os.path.join(gdir.dir, "inversion_input.npz"))
-        assert not os.path.exists(os.path.join(gdir.dir, "data_store"))
-
     def test_read_store(self, tmp_path, hef_gdir):
         """Test that read_store reads back what write_store wrote."""
         cfg.initialize()

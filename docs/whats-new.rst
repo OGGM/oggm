@@ -519,6 +519,7 @@ Breaking changes
 - OGGM now requires Python 3.12 or newer (:pull:`1951`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
+
 v1.6.3 (April 13, 2026)
 -----------------------
 

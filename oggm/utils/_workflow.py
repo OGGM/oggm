@@ -4207,7 +4207,7 @@ class GlacierDirectory(object):
         str
             The absolute path to the group's npz file.
         """
-        return os.path.join(self.dir, f"{filename}{filesuffix or ""}.npz")
+        return os.path.join(self.dir, f"{filename}{filesuffix or ''}.npz")
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
         """Reads an npz file located in the directory.
@@ -5742,8 +5742,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
-# Readers compare the major part only: a minor bump (e.g. a new kind) stays
-# readable, a major bump raises in `_finalize_merged_dir`.
+# Readers compare the major part only: a minor bump stays readable, a major
+# bump raises in `_finalize_merged_dir`.
 _MANIFEST_SCHEMA = "1.0"
 _MANIFEST_KINDS = ("delta", "standalone", "addon")
 
@@ -5772,7 +5772,7 @@ def manifest_id(manifest: dict) -> str:
     fields = ("rgi_id", "label", "border", "rgi_version", "files")
     key = {k: manifest[k] for k in fields}
     key["parent"] = (manifest.get("parent") or {}).get("id")
-    if "grid_id" in manifest:  # add-ons only so other ids stay the same
+    if "grid_id" in manifest:  # add-ons only, so other ids stay put
         key["grid_id"] = manifest["grid_id"]
     blob = json.dumps(key, sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()
@@ -5799,7 +5799,6 @@ def grid_id(grid) -> str:
     str
         A sha256 hex digest.
     """
-
     blob = json.dumps(grid.to_dict(), sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()
 
@@ -5813,11 +5812,7 @@ def _finalize_merged_dir(dirpath: str):
 
     .. note::
         A file removed by one level and written again by a later one
-        stays.
-
-    .. note::
-        Manifests of a kind this version does not know, e.g. an add-on
-        written by a newer minor schema, are skipped with a warning.
+        stays. Add-on manifests sit beside the chain and are skipped.
 
     Parameters
     ----------
@@ -5827,12 +5822,13 @@ def _finalize_merged_dir(dirpath: str):
     Raises
     ------
     InvalidWorkflowError
-        If a manifest's schema major version is newer than what this
-        OGGM version can read. Also raised if a parent manifest is
-        missing, or its ``id`` differs from the child's ``parent.id``.
-        This happens with a stale download cache, a regenerated parent,
-        or a legacy cumulative parent. Either way the directory is left
-        as the tars extracted it, without the removal pass.
+        If a manifest's schema major version or its kind is unknown to
+        this OGGM version, or if the manifests do not form one chain.
+        Also raised if a parent manifest is missing, or its ``id``
+        differs from the child's ``parent.id``. This happens with a
+        stale download cache or a regenerated parent. Either way the
+        directory is left as the tars extracted it, without the removal
+        pass.
     """
     manifests = {}
     for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
@@ -5846,13 +5842,11 @@ def _finalize_merged_dir(dirpath: str):
                 "Upgrade OGGM, or rebuild the level."
             )
         if m.get("kind") not in _MANIFEST_KINDS:
-            log.warning(
-                "Skipping %s: unknown manifest kind %r. A newer OGGM "
-                "version may use it.",
-                os.path.basename(fp),
-                m.get("kind"),
+            raise InvalidWorkflowError(
+                f"{os.path.basename(fp)} has the manifest kind "
+                f"{m.get('kind')!r}, unknown to this OGGM version. "
+                "Upgrade OGGM."
             )
-            continue
         if m["kind"] != "addon":  # add-ons sit beside the chain
             manifests[m["label"]] = m
     if not manifests:
@@ -5862,7 +5856,6 @@ def _finalize_merged_dir(dirpath: str):
     # the requested level is no other level's parent
     named = {(m.get("parent") or {}).get("label") for m in manifests.values()}
     leaves = [m for lbl, m in manifests.items() if lbl not in named]
-    chain = [max(leaves or manifests.values(), key=lambda m: m["created"])]
     if len(leaves) != 1:
         raise InvalidWorkflowError(
             f"The manifests layered in {dirpath} "
@@ -5952,9 +5945,8 @@ def write_level_manifest(
     directory. Per-label file names mean a layered directory
     self-documents every artefact applied to it.
 
-    The parent's id is read from its manifest. Legacy directories will
-    therefore raise an error instead of producing a broken chain. Users
-    should convert legacy directories into the new format instead.
+    The parent's id is read from its manifest, so a level can't be built
+    on a legacy (cumulative) directory, which has none.
 
     Parameters
     ----------
@@ -5962,14 +5954,14 @@ def write_level_manifest(
         The glacier directory or its path.
     label : str
         The artefact's label, which is also its folder name in the
-        published tree, e.g. ``"L3"`` or ``"L3a"``.
+        published tree, e.g. ``"L3"``.
     prev_state : dict
-        Snapshot of the parent's state. Ignored for the non-delta kinds,
-        which ship every file.
+        Snapshot of the parent's state. Ignored for a ``'standalone'``
+        or an ``'addon'``, which ship every file.
     parent : str | None, optional
         Label of the artefact this one was built on. Required for a
-        ``'delta'`` other than the root, kept for provenance by a
-        ``'standalone'``, and forbidden for a ``'materialisation'``.
+        ``'delta'``, optional for a ``'standalone'``, which keeps it for
+        provenance only, and forbidden for an ``'addon'``.
     parent_base_url : str | None, optional
         Base URL of the tree holding the parent. None means the same tree
         as this manifest.
@@ -5977,10 +5969,9 @@ def write_level_manifest(
         Directory holding ``{parent}.manifest.json``. Defaults to the
         glacier directory.
     kind : str, default ``'delta'``
-        ``'delta'`` (changes against its parent), ``'materialisation'``
-        (every file, cumulative, no parent), ``'standalone'`` (only what
-        it needs to run, e.g. the L5 bundle) or ``'addon'`` (optional
-        data for any gdir on the same grid, no parent).
+        ``'delta'`` (changes against its parent), ``'standalone'``
+        (every file it needs, e.g. the L1 root or the L5 bundle), or
+        ``'addon'`` (optional data for any gdir on the same grid).
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
@@ -6003,18 +5994,15 @@ def write_level_manifest(
             f"Invalid manifest kind: {kind!r}. "
             f"Must be one of {_MANIFEST_KINDS}."
         )
-    if kind == "addon":
-        if parent is not None:
-            raise ValueError(
-            f"An addon has no parent, got parent={parent!r}."
-        )
-        if  grid_id is None:
-            raise ValueError("An addon needs the grid_id of its grid.")
-    if kind == "delta" and parent is None and label != "L0":
+    if kind == "delta" and parent is None:
         raise ValueError(
-            f"A delta other than the root needs a parent, got label={label!r}. "
-            "Pass kind='materialisation' to ship every file instead."
+            f"A delta needs a parent, got label={label!r}. The root of a "
+            "chain is a 'standalone'."
         )
+    if kind == "addon" and parent is not None:
+        raise ValueError(f"An addon has no parent, got parent={parent!r}.")
+    if kind == "addon" and grid_id is None:
+        raise ValueError("An addon needs the grid_id of its grid.")
     if kind != "delta":
         prev_state = {}  # self-sufficient: ship every file
 
@@ -6205,6 +6193,7 @@ def gdir_to_tar(
     base_dir: str = None,
     delete: bool = True,
     include: list = None,
+    keep_fetched_from: bool = False,
 ) -> str:
     """Writes the content of a glacier directory to a tar file.
 
