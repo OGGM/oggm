@@ -331,14 +331,13 @@ def _layered_level_tars(
     """Gets the bundle tars to layer for a glacier, root first.
 
     A delta names its parent, which may live in another tree. This
-    method walks through links until it reaches the root, a non-delta,
-    or a parent legacy directory without a manifest.
+    method walks through links until it reaches a standalone level
+    (e.g. the L1 root). A legacy (cumulative) bundle has no manifest, so
+    it is the only tar.
 
     .. important::
         This doesn't check artefact ids. `_finalize_merged_dir` does
-        that after the tars are layered, and will raise an error for
-        trying to patch a legacy cumulative directory. Convert legacy
-        directories to the new format first.
+        that after the tars are layered.
 
     Parameters
     ----------
@@ -379,9 +378,9 @@ def _layered_level_tars(
 def _stamp_fetched_from(dirpath: str, sources: dict[str, str | None]):
     """Records in each layer's manifest the tree root it came from.
 
-    Runs after the tars are layered, so the id checks if
-    `_finalize_merged_dir` considers the manifests as published. Legacy
-    directories are skipped because they have no manifest.
+    Runs after the tars are layered, so that `_finalize_merged_dir`
+    checks the manifests as they were published. Legacy directories are
+    skipped because they have no manifest.
     """
     for label, src in sources.items():
         fp = os.path.join(dirpath, f"{label}.manifest.json")
@@ -459,7 +458,7 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
     tar_base = locate(from_tar)
     # A parent in this local tree (so a null link) is a sibling folder,
     # otherwise it comes from `base_url`. A chunked run writes L3 and L4
-    # to disk, whilst only L0 to L2 are published.
+    # to disk, whilst only L1 and L2 are published.
     root, name = os.path.split(os.path.normpath(from_tar))
     # For local paths I assumed a `<tree>/RGIxx/b_yyy/<label>` layout,
     # so the tree reads like a `base_url`. Other layouts keep `root`.

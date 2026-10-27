@@ -2025,7 +2025,8 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     Returns
     -------
     geopandas.GeoDataFrame
-        containing the desired RGI glacier outlines
+        containing the desired RGI glacier outlines, in the same order
+        as ``rgi_ids``
     """
 
     if version is None:
@@ -2055,6 +2056,11 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     selection.set_crs(crs=sh.crs, inplace=True, allow_override=True)  # for geolocalisation
     if len(selection) != len(rgi_ids):
         raise RuntimeError('Could not find all RGI ids')
+
+    # Same order as the input list
+    col = 'RGIId' if 'RGIId' in selection else 'rgi_id'
+    order = pd.Index(selection[col]).get_indexer(rgi_ids)
+    selection = selection.iloc[order]
 
     return selection
 

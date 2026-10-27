@@ -295,12 +295,20 @@ Enhancements
   only the files it added, changed or removed relative to its parent, plus a
   manifest file recording build information. Clients layer the levels they need
   into one glacier directory so several experiments can share one set of lower
-  levels. Legacy cumulative datasets still work (:pull:`1951`).
+  levels. Legacy cumulative datasets can still be read, but new levels can
+  only be built on incremental ones. There is no L0 anymore: L1 (outlines
+  and topography) is the root of the chain, and ``oggm_prepro`` starts from
+  scratch when no ``--start-level`` is given (``--start-level 0`` is no
+  longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
 
+- :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
+  in the same order as the input list of RGI ids. They were previously
+  sorted by RGI region and by their order in the RGI files (:issue:`1005`).
+  By `monsterlag <https://github.com/monsterlag>`_
 - Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
   in the wrong direction, step length ignoring ``melt_f_max``, broken
   error recovery, swapped "part success" / "dynamic spinup only" labels)
@@ -507,6 +515,8 @@ Breaking changes
 - New ``PARAMS['round_dem']`` and ``PARAMS['round_smoothed_dem']`` params
   changed a bit the centerlines and downstream lines results. This is most 
   noticeable in the centerlines representation (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- OGGM now requires Python 3.12 or newer (:pull:`1951`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 
 v1.6.3 (April 13, 2026)

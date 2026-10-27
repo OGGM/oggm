@@ -3575,9 +3575,8 @@ class GlacierDirectory(object):
         from_tar : str, list of str or bool, default=False
             path to a tar file to extract the gdir data from. If set to
             `True`, will check for a tar file at the expected location
-            in `base_dir`. A list of paths (one materialisation plus any
-            level deltas) are layered into the directory in ascending
-            order.
+            in `base_dir`. A list of paths (the level tars of a chain, root
+            first) are layered into the directory in ascending order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
@@ -5859,11 +5858,17 @@ def _finalize_merged_dir(dirpath: str):
     if not manifests:
         return
 
-    # This is a tie-breaker for instances where a full tar carries stale
-    # lower manifests (a `3a` start without L2.state.json).
+    # The tars are layered from the root to the requested level, so only
+    # the requested level is no other level's parent
     named = {(m.get("parent") or {}).get("label") for m in manifests.values()}
     leaves = [m for lbl, m in manifests.items() if lbl not in named]
     chain = [max(leaves or manifests.values(), key=lambda m: m["created"])]
+    if len(leaves) != 1:
+        raise InvalidWorkflowError(
+            f"The manifests layered in {dirpath} "
+            f"({', '.join(sorted(manifests))}) do not form one chain."
+        )
+    chain = leaves
     while (
         chain[-1]["kind"] == "delta"
         and chain[-1].get("parent")
@@ -6221,6 +6226,11 @@ def gdir_to_tar(
         when building a per-level delta, such as
         ``<group>.npz``. Directories are added recursively.
         The default adds the whole directory.
+    keep_fetched_from : bool, default False
+        Keep the ``fetched_from`` field of the manifests, which is
+        otherwise dropped. Only for tars which are never published, since
+        the field may hold local paths: the ``L3a`` directories of a
+        chunked run use it to tell the next stage where L2 came from.
 
     Returns
     -------
@@ -6248,11 +6258,12 @@ def gdir_to_tar(
                 for fp in glob.glob(os.path.join(source_dir, "*.manifest.json"))
             ]
         for rel in sorted(set(include)):
-            _tar_add_unstamped(
-                tar,
-                os.path.join(source_dir, rel),
-                arcname=os.path.join(arcbase, rel),
-            )
+            path = os.path.join(source_dir, rel)
+            arcname = os.path.join(arcbase, rel)
+            if keep_fetched_from:
+                tar.add(path, arcname=arcname)
+            else:
+                _tar_add_unstamped(tar, path, arcname=arcname)
 
     if delete:
         shutil.rmtree(source_dir)

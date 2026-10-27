@@ -1,18 +1,8 @@
-"""Compatibility and conversion wrappers between legacy and new glacier
+"""Compatibility and conversion wrappers between legacy and glacier
 directory formats.
 
-The main entry point is :func:`convert_prepro_to_deltas`, which converts
-the previous cumulative per-level tar artifacts (each level tar
-contains all lower levels' data) into the new incremental delta format.
-Each level ships only the files it added, changed, or removed, plus a
-``L{n}.manifest.json`` naming its parent, so clients can layer levels
-into one glacier directory.
-
-One call converts one source tree. In the cumulative system, the
-default dataset spans two trees (levels 0-2 under ``L1-L2_files``,
-levels 3-5 under the spinup ``L3-L5_files`` tree), so it takes two
-calls: the second links its first level to the converted, published
-copy of the first tree through ``parent_base_url``.
+The main entry point is :func:`convert_pickles_to_npz`, which converts
+the pickles of a glacier directory into npz.
 """
 
 import glob

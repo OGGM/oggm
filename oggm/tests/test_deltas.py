@@ -340,6 +340,7 @@ def test_write_level_manifest_ships_every_file(tmp_path, kind):
     }
     assert "data_store" not in m
     assert (m["parent"] or {}).get("label") == parent
+    assert m["parent"]["label"] == "L4"
     assert "L4.manifest.json" not in changed
 
 
@@ -348,6 +349,9 @@ def test_write_level_manifest_ships_every_file(tmp_path, kind):
     [
         ("L3", None, "delta"),  # only the root delta has no parent
         ("L3", None, "unknown"),  # unknown kind
+        ("L3", None, "delta"),  # a delta always has a parent
+        ("L1", None, "delta"),  # the root too: it is a standalone
+        ("L3", None, "unknown"),
     ],
 )
 def test_write_level_manifest_invalid_kind(tmp_path, label, parent, kind):
@@ -361,7 +365,9 @@ def test_write_level_manifest_invalid_kind(tmp_path, label, parent, kind):
 
 def test_write_level_manifest_root_and_free_label(tmp_path):
     gdir_dir = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
-    path, _ = utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
+    path, _ = utils.write_level_manifest(
+        gdir_dir, "L1", {}, kind="standalone", **_DS
+    )
     assert _manifest(path)["parent"] is None
 
     # A free-form label is its own manifest name and is never diffed
@@ -369,7 +375,7 @@ def test_write_level_manifest_root_and_free_label(tmp_path):
     with open(gdir_dir / "mb_calib.json", "w") as f:
         f.write("{}")
     path, changed = utils.write_level_manifest(
-        gdir_dir, "L3a", prev, parent="L0", **_DS
+        gdir_dir, "L3a", prev, parent="L1", **_DS
     )
     assert os.path.basename(path) == "L3a.manifest.json"
     assert set(changed) == {"mb_calib.json", "L3a.manifest.json"}
@@ -487,12 +493,12 @@ def test_peek_level_manifest_corruption(tmp_path):
 
     # Legacy bundle without a manifest should return None
     _build_bundle(tar_base, rid)
-    assert workflow._peek_level_manifest(tar_base, rid, "L1") is None
+    assert workflow._peek_level_manifest(tar_base, rid, "L2") is None
 
     # Delta bundle carrying a manifest should be parsed
-    manifest = {"label": "L1", "kind": "delta", "parent": {"label": "L0"}}
+    manifest = {"label": "L2", "kind": "delta", "parent": {"label": "L1"}}
     _build_bundle(tar_base, rid, with_manifest=manifest)
-    got = workflow._peek_level_manifest(tar_base, rid, "L1")
+    got = workflow._peek_level_manifest(tar_base, rid, "L2")
     assert got == manifest
     # Free-form labels are keyed by name
     _build_bundle(tar_base, rid, with_manifest={**manifest, "label": "L3a"})
@@ -520,25 +526,21 @@ class TestLayeredGdir:
         shutil.copytree(hef_gdir.dir, workdir)
         assert os.path.isfile(os.path.join(workdir, "inversion_flowlines.npz"))
 
-        # Materialisation artifact: everything up to L3 in one tar
-        utils.write_level_manifest(
-            workdir, "L3", {}, kind="materialisation", **_DS
-        )
-        materialisation_tar = utils.gdir_to_tar.unwrapped(
+        # L1 root: every file in one tar
+        utils.write_level_manifest(workdir, "L1", {}, kind="standalone", **_DS)
+        root_tar = utils.gdir_to_tar.unwrapped(
             _FakeGdir(workdir, workbase), delete=False
         )
-        materialisation_tar = shutil.move(
-            materialisation_tar, str(tmp_path / "materialisation.tar.gz")
-        )
+        root_tar = shutil.move(root_tar, str(tmp_path / "root.tar.gz"))
 
-        # L4 delta: a changed file and a new npz group
+        # L2 delta: a changed file and a new npz group
         prev = utils.snapshot_gdir_state(workdir)
         with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
             json.dump({"melt_f": 6.0}, f)
         arrays, meta = encode_npz(np.ones(4), "delta_check")
         _write_npz_store(workdir, arrays, meta, name="delta_check")
         _, changed = utils.write_level_manifest(
-            workdir, "L4", prev, parent="L3", **_DS
+            workdir, "L2", prev, parent="L1", **_DS
         )
         delta_tar = utils.gdir_to_tar.unwrapped(
             _FakeGdir(workdir, workbase), delete=False, include=changed
@@ -547,16 +549,16 @@ class TestLayeredGdir:
 
         ref_state = utils.snapshot_gdir_state(workdir)
 
-        # Layer materialisation + delta into a fresh base dir
+        # Layer root + delta into a fresh base dir
         newbase = str(tmp_path / "layered")
         gdir = oggm.GlacierDirectory(
-            rid, base_dir=newbase, from_tar=[materialisation_tar, delta_tar]
+            rid, base_dir=newbase, from_tar=[root_tar, delta_tar]
         )
 
         assert utils.snapshot_gdir_state(gdir.dir) == ref_state
         # Both manifests document the layering
-        assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
-        assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L1.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L2.manifest.json"))
         np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
@@ -650,7 +652,7 @@ class TestDeltaServer:
 
     @pytest.fixture
     def delta_server(self, tmp_path, hef_gdir):
-        """A local server tree with L3 materialisation, L4 delta, L5 standalone."""
+        """A local server tree with an L1 root, L2 delta and L5 standalone."""
         rid = hef_gdir.rgi_id
         srcbase = str(tmp_path / "src")
         workdir = os.path.join(srcbase, rid[:-6], rid[:-3], rid)
@@ -666,28 +668,26 @@ class TestDeltaServer:
                 tf.add(member_tar, arcname=f"{bundle}/{rid}.tar.gz")
             os.remove(member_tar)
 
-        # L3 materialisation (includes 0..3)
-        utils.write_level_manifest(
-            workdir, "L3", {}, kind="materialisation", **_DS
-        )
+        # L1 root: every file
+        utils.write_level_manifest(workdir, "L1", {}, kind="standalone", **_DS)
         publish(
-            3,
+            1,
             utils.gdir_to_tar.unwrapped(
                 _FakeGdir(workdir, srcbase), delete=False
             ),
         )
 
-        # L4 delta (requires 0..3): changed file + new npz group
+        # L2 delta: changed file + new npz group
         prev = utils.snapshot_gdir_state(workdir)
         with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
             json.dump({"melt_f": 6.0}, f)
         arrays, meta = encode_npz(np.ones(4), "delta_check")
         _write_npz_store(workdir, arrays, meta, name="delta_check")
         _, changed = utils.write_level_manifest(
-            workdir, "L4", prev, parent="L3", **_DS
+            workdir, "L2", prev, parent="L1", **_DS
         )
         publish(
-            4,
+            2,
             utils.gdir_to_tar.unwrapped(
                 _FakeGdir(workdir, srcbase), delete=False, include=changed
             ),
@@ -695,7 +695,7 @@ class TestDeltaServer:
 
         # L5 standalone
         utils.write_level_manifest(
-            workdir, "L5", {}, parent="L4", kind="standalone", **_DS
+            workdir, "L5", {}, parent="L2", kind="standalone", **_DS
         )
         publish(
             5,
@@ -727,19 +727,19 @@ class TestDeltaServer:
     def test_init_from_delta_server(self, served_calls):
         calls, rid = served_calls
 
-        # Level 4 = the L4 bundle plus the L3 materialisation it requires
+        # Level 2 = the L2 bundle plus the L1 root it requires
         gdirs = workflow.init_glacier_directories(
             [rid],
-            from_prepro_level=4,
+            from_prepro_level=2,
             prepro_border=80,
             prepro_base_url=self.BASE_URL,
         )
         gdir = gdirs[0]
         assert len(calls) == 2
-        assert "/L4/" in calls[0]
-        assert "/L3/" in calls[1]
-        assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
-        assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
+        assert "/L2/" in calls[0]
+        assert "/L1/" in calls[1]
+        assert os.path.isfile(os.path.join(gdir.dir, "L1.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L2.manifest.json"))
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
         np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
@@ -758,45 +758,45 @@ class TestDeltaServer:
     def test_init_from_local_delta_tree(self, delta_server, served_calls):
         """Test initialization from a local delta tree.
 
-        Server tree is read from disk, so the L4 delta is missing the
-        the grid from the L3 tar.
+        Server tree is read from disk, so the L2 delta takes the grid
+        from the L1 tar in the sibling folder.
         """
         server, _ = delta_server
         calls, rid = served_calls
         gdirs = workflow.init_glacier_directories(
-            [rid], from_tar=os.path.join(server, "RGI62", "b_080", "L4")
+            [rid], from_tar=os.path.join(server, "RGI62", "b_080", "L2")
         )
         gdir = gdirs[0]
         assert calls == []
-        assert os.path.isfile(os.path.join(gdir.dir, "L3.manifest.json"))
-        assert os.path.isfile(os.path.join(gdir.dir, "L4.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L1.manifest.json"))
+        assert os.path.isfile(os.path.join(gdir.dir, "L2.manifest.json"))
         assert gdir.grid.nx > 0
         with open(os.path.join(gdir.dir, "mb_calib.json")) as f:
             assert json.load(f)["melt_f"] == 6.0
 
     @pytest.fixture
-    def local_l4_only(self, delta_server, tmp_path):
-        """A local tree with the L4 delta but none of the levels it requires."""
+    def local_l2_only(self, delta_server, tmp_path):
+        """A local tree with the L2 delta but none of the levels it requires."""
         server, _ = delta_server
-        local = tmp_path / "local" / "RGI62" / "b_080" / "L4"
-        shutil.copytree(Path(server, "RGI62", "b_080", "L4"), local)
+        local = tmp_path / "local" / "RGI62" / "b_080" / "L2"
+        shutil.copytree(Path(server, "RGI62", "b_080", "L2"), local)
         return str(local)
 
     def test_init_from_local_tree_fetches_missing_level(
-        self, served_calls, local_l4_only
+        self, served_calls, local_l2_only
     ):
         calls, rid = served_calls
         gdirs = workflow.init_glacier_directories(
             [rid],
-            from_tar=local_l4_only,
+            from_tar=local_l2_only,
             prepro_base_url=self.BASE_URL,
             prepro_border=80,
         )
         gdir = gdirs[0]
         assert len(calls) == 1
-        assert "/L3/" in calls[0]
-        assert Path(gdir.dir, "L3.manifest.json").is_file()
-        assert Path(gdir.dir, "L4.manifest.json").is_file()
+        assert "/L1/" in calls[0]
+        assert Path(gdir.dir, "L1.manifest.json").is_file()
+        assert Path(gdir.dir, "L2.manifest.json").is_file()
         assert gdir.grid.nx > 0
         mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
         assert mb_calib["melt_f"] == 6.0
@@ -809,7 +809,7 @@ class TestDeltaServer:
 
     def test_url_load_records_fetched_from(self, served_calls):
         _, rid = served_calls
-        for level, labels in ((4, ("L4", "L3")), (5, ("L5",))):
+        for level, labels in ((2, ("L2", "L1")), (5, ("L5",))):
             gdir = workflow.init_glacier_directories(
                 [rid],
                 from_prepro_level=level,
@@ -822,26 +822,26 @@ class TestDeltaServer:
     def test_local_tree_records_tree_root(self, delta_server, served_calls):
         server, rid = delta_server
         gdir = workflow.gdir_from_tar(
-            rid, os.path.join(server, "RGI62", "b_080", "L4")
+            rid, os.path.join(server, "RGI62", "b_080", "L2")
         )
-        for label in ("L4", "L3"):
+        for label in ("L2", "L1"):
             assert self.fetched_from(gdir, label) == server
 
-    def test_fallback_level_records_base_url(self, served_calls, local_l4_only):
+    def test_fallback_level_records_base_url(self, served_calls, local_l2_only):
         _, rid = served_calls
         gdir = workflow.gdir_from_tar(
-            rid, local_l4_only, base_url=self.BASE_URL, prepro_border=80
+            rid, local_l2_only, base_url=self.BASE_URL, prepro_border=80
         )
-        local_root = str(Path(local_l4_only).parents[2])
-        assert self.fetched_from(gdir, "L4") == local_root
-        assert self.fetched_from(gdir, "L3") == self.BASE_URL
+        local_root = str(Path(local_l2_only).parents[2])
+        assert self.fetched_from(gdir, "L2") == local_root
+        assert self.fetched_from(gdir, "L1") == self.BASE_URL
 
     def test_local_tree_missing_level_without_base_url(
-        self, served_calls, local_l4_only
+        self, served_calls, local_l2_only
     ):
         calls, rid = served_calls
         with pytest.raises(FileNotFoundError):
-            workflow.gdir_from_tar(rid, local_l4_only)
+            workflow.gdir_from_tar(rid, local_l2_only)
         assert calls == []
 
 
@@ -882,7 +882,13 @@ class TestParentChain:
             for name in rm:
                 os.remove(wdir / name)
             _, changed = utils.write_level_manifest(
-                wdir, label, prev, parent=parent, parent_base_url=url, **_DS
+                wdir,
+                label,
+                prev,
+                parent=parent,
+                parent_base_url=url,
+                kind="delta" if parent else "standalone",
+                **_DS,
             )
             return changed
 
@@ -893,10 +899,7 @@ class TestParentChain:
         # The shared L1-L2 tree
         base = workdir("base")
         shutil.copytree(hef_gdir.dir, base)
-        publish("base", "L0", base, level(base, "L0"))
-        publish(
-            "base", "L1", base, level(base, "L1", "L0", write={"l1.txt": "L1"})
-        )
+        publish("base", "L1", base, level(base, "L1", write={"l1.txt": "L1"}))
         fork("base", "base_l1")  # kept to regenerate L2 later
         publish(
             "base", "L2", base, level(base, "L2", "L1", write={"l2.txt": "L2"})
@@ -975,9 +978,9 @@ class TestParentChain:
             # not against the experiment URL the user passed
             assert [c.split("/L")[0] for c in chain.calls] == [
                 self.url(exp) + "RGI62/b_080",
-                *[self.url("base") + "RGI62/b_080"] * 3,
+                *[self.url("base") + "RGI62/b_080"] * 2,
             ]
-            assert ["L3", "L2", "L1", "L0"] == [
+            assert ["L3", "L2", "L1"] == [
                 c.split("b_080/")[1][:2] for c in chain.calls
             ]
             states[exp] = utils.snapshot_gdir_state(gdir.dir)
@@ -1005,7 +1008,7 @@ class TestParentChain:
         opath = utils.gdir_to_tar.unwrapped(gdir, delete=False)
         built = chain.workdir("w5e5")
         with tarfile.open(opath, "r:gz") as tar:
-            for label in ("L0", "L1", "L2", "L3"):
+            for label in ("L1", "L2", "L3"):
                 name = f"{label}.manifest.json"
                 with tar.extractfile(f"{chain.rid}/{name}") as f:
                     assert f.read() == (built / name).read_bytes()
@@ -1063,12 +1066,11 @@ class TestStartState:
     def gdir(self, tmp_path):
         return SimpleNamespace(dir=str(tmp_path), rgi_id="RGI60-11.00897")
 
-    def test_missing_l2_state_is_delta(self, gdir, caplog):
+    def test_missing_l2_state_raises(self, gdir):
         from oggm.cli.prepro_levels import _start_state
 
-        with caplog.at_level(logging.WARNING, logger="oggm.cli.prepro_levels"):
-            assert _start_state(gdir, True) is None
-        assert "L2.state.json" in caplog.text
+        with pytest.raises(InvalidWorkflowError, match="L2.state.json"):
+            _start_state(gdir, True)
 
     def test_l2_state_is_loaded_and_removed(self, gdir):
         from oggm.cli.prepro_levels import _start_state
@@ -1285,62 +1287,24 @@ def test_level_consistency_mismatch(tmp_path):
         )
         return shutil.move(path, str(tmp_path / name))
 
-    utils.write_level_manifest(
-        gdir_dir, "L3", {}, kind="materialisation", **_DS
-    )
-    l3_a = tar("l3_a.tar.gz")
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+    l0_a = tar("l0_a.tar.gz")
 
-    # A level-4 delta built on a *different* L3
+    # A level-2 delta built on a *different* L1
     with open(os.path.join(gdir_dir, "dem_source.txt"), "w") as f:
         f.write("other DEM")
-    utils.write_level_manifest(
-        gdir_dir, "L3", {}, kind="materialisation", **_DS
-    )
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     prev = utils.snapshot_gdir_state(gdir_dir)
     with open(os.path.join(gdir_dir, "mb_calib.json"), "w") as f:
         json.dump({"melt_f": 6.0}, f)
     _, changed = utils.write_level_manifest(
-        gdir_dir, "L4", prev, parent="L3", **_DS
+        gdir_dir, "L2", prev, parent="L1", **_DS
     )
-    l4_on_b = tar("l4.tar.gz", changed)
+    l1_on_b = tar("l1.tar.gz", changed)
 
     layered = tmp_path / "layered"
-    with pytest.raises(InvalidWorkflowError, match="L4 was built on L3"):
-        utils._workflow._extract_tars([l3_a, l4_on_b], str(layered / rid))
-
-
-def test_finalize_ignores_stale_lower_manifests(tmp_path):
-    """A full L3 tar can carry the L0-L2 manifests of the run it started
-    from (a `3a` start without L2.state.json). The chain must still end at
-    the L4 delta layered last."""
-    rid = "RGI60-11.00897"
-    base = str(tmp_path / "src")
-    gdir_dir = _make_fake_gdir(os.path.join(base, rid))
-    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
-    for lbl, parent in (("L1", "L0"), ("L2", "L1")):
-        utils.write_level_manifest(
-            gdir_dir,
-            lbl,
-            utils.snapshot_gdir_state(gdir_dir),
-            parent=parent,
-            **_DS,
-        )
-    utils.write_level_manifest(
-        gdir_dir, "L3", {}, kind="materialisation", **_DS
-    )
-    l3 = utils.gdir_to_tar.unwrapped(
-        _FakeGdir(str(gdir_dir), base), delete=False
-    )
-    l3 = shutil.move(l3, str(tmp_path / "l3.tar.gz"))
-
-    prev = utils.snapshot_gdir_state(gdir_dir)
-    os.remove(gdir_dir / "log.txt")
-    _, changed = utils.write_level_manifest(
-        gdir_dir, "L4", prev, parent="L3", **_DS
-    )
-    l4 = utils.gdir_to_tar.unwrapped(
-        _FakeGdir(str(gdir_dir), base), delete=False, include=changed
-    )
+    with pytest.raises(InvalidWorkflowError, match="L2 was built on L1"):
+        utils._workflow._extract_tars([l0_a, l1_on_b], str(layered / rid))
 
     layered = tmp_path / "layered" / rid
     utils._workflow._extract_tars([l3, l4], str(layered))
@@ -1349,35 +1313,36 @@ def test_finalize_ignores_stale_lower_manifests(tmp_path):
         gdir_dir
     )
 
-
-def _unknown_manifest(gdir_dir, **overrides):
-    """Writes a manifest of a kind this OGGM version does not know."""
+def _raw_manifest(gdir_dir, **overrides):
+    """Writes a manifest as is, without `write_level_manifest` checks."""
     m = {
-        "schema_version": "1.1",
-        "kind": "patch",
+        "schema_version": "1.0",
+        "kind": "delta",
         "rgi_id": "RGI60-11.00897",
-        "label": "itslive",
+        "label": "L2",
         "id": "0" * 64,
         "parent": None,
         "created": "2999-01-01T00:00:00+00:00",
-        "files": {"added": {"itslive.nc": "0" * 64}, "updated": {}},
+        "files": {"added": {}, "updated": {}, "removed": []},
     }
     m.update(overrides)
     with open(os.path.join(gdir_dir, f"{m['label']}.manifest.json"), "w") as f:
         json.dump(m, f)
 
 
-def test_finalize_skips_unknown_kind(tmp_path, caplog):
-    """A newer manifest kind (e.g. an add-on) must not hide the chain."""
+def test_finalize_rejects_unknown_kind(tmp_path):
     gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
-    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
-    prev = utils.snapshot_gdir_state(gdir_dir)
-    os.remove(gdir_dir / "log.txt")
-    utils.write_level_manifest(gdir_dir, "L1", prev, parent="L0", **_DS)
-    (gdir_dir / "log.txt").write_text("restored by the L0 tar\n")
-    _unknown_manifest(gdir_dir)
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+    _raw_manifest(gdir_dir, kind="unknown", label="extra")
+    with pytest.raises(InvalidWorkflowError, match="'unknown'"):
+        utils._workflow._finalize_merged_dir(str(gdir_dir))
 
-    with caplog.at_level(logging.WARNING, logger="oggm.utils"):
+
+def test_finalize_rejects_two_chains(tmp_path):
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+    _raw_manifest(gdir_dir)  # an L2 that is not built on L1
+    with pytest.raises(InvalidWorkflowError, match="one chain"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
     assert not (gdir_dir / "log.txt").exists()
     assert "'patch'" in caplog.text
@@ -1386,10 +1351,8 @@ def test_finalize_skips_unknown_kind(tmp_path, caplog):
 @pytest.mark.parametrize("version", ["2.0", 2])
 def test_finalize_rejects_newer_major(tmp_path, version):
     gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
-    utils.write_level_manifest(gdir_dir, "L0", {}, **_DS)
-    _unknown_manifest(
-        gdir_dir, kind="delta", label="L1", schema_version=version
-    )
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+    _raw_manifest(gdir_dir, schema_version=version)
     with pytest.raises(InvalidWorkflowError, match="schema 2"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
 
