@@ -176,7 +176,7 @@ def test_write_level_manifest_schema(tmp_path):
 
     state = utils.snapshot_gdir_state(gdir_dir)
     # this needs to be updated whenever the schema changes
-    assert manifest["schema_version"] == "1.0"
+    assert manifest["schema_version"] == "1.1"
     assert manifest["kind"] == "delta"
     assert manifest["rgi_id"] == "RGI60-11.00897"
     assert manifest["label"] == "L3"
@@ -318,6 +318,7 @@ def test_write_level_manifest_standalone_ships_every_file(tmp_path):
         ("L3", None, "delta"),  # a delta always has a parent
         ("L1", None, "delta"),  # the root too: it is a standalone
         ("L3", None, "unknown"),
+        ("L3", None, "materialisation"),  # check this is dropped
     ],
 )
 def test_write_level_manifest_invalid_kind(tmp_path, label, parent, kind):

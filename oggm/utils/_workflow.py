@@ -5744,7 +5744,7 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
 
 # Readers compare the major part only: a minor bump stays readable, a major
 # bump raises in `_finalize_merged_dir`.
-_MANIFEST_SCHEMA = "1.0"
+_MANIFEST_SCHEMA = "1.1"
 _MANIFEST_KINDS = ("delta", "standalone", "addon")
 
 
