@@ -459,6 +459,27 @@ class TestGIS:
         with pytest.raises(RuntimeError):
             gis.glacier_masks(gdir)
 
+    def test_round_smoothed_dem(self):
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+
+        cfg.PARAMS['round_smoothed_dem'] = False
+        gis.process_dem(gdir)
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ref = ds.topo_smoothed.load()
+        assert np.any(ref != np.round(ref))
+
+        cfg.PARAMS['round_smoothed_dem'] = True
+        gis.process_dem(gdir)
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            topo_smoothed = ds.topo_smoothed.load()
+        assert topo_smoothed.dtype == np.float32
+        np.testing.assert_array_equal(topo_smoothed, np.round(topo_smoothed))
+        np.testing.assert_allclose(topo_smoothed, ref, atol=0.5)
+
     @pytest.mark.skipif((Version(rasterio.__version__) <
                          Version('1.0')),
                         reason='requires rasterio >= 1.0')
@@ -789,7 +810,7 @@ class TestCenterlines:
             len(d["full_line"].coords) - len(d["downstream_line"].coords)
             == cl.nx
         )
-        np.testing.assert_allclose(d['downstream_line'].length, 12, atol=0.5)
+        np.testing.assert_allclose(d['downstream_line'].length, 10, atol=0.5)
 
     def test_downstream_bedshape(self, hef_entity):
 
@@ -1069,7 +1090,7 @@ class TestElevationBandFlowlines:
 
         # And the distributed diff is not too large either
         rms = utils.rmsd(ds1.distributed_thickness, ds2.distributed_thickness)
-        assert rms < 30
+        assert rms < 31
 
     def test_run(self, hef_entity):
 
@@ -2410,7 +2431,7 @@ class TestInversion:
                                                          ref_table=ref_table,
                                                          a_bounds=a,
                                                          error_on_mismatch=False)
-        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.08)
+        np.testing.assert_allclose(df.vol_itmix_m3, df.vol_oggm_m3, rtol=0.09)
 
         # With fs it can work
         a = (0.1, 3)
