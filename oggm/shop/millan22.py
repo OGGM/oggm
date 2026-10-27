@@ -270,11 +270,11 @@ def millan_velocity_to_gdir(gdir, add_error=False):
             err_vx[p_ok] = err_vx[p_ok] * scaler
             err_vy[p_ok] = err_vy[p_ok] * scaler
             if all_err_vx is None:
-                all_err_vx = err_vx.filled(np.nan)
-                all_err_vy = err_vy.filled(np.nan)
+                all_err_vx = np.ma.filled(err_vx, np.nan)
+                all_err_vy = np.ma.filled(err_vy, np.nan)
             else:
-                err_vx = err_vx.filled(np.nan)
-                err_vy = err_vy.filled(np.nan)
+                err_vx = np.ma.filled(err_vx, np.nan)
+                err_vy = np.ma.filled(err_vy, np.nan)
                 all_err_vx[locuptate] = err_vx[locuptate]
                 all_err_vy[locuptate] = err_vy[locuptate]
 
