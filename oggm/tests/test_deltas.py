@@ -176,7 +176,7 @@ def test_write_level_manifest_schema(tmp_path):
 
     state = utils.snapshot_gdir_state(gdir_dir)
     # this needs to be updated whenever the schema changes
-    assert manifest["schema_version"] == "1.0"
+    assert manifest["schema_version"] == "1.1"
     assert manifest["kind"] == "delta"
     assert manifest["rgi_id"] == "RGI60-11.00897"
     assert manifest["label"] == "L3"
@@ -318,6 +318,7 @@ def test_write_level_manifest_standalone_ships_every_file(tmp_path):
         ("L3", None, "delta"),  # a delta always has a parent
         ("L1", None, "delta"),  # the root too: it is a standalone
         ("L3", None, "unknown"),
+        ("L3", None, "materialisation"),  # check this is dropped
     ],
 )
 def test_write_level_manifest_invalid_kind(tmp_path, label, parent, kind):
@@ -1118,3 +1119,176 @@ def test_finalize_rejects_newer_major(tmp_path, version):
     _raw_manifest(gdir_dir, schema_version=version)
     with pytest.raises(InvalidWorkflowError, match="schema 2"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
+
+
+class TestAddons:
+    """Add-ons: optional data matched to a gdir by its grid, not its chain."""
+
+    @staticmethod
+    def shifted(grid, dx=0.0, x0=0.0):
+        import salem
+
+        return salem.Grid(
+            proj=grid.proj,
+            nxny=(grid.nx, grid.ny),
+            dxdy=(grid.dx + dx, grid.dy - dx),
+            x0y0=(grid.x0 + x0, grid.y0),
+            pixel_ref=grid.pixel_ref,
+        )
+
+    def test_grid_id(self, tmp_path, hef_gdir):
+        import salem
+
+        grid = hef_gdir.grid
+        fp = str(tmp_path / "grid.json")
+        grid.to_json(fp)
+        assert utils.grid_id(salem.Grid.from_json(fp)) == utils.grid_id(grid)
+        assert utils.grid_id(self.shifted(grid, x0=grid.dx)) != utils.grid_id(
+            grid
+        )
+        assert utils.grid_id(self.shifted(grid, dx=1.0)) != utils.grid_id(grid)
+
+    def test_manifest_id_unchanged_without_grid_id(self):
+        # Pinned before add-ons existed as published ids must not move
+        m = {
+            "rgi_id": "RGI60-11.00897",
+            "label": "L2",
+            "border": 80,
+            "rgi_version": "62",
+            "files": {
+                "added": {"a.txt": "0" * 64},
+                "updated": {},
+                "removed": [],
+            },
+            "parent": {"base_url": None, "label": "L1", "id": "p"},
+        }
+        assert utils.manifest_id(m) == (
+            "b354db5d377aa134a7b57a87241a988423172043a6d53eac1c6efb2b4315e533"
+        )
+        addon = {**m, "parent": None, "grid_id": "g1"}
+        assert utils.manifest_id(addon) != utils.manifest_id(
+            {**addon, "grid_id": "g2"}
+        )
+
+    def test_write_addon_manifest(self, tmp_path):
+        d = _make_fake_gdir(str(tmp_path / "RGI60-11.00897"))
+        with pytest.raises(ValueError, match="grid_id"):
+            utils.write_level_manifest(d, "itslive", {}, kind="addon", **_DS)
+        with pytest.raises(ValueError, match="parent"):
+            utils.write_level_manifest(
+                d, "itslive", {}, kind="addon", parent="L2", grid_id="g", **_DS
+            )
+        _, changed = utils.write_level_manifest(
+            d, "itslive", {"log.txt": "x"}, kind="addon", grid_id="g", **_DS
+        )
+        m = _manifest(d / "itslive.manifest.json")
+        assert m["kind"] == "addon"
+        assert m["grid_id"] == "g"
+        assert m["parent"] is None
+        assert "log.txt" in m["files"]["added"]  # ships every file
+        assert "itslive.manifest.json" in changed
+        utils.write_level_manifest(d, "L1", {}, kind="standalone", **_DS)
+        assert "grid_id" not in _manifest(d / "L1.manifest.json")
+
+    def test_layering_ignores_addon_manifest(self, tmp_path):
+        """An add-on manifest newer than the leaf level must not replace it
+        as the leaf, or the level removals are skipped."""
+        rid = "RGI60-11.00897"
+        base = str(tmp_path / "src")
+        gdir_dir = _make_fake_gdir(os.path.join(base, rid))
+        utils.write_level_manifest(
+            gdir_dir, "L1", {}, kind="standalone", **_DS
+        )
+        l1 = utils.gdir_to_tar.unwrapped(
+            _FakeGdir(str(gdir_dir), base), delete=False
+        )
+        l1 = shutil.move(l1, str(tmp_path / "l1.tar.gz"))
+
+        prev = utils.snapshot_gdir_state(gdir_dir)
+        os.remove(gdir_dir / "log.txt")
+        _, changed = utils.write_level_manifest(
+            gdir_dir, "L2", prev, parent="L1", **_DS
+        )
+        utils.write_level_manifest(
+            gdir_dir, "itslive", {}, kind="addon", grid_id="g", **_DS
+        )
+        l2 = utils.gdir_to_tar.unwrapped(
+            _FakeGdir(str(gdir_dir), base),
+            delete=False,
+            include=changed + ["itslive.manifest.json"],
+        )
+
+        layered = tmp_path / "layered" / rid
+        utils._workflow._extract_tars([l1, l2], str(layered))
+        assert not (layered / "log.txt").exists()
+
+    @pytest.fixture
+    def addon(self, tmp_path, hef_gdir):
+        """An `itslive` add-on built from one copy of HEF, and a second copy
+        to apply it to."""
+        import xarray as xr
+
+        rid = hef_gdir.rgi_id
+
+        def copy(name):
+            workdir = tmp_path / name / rid[:-6] / rid[:-3] / rid
+            shutil.copytree(hef_gdir.dir, workdir)
+            return oggm.GlacierDirectory(rid, base_dir=tmp_path / name)
+
+        src, dst = copy("src"), copy("dst")
+        with src.open_group("gridded_data") as ds:
+            v = xr.full_like(ds["topo"], 3.5).rename("itslive_v")
+        src.write_group(v.to_dataset(), "gridded_data", mode="a")
+
+        out = tmp_path / "addons" / "itslive"
+        utils.write_addon(
+            src, label="itslive", variables=["itslive_v"], output_dir=str(out)
+        )
+        utils.base_dir_to_tar(str(out))
+        return SimpleNamespace(src=src, dst=dst, out=out)
+
+    def test_apply_addon_from_local_dir(self, addon):
+        with addon.dst.open_group("gridded_data") as ds:
+            before = ds.load()
+        assert "itslive_v" not in before
+
+        utils.apply_addon(addon.dst, base_url=str(addon.out))
+
+        with addon.dst.open_group("gridded_data") as ds:
+            after = ds.load()
+        np.testing.assert_array_equal(after["itslive_v"], 3.5)
+        for var in before.data_vars:
+            np.testing.assert_array_equal(after[var], before[var])
+        m = _manifest(Path(addon.dst.dir) / "itslive.manifest.json")
+        assert m["kind"] == "addon"
+
+    def test_apply_addon_from_url(self, addon, monkeypatch):
+        host = "https://addons.invalid/"
+        calls = []
+
+        def fake_file_downloader(www_path, **kwargs):
+            calls.append(www_path)
+            local = addon.out.parent / www_path.replace(host, "")
+            return str(local) if local.is_file() else None
+
+        monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
+        utils.apply_addon(addon.dst, base_url=host + "itslive")
+        assert calls == [host + "itslive/RGI50-11/RGI50-11.008.tar"]
+        with addon.dst.open_group("gridded_data") as ds:
+            assert "itslive_v" in ds
+
+    def test_apply_addon_refuses_other_grid(self, addon):
+        from oggm.exceptions import InvalidWorkflowError
+
+        self.shifted(addon.dst.grid, x0=addon.dst.grid.dx).to_json(
+            addon.dst.get_filepath("glacier_grid")
+        )
+        dst = oggm.GlacierDirectory(
+            addon.dst.rgi_id, base_dir=addon.dst.base_dir
+        )
+        fp = Path(dst.get_filepath("gridded_data"))
+        before = fp.read_bytes()
+        with pytest.raises(InvalidWorkflowError, match="grid"):
+            utils.apply_addon(dst, base_url=str(addon.out))
+        assert fp.read_bytes() == before
+        assert not (Path(dst.dir) / "itslive.manifest.json").exists()
