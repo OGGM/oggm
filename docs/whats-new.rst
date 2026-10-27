@@ -301,6 +301,9 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Support for users adding optional data to any gdir with a matching glacier
+  grid via the ``addon`` data kind (:pull:`2011`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
