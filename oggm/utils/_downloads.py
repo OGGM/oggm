@@ -1329,7 +1329,7 @@ def _open_inner_zip(bundle_url, rgi_id, block_size=8192):
 
 
 def peek_remote_manifest(
-    bundle_url: str, rgi_id: str, level: int, block_size: int = 8192
+    bundle_url: str, rgi_id: str, label: str, block_size: int = 8192
 ) -> dict | None:
     """Read a glacier's level manifest out of a remote v2 zip bundle.
 
@@ -1342,13 +1342,13 @@ def peek_remote_manifest(
         URL of the outer bundle zip, e.g. ``.../L3/RGI60-07/RGI60-07.000.zip``.
     rgi_id : str
         The glacier's RGI ID.
-    level : int
-        The prepro level of the manifest to read.
+    label : str
+        The label of the manifest to read, e.g. ``"L3"``.
 
     Returns
     -------
     dict | None
-        The parsed ``L{level}.manifest.json``, or None when the member
+        The parsed ``{label}.manifest.json``, or None when the member
         or manifest is missing.
     """
     try:
@@ -1356,7 +1356,7 @@ def peek_remote_manifest(
             bundle_url, rgi_id, block_size=block_size
         )
         with http_file, outer, inner:
-            with inner.open(f"{rgi_id}/L{level}.manifest.json") as mf:
+            with inner.open(f"{rgi_id}/{label}.manifest.json") as mf:
                 return json.load(mf)
     except (KeyError, zipfile.BadZipFile, requests.HTTPError):
         return None
@@ -2225,7 +2225,8 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     Returns
     -------
     geopandas.GeoDataFrame
-        containing the desired RGI glacier outlines
+        containing the desired RGI glacier outlines, in the same order
+        as ``rgi_ids``
     """
 
     if version is None:
@@ -2255,6 +2256,11 @@ def get_rgi_glacier_entities(rgi_ids, version=None):
     selection.set_crs(crs=sh.crs, inplace=True, allow_override=True)  # for geolocalisation
     if len(selection) != len(rgi_ids):
         raise RuntimeError('Could not find all RGI ids')
+
+    # Same order as the input list
+    col = 'RGIId' if 'RGIId' in selection else 'rgi_id'
+    order = pd.Index(selection[col]).get_indexer(rgi_ids)
+    selection = selection.iloc[order]
 
     return selection
 

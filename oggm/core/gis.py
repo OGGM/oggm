@@ -447,6 +447,9 @@ def reproject_dem(dem_list, dem_source, dst_grid_prop, output_path):
             dst_nodata=nodata,
             # Configuration
             resampling=resampling)
+        if cfg.PARAMS['round_dem'] and np.issubdtype(dtype, np.floating):
+            # Much better compression
+            np.round(dst_array, out=dst_array)
         dest.write(dst_array, 1)
 
     for dem_ds in dem_dss:
@@ -863,6 +866,11 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
         raise InvalidDEMError('({}) min equal max in the DEM.'
                               .format(grid_name))
 
+    # Round to the meter (much better compression)
+    # The interpolation above can create non-integer values
+    if cfg.PARAMS['round_dem']:
+        np.round(dem, out=dem)
+
     # Clip topography to 0 m a.s.l.
     if cfg.PARAMS['clip_dem_to_zero']:
         utils.clip_min(dem, 0, out=dem)
@@ -871,6 +879,8 @@ def process_dem(gdir=None, grid=None, fpath=None, output_filename=None):
     if cfg.PARAMS['smooth_window'] > 0.:
         gsize = np.rint(cfg.PARAMS['smooth_window'] / dx)
         smoothed_dem = gaussian_blur(dem, int(gsize))
+        if cfg.PARAMS['round_smoothed_dem']:
+            np.round(smoothed_dem, out=smoothed_dem)
     else:
         smoothed_dem = dem.copy()
 

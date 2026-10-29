@@ -1,15 +1,18 @@
-"""Tests for the v2 glacier directory format (HANDOFF_1896).
+"""Tests for the v2 glacier directory format.
 
 Covers dataset group access (``open_group``/``write_group``) and later
 steps: gridded/climate funnels, geoparquet vectors, zip containers,
 v2 converters and streaming.
 """
 
+import glob
 import io
 import json
 import os
+import shutil
 import tarfile
 import zipfile
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -18,7 +21,6 @@ import xarray as xr
 from numpy.testing import assert_allclose
 
 from oggm import cfg, utils, workflow
-from oggm.exceptions import InvalidWorkflowError
 
 pytestmark = pytest.mark.test_env("utils")
 
@@ -129,8 +131,6 @@ class TestGroupAccess:
             hef_gdir.open_group("gcm_data", filesuffix="_does_not_exist")
 
     def test_filesuffix_none_never_makes_none_group(self, tmp_path, hef_gdir):
-        import glob as _glob
-
         cfg.PATHS["working_dir"] = str(tmp_path)
         gdir = hef_gdir
 
@@ -141,10 +141,7 @@ class TestGroupAccess:
             {"a": np.arange(3.0)}, "inversion_input", filesuffix=None
         )
 
-        assert not _glob.glob(os.path.join(gdir.dir, "*None*"))
-        assert not _glob.glob(
-            os.path.join(gdir.get_filepath("data_store"), "*None*")
-        )
+        assert not glob.glob(os.path.join(gdir.dir, "*None*"))
         assert gdir.has_file("gcm_data", filesuffix=None)
         with gdir.open_group("gcm_data", filesuffix=None) as back:
             assert "topo" in back
@@ -308,7 +305,7 @@ class TestVectorFunnel:
         gdir = hef_gdir
         gdf = gdir.read_shapefile("outlines")
         gdir.write_shapefile(gdf, "outlines")
-        # drop every legacy outlines artifact
+        # drop every legacy outlines artefact
         for f in _glob.glob(os.path.join(gdir.dir, "outlines.tar*")):
             os.remove(f)
         for f in _glob.glob(os.path.join(gdir.dir, "outlines.sh[px]")):
@@ -355,13 +352,13 @@ class _FakeGdir:
 
 def _make_fake_gdir_dir(path):
     """Minimal on-disk glacier dir: two files plus one npz store group."""
-    os.makedirs(os.path.join(path, "data_store"), exist_ok=True)
+    os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "diagnostics.json"), "w") as f:
         json.dump({"a": 1}, f)
     with open(os.path.join(path, "dem.tif"), "wb") as f:
         f.write(b"not really a tif")
     np.savez(
-        os.path.join(path, "data_store", "inversion_flowlines.npz"),
+        os.path.join(path, "inversion_flowlines.npz"),
         thick=np.arange(5, dtype=float),
     )
     return path
@@ -373,9 +370,9 @@ def _build_zip_bundle(path, rid, with_manifest=None):
     with zipfile.ZipFile(inner_buf, "w", zipfile.ZIP_STORED) as inner:
         inner.writestr(f"{rid}/diagnostics.json", '{"a": 1}\n')
         if with_manifest is not None:
-            level = with_manifest["level"]
+            label = with_manifest["label"]
             inner.writestr(
-                f"{rid}/L{level}.manifest.json", json.dumps(with_manifest)
+                f"{rid}/{label}.manifest.json", json.dumps(with_manifest)
             )
         inner.writestr(f"{rid}/filler.bin", os.urandom(40000))
     bundle = f"{rid[:-6]}.{rid[-5:-2]}"
@@ -398,7 +395,7 @@ class TestZipContainers:
             assert f"{rid}/diagnostics.json" in names
             assert f"{rid}/dem.tif" in names
             assert any(
-                n == f"{rid}/data_store/inversion_flowlines.npz" for n in names
+                n == f"{rid}/inversion_flowlines.npz" for n in names
             )
             # STORED members so HTTP ranges can stream them
             assert all(
@@ -414,14 +411,14 @@ class TestZipContainers:
             fake,
             delete=False,
             fmt="zip",
-            include=["diagnostics.json", "data_store/inversion_flowlines.npz"],
+            include=["diagnostics.json", "inversion_flowlines.npz"],
         )
         with zipfile.ZipFile(opath) as zf:
             names = zf.namelist()
         assert f"{rid}/diagnostics.json" in names
         assert not any("dem.tif" in n for n in names)
         assert any(
-            n == f"{rid}/data_store/inversion_flowlines.npz" for n in names
+            n == f"{rid}/inversion_flowlines.npz" for n in names
         )
 
     def test_gdir_to_archive_tar_delegation(self, tmp_path):
@@ -479,7 +476,7 @@ class TestZipContainers:
             utils.robust_archive_extract(member, to_dir)
             assert os.path.isfile(os.path.join(to_dir, "diagnostics.json"))
             assert os.path.isfile(
-                os.path.join(to_dir, "data_store", "inversion_flowlines.npz")
+                os.path.join(to_dir, "inversion_flowlines.npz")
             )
 
     def test_robust_archive_extract_delegates_to_tar(self, tmp_path):
@@ -512,7 +509,7 @@ class TestZipContainers:
             )
 
     def test_mixed_tar_and_zip_layering(self, tmp_path):
-        # a tar materialisation topped by a zip delta merges cleanly
+        # a tar root topped by a zip delta merges cleanly
         rid = "RGI60-07.00001"
         gdir_dir = _make_fake_gdir_dir(str(tmp_path / rid))
         fake = _FakeGdir(gdir_dir, str(tmp_path))
@@ -537,52 +534,6 @@ class TestZipContainers:
         assert os.path.isfile(os.path.join(to_dir, "mb_calib.json"))
 
 
-class TestManifestFormatVersion:
-    """format_version in manifests and mixed-version refusal."""
-
-    def test_write_level_manifest_format_version(self, tmp_path):
-        gdir_dir = _make_fake_gdir_dir(str(tmp_path / "RGI60-07.00001"))
-
-        mp, _ = utils.write_level_manifest(
-            gdir_dir,
-            level=0,
-            prev_state={},
-            requires=[],
-            artefact_tag="t",
-            border=80,
-            rgi_version="62",
-        )
-        with open(mp) as f:
-            assert json.load(f)["format_version"] == 1
-
-        mp, _ = utils.write_level_manifest(
-            gdir_dir,
-            level=0,
-            prev_state={},
-            requires=[],
-            artefact_tag="t",
-            border=80,
-            rgi_version="62",
-            format_version=2,
-        )
-        with open(mp) as f:
-            assert json.load(f)["format_version"] == 2
-
-    def test_check_level_compat_mixed_format_version(self):
-        from oggm.utils._workflow import _check_level_compat
-
-        base = dict(artefact_id="d", requires=[], includes_levels=None)
-        m0 = dict(base, level=0, includes_levels=[0, 1, 2, 3], format_version=1)
-        m4 = dict(base, level=4, requires=[3], format_version=2)
-        with pytest.raises(InvalidWorkflowError, match="format"):
-            _check_level_compat([m0, m4])
-
-        # legacy manifests without the key default to 1 and stay valid
-        m0.pop("format_version")
-        m4["format_version"] = 1
-        _check_level_compat([m0, m4])
-
-
 class TestZipPrepro:
     """zip probing + manifest peek on the download path."""
 
@@ -593,22 +544,22 @@ class TestZipPrepro:
 
         # legacy-ish zip bundle without a manifest -> None
         _build_zip_bundle(zip_base, rid)
-        assert workflow._peek_level_manifest(zip_base, rid, 1) is None
+        assert workflow._peek_level_manifest(zip_base, rid, "L2") is None
 
         manifest = {
-            "level": 1,
+            "schema_version": "2.0",
+            "label": "L2",
             "kind": "delta",
-            "requires": [0],
-            "format_version": 2,
+            "parent": {"base_url": None, "label": "L1", "id": "0" * 64},
         }
         _build_zip_bundle(zip_base, rid, with_manifest=manifest)
-        assert workflow._peek_level_manifest(zip_base, rid, 1) == manifest
+        assert workflow._peek_level_manifest(zip_base, rid, "L2") == manifest
 
         # truncated zip -> None, not a crash
         size = os.path.getsize(zip_base)
         with open(zip_base, "r+b") as f:
             f.truncate(size - 20000)
-        assert workflow._peek_level_manifest(zip_base, rid, 1) is None
+        assert workflow._peek_level_manifest(zip_base, rid, "L2") is None
 
     def test_prepro_probes_zip_first(self, tmp_path, monkeypatch):
         from oggm.utils import _downloads
@@ -663,56 +614,111 @@ class TestZipPrepro:
         )
         assert out == tar_base
 
-# repo-local sample data (untracked), skip when absent
-_EXT_DATA = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "ext",
-    "data",
-)
-DELTA_SERVER = os.path.join(_EXT_DATA, "delta_server")
-STREAM_SERVER = os.path.join(_EXT_DATA, "stream_server")
-
-needs_delta_server = pytest.mark.skipif(
-    not os.path.isdir(os.path.join(DELTA_SERVER, "RGI62")),
-    reason="local ext/data/delta_server fixture tree not available",
-)
+_DS = dict(border=40, rgi_version="62")
 
 
-def _extract_v1_member(level, rid, dest_base):
-    """Extract one glacier member of a v1 delta_server bundle."""
+@pytest.fixture(scope="module")
+def v1_tree(hef_gdir_base, tmp_path_factory):
+    """A v1.6 parent-chain tree of HEF, as prepro_levels publishes it.
+
+    L1 is the standalone root, L2 to L4 are deltas (L4 removes a file
+    added by L2) and L5 is a standalone with L4 as its parent. The
+    directory is converted to v1.6 payload formats first, since the
+    fixture glacier is written in v2 formats.
+    """
+    from oggm.utils import _compat
+
+    rid = hef_gdir_base.rgi_id
+    tmp = tmp_path_factory.mktemp("v1_tree")
+    out = tmp / "tree"
+    tree = out / "RGI62" / "b_040"
+    src = str(tmp / "src")
+    workdir = os.path.join(src, rid[:-6], rid[:-3], rid)
+    shutil.copytree(hef_gdir_base.dir, workdir)
+    _compat.convert_gdir_to_v16(workdir)
+
+    def publish(label, wdir, base, include=None):
+        utils.gdir_to_tar.unwrapped(
+            _FakeGdir(wdir, base),
+            base_dir=str(tree / label),
+            delete=False,
+            include=include,
+        )
+        utils.base_dir_to_tar(str(tree / label))
+
+    def delta(label, parent, write=None, rm=()):
+        prev = utils.snapshot_gdir_state(workdir)
+        for name, text in (write or {}).items():
+            with open(os.path.join(workdir, name), "w") as f:
+                f.write(text)
+        for name in rm:
+            os.remove(os.path.join(workdir, name))
+        _, changed = utils.write_level_manifest(
+            workdir, label, prev, parent=parent, **_DS
+        )
+        publish(label, workdir, src, include=changed)
+
+    utils.write_level_manifest(workdir, "L1", {}, kind="standalone", **_DS)
+    publish("L1", workdir, src)
+    delta("L2", "L1", write={"l2.txt": "l2"})
+    delta("L3", "L2", write={"l3.txt": "l3"})
+    delta("L4", "L3", write={"l4.txt": "l4"}, rm=["l2.txt"])
+
+    # the L5 mini directory holds no manifests of the levels below
+    mini = str(tmp / "mini")
+    minidir = os.path.join(mini, rid[:-6], rid[:-3], rid)
+    shutil.copytree(workdir, minidir)
+    for fp in glob.glob(os.path.join(minidir, "*.manifest.json")):
+        os.remove(fp)
+    utils.write_level_manifest(
+        minidir, "L5", {}, parent="L4", parent_dir=workdir,
+        kind="standalone", **_DS
+    )
+    publish("L5", minidir, mini)
+    return SimpleNamespace(root=str(out), tree=str(tree), rid=rid)
+
+
+@pytest.fixture(scope="module")
+def v2_tree(v1_tree, tmp_path_factory):
+    """The v2 (zip/npz/netCDF/parquet) conversion of ``v1_tree``."""
+    from oggm.utils import _compat
+
+    tmp = tmp_path_factory.mktemp("v2_tree")
+    return _compat.convert_prepro_to_v2_artefacts(
+        v1_tree.root,
+        [v1_tree.rid],
+        str(tmp / "tree"),
+        workdir=str(tmp / "wk"),
+        **_DS,
+    )
+
+
+def _member(tree, label, rid, ext):
     region = rid[:-6]
     bundle = f"{region}.{rid[-5:-2]}"
-    member = os.path.join(
-        DELTA_SERVER,
-        "RGI62",
-        "b_080",
-        f"L{level}",
-        region,
-        bundle,
-        rid + ".tar.gz",
-    )
-    to_dir = os.path.join(dest_base, region, rid[:-3], rid)
-    os.makedirs(os.path.dirname(to_dir), exist_ok=True)
-    utils.robust_archive_extract(member, to_dir)
-    return to_dir
+    return os.path.join(tree, label, region, bundle, rid + ext)
 
 
-@needs_delta_server
+def _inner_names(tree, label, rid):
+    region, bundle = rid[:-6], f"{rid[:-6]}.{rid[-5:-2]}"
+    with zipfile.ZipFile(os.path.join(tree, label, region, bundle + ".zip")) as o:
+        with o.open(f"{bundle}/{rid}.zip") as fobj:
+            with zipfile.ZipFile(fobj) as inner:
+                return set(inner.namelist())
+
+
 class TestV2Converters:
 
-    @pytest.fixture(autouse=True)
-    def _init_cfg(self, tmp_path):
-        cfg.initialize()
-        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
-        os.makedirs(cfg.PATHS["working_dir"], exist_ok=True)
-        cfg.PARAMS["border"] = 80
-        cfg.PARAMS["rgi_version"] = "62"
-
-    def test_convert_gdir_to_v2_and_back(self, tmp_path):
+    def test_convert_gdir_to_v2_and_back(self, tmp_path, v1_tree):
         from oggm.utils import _compat
 
-        rid = "RGI60-07.00001"
-        gdir_dir = _extract_v1_member(3, rid, str(tmp_path))
+        rid = v1_tree.rid
+        gdir_dir = os.path.join(str(tmp_path), rid[:-6], rid[:-3], rid)
+        os.makedirs(os.path.dirname(gdir_dir))
+        utils.robust_archive_extract(
+            _member(v1_tree.tree, "L1", rid, ".tar.gz"), gdir_dir
+        )
+        assert os.path.exists(os.path.join(gdir_dir, "outlines.tar.gz"))
 
         # reference content before conversion
         with xr.open_dataset(os.path.join(gdir_dir, "gridded_data.nc")) as ds:
@@ -740,7 +746,7 @@ class TestV2Converters:
 
         # and back to v1.6
         _compat.convert_gdir_to_v16(gdir_dir)
-        assert os.path.exists(os.path.join(gdir_dir, "gridded_data.nc"))
+        assert os.path.exists(os.path.join(gdir_dir, "outlines.tar.gz"))
         with xr.open_dataset(
             os.path.join(gdir_dir, "climate_historical.nc")
         ) as ds:
@@ -748,111 +754,55 @@ class TestV2Converters:
         with xr.open_dataset(os.path.join(gdir_dir, "gridded_data.nc")) as ds:
             assert_allclose(ds["topo"].values, ref_grid["topo"].values)
 
-    def test_convert_prepro_to_v2_artifacts(self, tmp_path):
-        from oggm.utils import _compat as compat
-
-        rid = "RGI60-07.00001"
-        out = compat.convert_prepro_to_v2_artifacts(
-            DELTA_SERVER,
-            [rid],
-            str(tmp_path / "v2"),
-            artefact_tag="v2test",
-            workdir=str(tmp_path / "wk"),
-        )
+    def test_convert_prepro_to_v2_artefacts(self, v2_tree, v1_tree):
+        rid = v1_tree.rid
         region, bundle = rid[:-6], f"{rid[:-6]}.{rid[-5:-2]}"
-        for lvl in (0, 3, 4, 5):
-            assert os.path.isfile(
-                os.path.join(out, f"L{lvl}", region, bundle + ".zip")
+        ms = {}
+        for label in ("L1", "L2", "L3", "L4", "L5"):
+            ms[label] = workflow._peek_level_manifest(
+                os.path.join(v2_tree, label, region, bundle + ".zip"),
+                rid,
+                label,
             )
+            assert ms[label]["schema_version"] == "2.0"
 
-        # the L3 materialisation keeps its kind and gets format_version 2
-        m = workflow._peek_level_manifest(
-            os.path.join(out, "L3", region, bundle + ".zip"), rid, 3
-        )
-        assert m["format_version"] == 2
-        assert m["includes_levels"] == [0, 1, 2, 3]
-        assert m["requires"] == []
+        # each v1 level keeps its kind and parent, with v2 parent ids
+        assert ms["L1"]["kind"] == "standalone"
+        assert ms["L1"]["parent"] is None
+        for label, parent in (("L2", "L1"), ("L3", "L2"), ("L4", "L3")):
+            assert ms[label]["kind"] == "delta"
+            assert ms[label]["parent"]["label"] == parent
+            assert ms[label]["parent"]["base_url"] is None
+            assert ms[label]["parent"]["id"] == ms[parent]["id"]
+        assert ms["L5"]["kind"] == "standalone"
+        assert ms["L5"]["parent"]["id"] == ms["L4"]["id"]
+        assert ms["L4"]["files"]["removed"] == ["l2.txt"]
 
-        # the L4 delta stays a delta and ships no v1 payload formats
-        m4 = workflow._peek_level_manifest(
-            os.path.join(out, "L4", region, bundle + ".zip"), rid, 4
-        )
-        assert m4["format_version"] == 2
-        assert m4["requires"] == [0, 1, 2, 3]
-        with zipfile.ZipFile(
-            os.path.join(out, "L4", region, bundle + ".zip")
-        ) as outer:
-            with outer.open(f"{bundle}/{rid}.zip") as fobj:
-                with zipfile.ZipFile(fobj) as inner:
-                    names = inner.namelist()
-        # model run NetCDFs are passthrough members - still there
-        assert any("model_geometry" in n for n in names)
-        # but no legacy shapefile tars or pickles
-        assert not any(n.endswith(".tar.gz") for n in names)
-        assert not any(n.endswith(".pkl") for n in names)
-        # re-converting the layered L3 state is a fixed point as netCDF
-        # groups ship in the L4 delta only if v1 L4 changed them
-        v1m4 = workflow._peek_level_manifest(
-            os.path.join(
-                DELTA_SERVER, "RGI62", "b_080", "L4", region, bundle + ".tar"
-            ),
-            rid,
-            4,
-        )
-        v1_changed = set(v1m4["files"]["added"] + v1m4["files"]["updated"])
-        for nc in ("gridded_data.nc", "climate_historical.nc"):
-            if nc not in v1_changed:
-                assert f"{rid}/{nc}" not in names, nc
-
-        # converted L3 member holds compressed netCDF groups, npz store
-        # groups and parquet instead of pickles/.tar.gz
-        with zipfile.ZipFile(
-            os.path.join(out, "L3", region, bundle + ".zip")
-        ) as outer:
-            with outer.open(f"{bundle}/{rid}.zip") as fobj:
-                with zipfile.ZipFile(fobj) as inner:
-                    names = inner.namelist()
+        # the converted root holds v2 payload formats only
+        names = _inner_names(v2_tree, "L1", rid)
         assert f"{rid}/gridded_data.nc" in names
         assert f"{rid}/climate_historical.nc" in names
-        assert any(n.startswith(f"{rid}/data_store/") for n in names)
+        assert f"{rid}/inversion_flowlines.npz" in names
         assert f"{rid}/outlines.parquet" in names
-        assert not any(n.endswith(".pkl") for n in names)
-        assert not any(n.endswith(".tar.gz") for n in names)
+        assert not any(n.endswith((".pkl", ".tar.gz")) for n in names)
 
+        # re-converting the layered parent is a fixed point, so a delta
+        # ships what its v1 level changed and nothing else
+        assert _inner_names(v2_tree, "L4", rid) == {
+            f"{rid}/l4.txt",
+            f"{rid}/L4.manifest.json",
+        }
 
-@pytest.fixture(scope="session")
-def stream_server_tree():
-    """The v2 (zip/npz/netCDF/parquet) sibling of ext/data/delta_server.
-
-    Generated once from the local v1 tree and kept untracked,
-    regenerated only if missing.
-    """
-    from oggm.utils import _compat
-
-    if not os.path.isdir(os.path.join(DELTA_SERVER, "RGI62")):
-        pytest.skip("local ext/data/delta_server fixture tree missing")
-    cfg.initialize()
-    rids = ["RGI60-07.00001", "RGI60-07.00099", "RGI60-07.00100"]
-    marker = os.path.join(
-        STREAM_SERVER,
-        "RGI62",
-        "b_080",
-        "L5",
-        "RGI60-07",
-        "RGI60-07.001.zip",
-    )
-    if not os.path.isfile(marker):
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as wk:
-            _compat.convert_prepro_to_v2_artifacts(
-                DELTA_SERVER,
-                rids,
-                STREAM_SERVER,
-                artefact_tag="oggm_v1.6_2025.6_elev_bands_w5e5_v2",
-                workdir=wk,
+    def test_v2_tree_loads_from_disk(self, v2_tree, v1_tree, tmp_path):
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        gdir = workflow.gdir_from_tar(v1_tree.rid, os.path.join(v2_tree, "L4"))
+        for label in ("L1", "L2", "L3", "L4"):
+            assert os.path.isfile(
+                os.path.join(gdir.dir, f"{label}.manifest.json")
             )
-    return STREAM_SERVER
+        assert os.path.isfile(os.path.join(gdir.dir, "l3.txt"))
+        assert not os.path.exists(os.path.join(gdir.dir, "l2.txt"))
+        assert gdir.read_shapefile("outlines").crs is not None
 
 
 @pytest.mark.download
@@ -934,30 +884,25 @@ def test_live_bremen_v2_zip_server(tmp_path):
 
     # streaming: one ranged read of the L3 manifest, no download
     m = peek_remote_manifest(
-        base_url + "RGI62/b_080/L3/RGI60-07/RGI60-07.000.zip", rid, 3
+        base_url + "RGI62/b_080/L3/RGI60-07/RGI60-07.000.zip", rid, "L3"
     )
-    assert m["format_version"] == 2
+    assert m["schema_version"] == "2.0"
 
 
 class TestV2Server:
     """End-to-end: init_glacier_directories against a v2 zip server."""
 
-    BASE_URL = (
-        "https://cluster.klima.uni-bremen.de/~ngampierakis/test_gdirs/"
-        "oggm_v1.6/2026.7/elev_bands/W5E5/"
-    )
+    BASE_URL = "https://fake.example/gdirs/v2/"
 
     @pytest.fixture
-    def served_calls(self, stream_server_tree, monkeypatch, tmp_path):
+    def served_calls(self, v2_tree, monkeypatch, tmp_path):
         from oggm.utils import _downloads
 
-        cfg.initialize()
+        server = os.path.dirname(os.path.dirname(v2_tree))
         calls = []
 
         def fake_file_downloader(www_path, **kwargs):
-            local = os.path.join(
-                stream_server_tree, www_path.replace(self.BASE_URL, "")
-            )
+            local = os.path.join(server, www_path.replace(self.BASE_URL, ""))
             if not os.path.isfile(local):
                 return None
             calls.append(www_path)
@@ -969,26 +914,23 @@ class TestV2Server:
         os.makedirs(wd, exist_ok=True)
         cfg.PATHS["working_dir"] = wd
         cfg.PARAMS["has_internet"] = False
-        cfg.PARAMS["border"] = 80
-        cfg.PARAMS["rgi_version"] = "62"
         return calls
 
-    def test_init_level4_and_run(self, served_calls):
+    def test_init_level4_and_run(self, served_calls, v1_tree):
         from oggm import tasks
 
         calls = served_calls
-        rid = "RGI60-07.00001"
         gdirs = workflow.init_glacier_directories(
-            [rid],
+            [v1_tree.rid],
             from_prepro_level=4,
-            prepro_border=80,
+            prepro_border=40,
+            prepro_rgi_version="62",
             prepro_base_url=self.BASE_URL,
         )
         gdir = gdirs[0]
-        # L4 delta + the L3 materialisation it requires, all zip
-        assert len(calls) == 2
-        assert calls[0].endswith(".zip") and "/L4/" in calls[0]
-        assert calls[1].endswith(".zip") and "/L3/" in calls[1]
+        # the L4 delta and the chain down to the L1 root, all zip
+        assert [c.split("/")[-3] for c in calls] == ["L4", "L3", "L2", "L1"]
+        assert all(c.endswith(".zip") for c in calls)
 
         # a functional glacier directory: groups + vectors + run
         assert gdir.has_file("gridded_data")
@@ -999,20 +941,20 @@ class TestV2Server:
         assert len(fls) >= 1
 
         tasks.run_from_climate_data(
-            gdir, ys=2004, ye=2006, output_filesuffix="_v2run"
+            gdir, ys=1990, ye=1992, output_filesuffix="_v2run"
         )
         with xr.open_dataset(
             gdir.get_filepath("model_diagnostics", filesuffix="_v2run")
         ) as ds:
             assert ds.volume_m3.isel(time=-1) > 0
 
-    def test_init_level5_single_fetch(self, served_calls):
+    def test_init_level5_single_fetch(self, served_calls, v1_tree):
         calls = served_calls
-        rid = "RGI60-07.00100"
         gdirs = workflow.init_glacier_directories(
-            [rid],
+            [v1_tree.rid],
             from_prepro_level=5,
-            prepro_border=80,
+            prepro_border=40,
+            prepro_rgi_version="62",
             prepro_base_url=self.BASE_URL,
         )
         assert len(calls) == 1
@@ -1022,8 +964,8 @@ class TestV2Server:
 
 
 @pytest.fixture(scope="class")
-def range_server(request, stream_server_tree):
-    """A local HTTP server with Range support over ext/data/stream_server.
+def range_server(request, v2_tree):
+    """A local HTTP server with Range support over the ``v2_tree`` root.
 
     SimpleHTTPRequestHandler does NOT support Range, so this implements
     just enough: HEAD (size discovery) and single-range GET, recording
@@ -1032,7 +974,7 @@ def range_server(request, stream_server_tree):
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    root = stream_server_tree
+    root = os.path.dirname(os.path.dirname(v2_tree))
     stats = {"statuses": [], "bytes": 0, "ranges": []}
 
     class RangeHandler(BaseHTTPRequestHandler):
@@ -1109,22 +1051,22 @@ def range_server(request, stream_server_tree):
 class TestStreaming:
     """Phase B: lazy remote reads via HTTP ranges (mock server)."""
 
-    BUNDLE = "RGI62/b_080/L3/RGI60-07/RGI60-07.000.zip"
-    RID = "RGI60-07.00001"
+    BUNDLE = "RGI62/b_040/L1/RGI50-11/RGI50-11.008.zip"
+    RID = "RGI50-11.00897"
 
     def test_peek_remote_manifest(self, range_server):
         from oggm.utils._downloads import peek_remote_manifest
 
         url, stats = range_server
-        m = peek_remote_manifest(f"{url}/{self.BUNDLE}", self.RID, 3)
-        assert m["format_version"] == 2
-        assert m["includes_levels"] == [0, 1, 2, 3]
+        m = peek_remote_manifest(f"{url}/{self.BUNDLE}", self.RID, "L1")
+        assert m["schema_version"] == "2.0"
+        assert m["kind"] == "standalone"
         assert m["rgi_id"] == self.RID
-        # missing level -> None, not a crash
-        assert peek_remote_manifest(f"{url}/{self.BUNDLE}", self.RID, 9) is None
+        # missing label -> None, not a crash
+        assert peek_remote_manifest(f"{url}/{self.BUNDLE}", self.RID, "L9") is None
 
     def test_open_remote_group_streams_ranges(
-        self, range_server, tmp_path, stream_server_tree
+        self, range_server, tmp_path, v2_tree
     ):
         from oggm.utils._downloads import open_remote_group
 
@@ -1139,15 +1081,7 @@ class TestStreaming:
             remote_ref_hgt = ds.attrs["ref_hgt"]
 
         # ground truth: extract the same member locally
-        member = os.path.join(
-            stream_server_tree,
-            "RGI62",
-            "b_080",
-            "L3",
-            "RGI60-07",
-            "RGI60-07.000",
-            self.RID + ".zip",
-        )
+        member = _member(v2_tree, "L1", self.RID, ".zip")
         to_dir = str(tmp_path / self.RID)
         utils.robust_archive_extract(member, to_dir)
         with xr.open_dataset(
@@ -1159,7 +1093,7 @@ class TestStreaming:
         # streaming proof: ranged responses only, and far fewer bytes
         # than the whole bundle
         bundle_size = os.path.getsize(
-            os.path.join(stream_server_tree, self.BUNDLE)
+            os.path.join(os.path.dirname(os.path.dirname(v2_tree)), self.BUNDLE)
         )
         assert 206 in stats["statuses"]
         assert 200 not in stats["statuses"]
@@ -1173,7 +1107,7 @@ class TestStreaming:
         stats["statuses"].clear()
         stats["ranges"].clear()
 
-        m = peek_remote_manifest(f"{url}/{self.BUNDLE}", self.RID, 3)
+        m = peek_remote_manifest(f"{url}/{self.BUNDLE}", self.RID, "L1")
         assert m["rgi_id"] == self.RID
 
         assert 206 in stats["statuses"]
@@ -1183,7 +1117,7 @@ class TestStreaming:
             assert next_start > prev_end, f"overlapping range fetches: {spans}"
 
     def test_open_remote_group_direct_ranges(
-        self, range_server, tmp_path, stream_server_tree
+        self, range_server, tmp_path, v2_tree
     ):
         # Phase C: one group open resolves each byte region at most once
         # (the fsspec chain re-read the outer central directory ~3x).
@@ -1199,15 +1133,7 @@ class TestStreaming:
         ) as ds:
             remote_temp = ds["temp"].values
 
-        member = os.path.join(
-            stream_server_tree,
-            "RGI62",
-            "b_080",
-            "L3",
-            "RGI60-07",
-            "RGI60-07.000",
-            self.RID + ".zip",
-        )
+        member = _member(v2_tree, "L1", self.RID, ".zip")
         to_dir = str(tmp_path / "direct" / self.RID)
         utils.robust_archive_extract(member, to_dir)
         with xr.open_dataset(
@@ -1226,6 +1152,6 @@ class TestStreaming:
             assert next_start > prev_end, f"overlapping range fetches: {spans}"
 
         bundle_size = os.path.getsize(
-            os.path.join(stream_server_tree, self.BUNDLE)
+            os.path.join(os.path.dirname(os.path.dirname(v2_tree)), self.BUNDLE)
         )
         assert stats["bytes"] < bundle_size / 2

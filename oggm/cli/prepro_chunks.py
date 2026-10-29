@@ -5,10 +5,10 @@ Type `$ oggm_prepro_chunks -h` for help
 This tells you how many chunks the glaciers of an RGI region fall into, which
 is what you need to size the SLURM array of a chunked preprocessing run::
 
-    $ oggm_prepro_chunks --rgi-reg 13
-    15
+    $ oggm_prepro_chunks --rgi-reg 13 --rgi-version 62
+    55
 
-    $ sbatch --array=0-14 run_prepro.sh
+    $ sbatch --array=0-54 run_prepro.sh
 
 Chunks are blocks of the RGI id space (with `--chunk-size 1000`, chunk 3 holds
 the glaciers whose id ends in 03000 to 03999), so their number is a property
