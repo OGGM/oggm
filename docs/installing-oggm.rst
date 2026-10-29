@@ -10,7 +10,7 @@ Installing OGGM
    world, and that you may not have to run OGGM for your use case?
    Visit :doc:`download-projections` for more information.
 
-OGGM is `fully tested <https://github.com/OGGM/oggm/actions?query=event%3Apush>`_ with Python 3.11 to 3.14 on Linux.
+OGGM is `fully tested <https://github.com/OGGM/oggm/actions?query=event%3Apush>`_ with Python 3.12 to 3.14 on Linux.
 macOS is not automatically tested but it should work on Mac just the same.
 
 .. warning::

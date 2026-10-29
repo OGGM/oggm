@@ -35,7 +35,6 @@ Tools to set-up and run OGGM.
     workflow.invert_from_params
     workflow.get_rgi_chunk
     workflow.count_rgi_chunks
-    workflow.print_slurm_array
 
 Troubleshooting
 ===============

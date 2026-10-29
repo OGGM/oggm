@@ -9,6 +9,20 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
+  rounded to the nearest meter before being written to ``dem.tif`` and to
+  ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
+  stored as floats (e.g. COPDEM). The data type is unchanged (float32).
+  The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the 
+  same for ``topo_smoothed``: it saves about as much space again. 
+  This changes the results slightly. Set both to ``False`` to recover 
+  the previous behavior (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``compute_downstream_line`` now also finds the domain exits located on
+  flat stretches of the domain edge (equal elevation values, more frequent
+  with rounded DEMs), which were ignored before. This changes the
+  downstream line of a few glaciers. It is also faster.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` can now store two area-weighted air temperature
   diagnostics, i.e. the downscaled temperature (temperature bias and lapse
   rate applied) which the mass balance model actually uses for melt and for
@@ -37,11 +51,11 @@ Enhancements
   directory tar files on disk with the new ``--start-from-dir``, the local
   equivalent of ``--start-base-url``. Nothing needs merging afterwards: the
   whole-region stages write the summary files exactly as a single job would.
-  New helpers :py:func:`workflow.get_rgi_chunk`,
-  :py:func:`workflow.count_rgi_chunks` and
-  :py:func:`workflow.print_slurm_array` make the same chunking available to
-  ordinary runs, and the new ``oggm_prepro_chunks`` command tells you how many
-  chunks a region has. See the documentation for a complete SLURM example (:pull:`1991`).
+  New helpers :py:func:`workflow.get_rgi_chunk` and
+  :py:func:`workflow.count_rgi_chunks` make the same chunking available to
+  ordinary runs (e.g. projections, with any chunk size), and the new
+  ``oggm_prepro_chunks`` command tells you how many chunks a region has. See
+  :ref:`chunked-runs` for the rationale and sample SLURM scripts (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``calibrate_inversion_from_ref_table`` gained a ``glen_a_factor`` keyword to
   skip the calibration and invert with a known A factor instead. The factor a
@@ -277,10 +291,38 @@ Enhancements
   to the glacier state of a given simulation year, instead of the default
   largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Preprocessed glacier directories are now incremental. Each prepro level ships
+  only the files it added, changed or removed relative to its parent, plus a
+  manifest file recording build information. Clients layer the levels they need
+  into one glacier directory so several experiments can share one set of lower
+  levels. Legacy cumulative datasets can still be read, but new levels can
+  only be built on incremental ones. There is no L0 anymore: L1 (outlines
+  and topography) is the root of the chain, and ``oggm_prepro`` starts from
+  scratch when no ``--start-level`` is given (``--start-level 0`` is no
+  longer accepted) (:pull:`1951`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
 
+- :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
+  in the same order as the input list of RGI ids. They were previously
+  sorted by RGI region and by their order in the RGI files (:issue:`1005`).
+  By `monsterlag <https://github.com/monsterlag>`_
+- Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
+  in the wrong direction, step length ignoring ``melt_f_max``, broken
+  error recovery, swapped "part success" / "dynamic spinup only" labels)
+  and added a bisection fallback for non-monotonic responses. This changes
+  the calibrated melt_f of some glaciers. The new
+  ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic stores why the
+  calibration stopped (:pull:`2005`, :pull:`1963`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
+- The monthly hydrological output of ``run_with_hydro`` (``*_monthly``
+  variables) now has the correct ``kg month-1`` unit attribute: the values
+  are monthly totals, but the attribute was copied from the annual variables
+  (``kg yr-1``). The values themselves are unchanged.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``init_present_time_glacier`` no longer fails with "Trapezoid beds need to
   have origin widths > 0" when the inversion returns a trapezoid sitting
   exactly on its physical boundary (thickness = width / lambda, i.e. a zero
@@ -467,11 +509,15 @@ Breaking changes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``read_pickle`` and ``write_pickle`` have been removed in favour of
   ``read_store`` and ``write_store``, which store data as npz files in the
-  glacier directory's ``data_store`` folder. Existing pickles from older
-  glacier directories are still read transparently by ``read_store``
-  (:pull:`1908`).
+  glacier directory. Existing pickles from older glacier directories are still
+  supported by ``read_store`` (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-
+- New ``PARAMS['round_dem']`` and ``PARAMS['round_smoothed_dem']`` params
+  changed a bit the centerlines and downstream lines results. This is most 
+  noticeable in the centerlines representation (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- OGGM now requires Python 3.12 or newer (:pull:`1951`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 v1.6.3 (April 13, 2026)

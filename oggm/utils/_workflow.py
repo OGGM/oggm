@@ -2,6 +2,7 @@
 
 # Builtins
 import glob
+import io
 import os
 import tempfile
 import gzip
@@ -3477,36 +3478,26 @@ def robust_archive_extract(
         os.remove(from_archive)
 
 
-def _extract_tars(
-    from_tar: str, to_dir: str, delete_tar: bool = False, finalize: bool = None
-):
-    """Extract one tar or layer several level tars into a directory.
+def _extract_tars(from_tar: str, to_dir: str, delete_tar: bool = False):
+    """Extract one archive or layer several level archives into a directory.
 
-    Lists are extracted in order (ascending level: materialisation
-    first, then deltas), later members overwriting earlier ones, after
-    which the merged directory is finalised by checking the level
-    manifests. Pass ``finalize=True`` to force finalisation for a single
-    tar layered onto an existing directory.
+    Lists are extracted in order (root first), later members overwriting
+    earlier ones, after which the merged directory is finalised by
+    checking the level manifests. Tar and zip archives can be mixed.
 
     Parameters
     ----------
     from_tar : str or list of str
-        Path(s) to the tar file(s) to extract.
+        Path(s) to the tar or zip file(s) to extract.
     to_dir : str
-        Path to the directory where to extract the tar file(s).
+        Path to the directory where to extract the archive(s).
     delete_tar : bool, default False
-        Whether to delete the tar file(s) after extraction.
-    finalize : bool or None, default None
-        Whether to finalise the merged directory after extraction. If
-        None, finalisation is performed if multiple tars are extracted,
-        or if a single tar is extracted onto an existing directory. Pass
-        True to force finalisation for a single tar layered onto an
-        existing directory.
+        Whether to delete the archive(s) after extraction.
     """
     tars = from_tar if isinstance(from_tar, (list, tuple)) else [from_tar]
     for ft in tars:
         robust_archive_extract(ft, to_dir, delete_archive=delete_tar)
-    if finalize or (finalize is None and len(tars) > 1):
+    if len(tars) > 1:
         _finalize_merged_dir(to_dir)
 
 
@@ -3637,7 +3628,6 @@ class GlacierDirectory(object):
         settings_filesuffix='',
         observations_filesuffix='',
         add_parent_values_to_settings=False,
-        append=False,
     ):
         """Creates a new directory or opens an existing one.
 
@@ -3654,9 +3644,8 @@ class GlacierDirectory(object):
         from_tar : str, list of str or bool, default=False
             path to a tar file to extract the gdir data from. If set to
             `True`, will check for a tar file at the expected location
-            in `base_dir`. A list of paths (one materialisation plus any
-            level deltas) are layered into the directory in ascending
-            order.
+            in `base_dir`. A list of paths (the level tars of a chain, root
+            first) are layered into the directory in ascending order.
         delete_tar : bool, default=False
             delete the original tar file after extraction.
         settings_filesuffix : str, default=''
@@ -3666,10 +3655,6 @@ class GlacierDirectory(object):
         add_parent_values_to_settings : bool, default=False
             if True and a settings value is read from the parent settings file
             this value is also added to the current settings file
-        append : bool, default False
-            layer the tar file(s) on top of an existing directory
-            instead of replacing it (used to top up a directory with
-            additional prepro levels).
         """
 
         if base_dir is None:
@@ -3684,16 +3669,11 @@ class GlacierDirectory(object):
                 _dir = os.path.join(base_dir, rgi_entity[:-6], rgi_entity[:-3],
                                     rgi_entity)
                 # Avoid bad surprises
-                if os.path.exists(_dir) and not append:
+                if os.path.exists(_dir):
                     shutil.rmtree(_dir)
                 if from_tar is True:
                     from_tar = _dir + '.tar.gz'
-                _extract_tars(
-                    from_tar,
-                    _dir,
-                    delete_tar=delete_tar,
-                    finalize=True if append else None,
-                )
+                _extract_tars(from_tar, _dir, delete_tar=delete_tar)
                 from_tar = False  # to not re-unpack later below
                 _shp = os.path.join(_dir, 'outlines.shp')
             else:
@@ -3734,18 +3714,13 @@ class GlacierDirectory(object):
 
         # Do we have to extract the files first?
         # This has to happen before the settings are read below.
-        if (reset or from_tar) and os.path.exists(self.dir) and not append:
+        if (reset or from_tar) and os.path.exists(self.dir):
             shutil.rmtree(self.dir)
 
         if from_tar:
             if from_tar is True:
                 from_tar = self.dir + '.tar.gz'
-            _extract_tars(
-                from_tar,
-                self.dir,
-                delete_tar=delete_tar,
-                finalize=True if append else None,
-            )
+            _extract_tars(from_tar, self.dir, delete_tar=delete_tar)
             write_shp = False
         else:
             mkdir(self.dir)
@@ -4289,9 +4264,10 @@ class GlacierDirectory(object):
     def get_store_filepath(self, filename: str, filesuffix: str = "") -> str:
         """Absolute path to a group of the npz data store.
 
-        Each group of the store is one npz file, named after the
-        filename and its suffix, so that a group can be written or
-        replaced without touching the rest of the store.
+        Each group of the store is one npz file at the top level of the
+        glacier directory, named after the filename and its suffix, so
+        that a group can be written or replaced without touching the rest
+        of the store.
 
         Parameters
         ----------
@@ -4305,9 +4281,7 @@ class GlacierDirectory(object):
         str
             The absolute path to the group's npz file.
         """
-        return os.path.join(
-            self.get_filepath("data_store"), f"{filename}{filesuffix or ''}.npz"
-        )
+        return os.path.join(self.dir, f"{filename}{filesuffix or ''}.npz")
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
         """Reads an npz file located in the directory.
@@ -4440,7 +4414,7 @@ class GlacierDirectory(object):
         """Reads a data store located in the glacier directory.
 
         Supports npz and pickle. Each group of the npz store is one file
-        under ``data_store``, named after the filename and its suffix.
+        in the glacier directory, named after the filename and its suffix.
         If the group is not found, falls back to reading a pickle file
         with the same name and suffix.
 
@@ -4525,7 +4499,6 @@ class GlacierDirectory(object):
         group = f"{filename}{filesuffix}"
         arrays, meta = transcoder.encode_npz(var, group)
         fp = self.get_store_filepath(filename, filesuffix=filesuffix)
-        mkdir(os.path.dirname(fp))
         # Write beside the target and move it into place, so that an
         # interrupted write cannot leave a half-written group behind.
         tmp_fp = f"{fp}.tmp{os.getpid()}"
@@ -5828,82 +5801,144 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     return merged
 
 
-def artefact_id_from_tag(artefact_tag: str, border: int, rgi_version: str) -> str:
-    """The artefact_id shared by all levels of one logical artefact.
+# Readers compare the major part only: a minor bump stays readable, a major
+# bump raises in `_finalize_merged_dir`. Major 2 is the v2 payload layout
+# (STORED zips of npz store groups, compressed netCDF and geoparquet), and
+# major 1 the v1 tars, so one chain never mixes the two.
+_MANIFEST_SCHEMA = "2.0"
+_MANIFEST_KINDS = ("delta", "standalone")
 
-    Derived from an explicit tag, never from a source URL. One logical
-    artefact can be served from several URLs (e.g. the reference v1.6
-    L0-L2 and L3-L5 trees). This is used for identifying artefacts
-    internally and is not meant to be human-readable.
+
+def manifest_id(manifest: dict) -> str:
+    """Content id of one artefact, chained to its parent's id.
+
+    Hashes the content fields only, so two identical builds share an id
+    whatever their ``created`` time or ``oggm_version``. The parent's
+    ``base_url`` is left out, so a mirror serves the same id.
+
+    .. caution::
+        Regenerating a parent changes the id recorded by every child
+        built upon it.
 
     Parameters
     ----------
-    artefact_tag : str
-        A short string identifying the artefact. This is usually
-        generated from the base URL e.g. "oggm_v1.6_2025.6_elev_bands_w5e5".
-    border : int
-        Map border number.
-    rgi_version : str
-        The RGI version.
+    manifest : dict
+        A level manifest, as written by :func:`write_level_manifest`.
 
     Returns
     -------
     str
-        A sha1 hex digest of the artefact tag, border, and RGI version.
+        A sha256 hex digest.
     """
-    key = f"{artefact_tag}|{border}|{rgi_version}"
-    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()
+    fields = ("rgi_id", "label", "border", "rgi_version", "files")
+    key = {k: manifest[k] for k in fields}
+    key["parent"] = (manifest.get("parent") or {}).get("id")
+    blob = json.dumps(key, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
 
 
-def _check_level_compat(manifests: list):
-    """Validate that layered level manifests form one usable directory.
-
-    Raises InvalidWorkflowError if the manifests mix datasets, if a
-    level's requirements are not covered, or if the included levels are
-    not contiguous.
-    """
-
-    artefact_ids = {m["artefact_id"] for m in manifests}
-    if len(artefact_ids) > 1:
-        raise InvalidWorkflowError(
-            "Layered prepro levels come from different artefacts: "
-            f"{sorted(artefact_ids)}"
-        )
-    format_versions = {m.get("format_version", 1) for m in manifests}
-    if len(format_versions) > 1:
-        # v1 ships tar bundles, v2 zip bundles of npz/netCDF/parquet
-        raise InvalidWorkflowError(
-            "Layered prepro levels have mixed format_versions: "
-            f"{sorted(format_versions)}"
-        )
-    included = set()
-    for m in manifests:
-        included.update(m.get("includes_levels") or [m["level"]])
-    for m in manifests:
-        missing = set(m.get("requires") or []) - included
-        if missing:
-            raise InvalidWorkflowError(
-                f"Level {m['level']} requires levels {sorted(missing)} "
-                "which are not present in the layered directory."
-            )
-    levels = sorted(included)
-    if levels != list(range(levels[0], levels[-1] + 1)):
-        raise InvalidWorkflowError(
-            f"Layered prepro levels are not contiguous: {levels}"
-        )
+def _schema_major(manifest: dict) -> int:
+    """The major part of a manifest's ``schema_version``."""
+    return int(str(manifest.get("schema_version", 1)).split(".")[0])
 
 
 def _finalize_merged_dir(dirpath: str):
-    """Make a directory whole again after layering level tars into it.
+    """Reconstruct a directory after layering level tars into it.
 
-    Checks that the applied level manifests are compatible.
+    This orders layered manifests by following a leaf's links to its
+    root, checking each parent is the one its child was built on and
+    deleting files removed by the delta encoding chain.
+
+    .. note::
+        A file removed by one level and written again by a later one
+        stays.
+
+    Parameters
+    ----------
+    dirpath : str
+        Path to the merged glacier directory.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If a manifest's schema major version or its kind is unknown to
+        this OGGM version, if the manifests do not form one chain, or if
+        the chain mixes schema majors (v1 and v2 payload formats).
+        Also raised if a parent manifest is missing, or its ``id``
+        differs from the child's ``parent.id``. This happens with a
+        stale download cache or a regenerated parent. Either way the
+        directory is left as the tars extracted it, without the removal
+        pass.
     """
-    manifests = []
-    for fp in sorted(glob.glob(os.path.join(dirpath, "L*.manifest.json"))):
+    manifests = {}
+    for fp in glob.glob(os.path.join(dirpath, "*.manifest.json")):
         with open(fp) as f:
-            manifests.append(json.load(f))
-    if manifests:
-        _check_level_compat(manifests)
+            m = json.load(f)
+        version = str(m.get("schema_version", 1))
+        if _schema_major(m) > _schema_major({"schema_version": _MANIFEST_SCHEMA}):
+            raise InvalidWorkflowError(
+                f"{os.path.basename(fp)} uses manifest schema {version}, "
+                f"but this OGGM version reads schema {_MANIFEST_SCHEMA}. "
+                "Upgrade OGGM, or rebuild the level."
+            )
+        if m.get("kind") not in _MANIFEST_KINDS:
+            raise InvalidWorkflowError(
+                f"{os.path.basename(fp)} has the manifest kind "
+                f"{m.get('kind')!r}, unknown to this OGGM version. "
+                "Upgrade OGGM."
+            )
+        manifests[m["label"]] = m
+    if not manifests:
+        return
+
+    # The tars are layered from the root to the requested level, so only
+    # the requested level is no other level's parent
+    named = {(m.get("parent") or {}).get("label") for m in manifests.values()}
+    leaves = [m for lbl, m in manifests.items() if lbl not in named]
+    if len(leaves) != 1:
+        raise InvalidWorkflowError(
+            f"The manifests layered in {dirpath} "
+            f"({', '.join(sorted(manifests))}) do not form one chain."
+        )
+    chain = leaves
+    while (
+        chain[-1]["kind"] == "delta"
+        and chain[-1].get("parent")
+        and len(chain) <= len(manifests)
+    ):
+        child, ref = chain[-1], chain[-1]["parent"]
+        found = manifests.get(ref["label"])
+        if found is None or found["id"] != ref["id"]:
+            raise InvalidWorkflowError(
+                f"({child['rgi_id']}) {child['label']} was built on "
+                f"{ref['label']} id {ref['id'][:8]} at "
+                f"{ref['base_url'] or 'the same tree'}, but the layered "
+                f"{ref['label']} has "
+                + (f"id {found['id'][:8]}" if found else "no manifest")
+                + ". Clear the download cache, or rebuild "
+                f"{child['label']}."
+            )
+        chain.append(found)
+
+    majors = sorted({_schema_major(m) for m in chain})
+    if len(majors) > 1:
+        raise InvalidWorkflowError(
+            f"({chain[0]['rgi_id']}) The levels layered in {dirpath} mix "
+            f"manifest schemas {' and '.join(map(str, majors))}, i.e. v1 "
+            "and v2 payload formats. Load every level from one tree, or "
+            "convert the v1 tree with `convert_prepro_to_v2_artefacts`."
+        )
+
+    alive = {}
+    for m in reversed(chain):
+        for rel in m["files"].get("removed", []):
+            alive[rel] = False
+        for rel in [*m["files"]["added"], *m["files"]["updated"]]:
+            alive[rel] = True
+    for rel, keep in alive.items():
+        fp = os.path.join(dirpath, rel)
+        if not keep and os.path.exists(fp):
+            os.remove(fp)
 
 
 def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
@@ -5912,7 +5947,7 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     Maps each relative file path to a sha256 hex digest of its content.
     Each group of the data store is one npz file, so a group added or
     rewritten by a prepro level shows up as its own key, e.g.
-    ``data_store/inversion_flowlines.npz``.
+    ``inversion_flowlines.npz``.
 
     Parameters
     ----------
@@ -5940,65 +5975,54 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
 
 def write_level_manifest(
     gdir_or_dir: GlacierDirectory | str,
-    level: int,
+    label: str,
     prev_state: dict,
-    requires: list[int],
-    artefact_tag: str,
-    artefact_id: str = "",
-    includes_levels: list[int] | None = None,
+    parent: str | None = None,
+    parent_base_url: str | None = None,
+    parent_dir: str | None = None,
     kind: str = "delta",
     border: int | None = None,
     rgi_version: str | None = None,
-    format_version: int = 1,
 ) -> tuple[str, list[str]]:
     """Diffs a glacier directory against a snapshot and writes a manifest.
 
     Compares the current state (see :func:`snapshot_gdir_state`) with
-    ``prev_state`` and records what this prepro level added or changed
-    in a ``L{level}.manifest.json`` file inside the glacier directory.
-    Per-level file names mean a layered directory self-documents every
-    level applied to it.
+    ``prev_state`` and records what this artefact added, changed, or
+    removed in a ``{label}.manifest.json`` file inside the glacier
+    directory. Per-label file names mean a layered directory
+    self-documents every artefact applied to it.
+
+    The parent's id is read from its manifest, so a level can't be built
+    on a legacy (cumulative) directory, which has none.
 
     Parameters
     ----------
     gdir_or_dir : GlacierDirectory | str
         The glacier directory or its path.
-    level : int
-        The prepro level this manifest describes.
+    label : str
+        The artefact's label, which is also its folder name in the
+        published tree, e.g. ``"L3"``.
     prev_state : dict
-        Snapshot taken before the level's tasks ran. Use an empty dict
-        for a level starting from scratch.
-    requires : list[int]
-        Levels that must be present below this one. Empty for materialisations
-        and standalone bundles.
-    artefact_tag : str
-        Tag identifying the artefact, e.g.
-        "oggm_v1.6_2025.6_elev_bands_w5e5".
-    artefact_id : str
-        Identifier shared by all levels of one logical artefact. Must not
-        be derived from a source URL: one artefact can be served from
-        several URLs.
-    includes_levels : list[int] | None, optional
-        Levels whose data this artifact contains. Defaults to
-        ``[level]`` (a plain delta). A materialisation lists all
-        included levels.
+        Snapshot of the parent's state. Ignored for a ``'standalone'``,
+        which ships every file.
+    parent : str | None, optional
+        Label of the artefact this one was built on. Required for a
+        ``'delta'``, and optional for a ``'standalone'``, which keeps it
+        for provenance only.
+    parent_base_url : str | None, optional
+        Base URL of the tree holding the parent. None means the same tree
+        as this manifest.
+    parent_dir : str | None, optional
+        Directory holding ``{parent}.manifest.json``. Defaults to the
+        glacier directory.
     kind : str, default ``'delta'``
-        The kind of manifest: ``'delta'`` (incremental changes only),
-        ``'materialisation'`` (cumulative artefact holding every level in
-        ``includes_levels``, e.g. L3) or ``'standalone'`` (self-sufficient
-        subset, e.g. the L5 run bundle). A ``'delta'`` whose
-        ``includes_levels`` spans several levels and whose ``requires`` is
-        empty is written as a ``'materialisation'``.
+        ``'delta'`` (changes against its parent) or ``'standalone'``
+        (every file it needs, e.g. the L1 root or the L5 bundle).
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
         RGI version of the dataset; defaults to
         ``cfg.PARAMS['rgi_version']``.
-    format_version : int, default 1
-        Payload format of the artifact: 1 for tar bundles of native
-        files (``.nc``, shapefile tars, pickles), 2 for STORED zip
-        bundles of npz store groups, compressed netCDF and geoparquet.
-        Levels of mixed format_versions cannot be layered.
 
     Returns
     -------
@@ -6007,36 +6031,20 @@ def write_level_manifest(
         paths, including the manifest itself, passed to
         ``gdir_to_tar(include=...)``.
     """
-    if not artefact_id:
-        artefact_id = artefact_id_from_tag(
-            artefact_tag,
-            border or cfg.PARAMS["border"],
-            rgi_version or cfg.PARAMS["rgi_version"],
-        )
-    kinds = ("delta", "materialisation", "standalone")
-    if kind not in kinds:
+
+    if kind not in _MANIFEST_KINDS:
         raise ValueError(
-            f"Invalid manifest kind: {kind!r}. Must be one of {kinds}."
+            f"Invalid manifest kind: {kind!r}. "
+            f"Must be one of {_MANIFEST_KINDS}."
         )
-    includes_levels = sorted(
-        int(l)
-        for l in (includes_levels if includes_levels is not None else [level])
-    )
-    # A cumulative artefact spanning several levels needs nothing below it
-    is_materialisation = not requires and len(includes_levels) > 1
-    if kind == "delta" and is_materialisation:
-        kind = "materialisation"
-    elif kind == "materialisation" and not is_materialisation:
+    if kind == "delta" and parent is None:
         raise ValueError(
-            "A materialisation must include several levels and require none, "
-            f"got includes_levels={includes_levels}, requires={list(requires)}."
+            f"A delta needs a parent, got label={label!r}. The root of a "
+            "chain is a 'standalone'."
         )
-    elif kind == "delta" and level > 0 and not requires:
-        raise ValueError(
-            f"A delta above L0 must require the levels below it, got "
-            f"level={level}, requires=[]. Pass includes_levels spanning "
-            "0..level to write a materialisation instead."
-        )
+    if kind != "delta":
+        prev_state = {}  # self-sufficient: ship every file
+
     root = os.path.normpath(getattr(gdir_or_dir, "dir", gdir_or_dir))
     rgi_id = getattr(gdir_or_dir, "rgi_id", os.path.basename(root))
     if border is None:
@@ -6044,55 +6052,75 @@ def write_level_manifest(
     if rgi_version is None:
         rgi_version = cfg.PARAMS["rgi_version"]
 
-    store_name = os.path.basename(cfg.BASENAMES["data_store"])
-    state = snapshot_gdir_state(root)
-    added, updated, data_store = [], [], []
-    for rel, digest in sorted(state.items()):
-        if regexp.match(r"^L\d+\.manifest\.json$", rel):
-            continue
-        changed_kind = (
-            "added"
-            if rel not in prev_state
-            else "updated" if prev_state[rel] != digest else None
-        )
-        if changed_kind is None:
-            continue
-        if rel.startswith(store_name + "/"):
-            data_store.append(rel[len(store_name) + 1 :])
-        elif changed_kind == "added":
-            added.append(rel)
-        else:
-            updated.append(rel)
+    parent_ref = None
+    if parent is not None:
+        fp = os.path.join(parent_dir or root, f"{parent}.manifest.json")
+        with open(fp) as f:
+            parent_ref = {
+                "base_url": parent_base_url,
+                "label": parent,
+                "id": json.load(f)["id"],
+            }
 
-    manifest_name = f"L{level}.manifest.json"
+    def is_manifest(rel):
+        return "/" not in rel and rel.endswith(".manifest.json")
+
+    state = snapshot_gdir_state(root)
+    added, updated = {}, {}
+    for rel, digest in sorted(state.items()):
+        if is_manifest(rel) or prev_state.get(rel) == digest:
+            continue
+        if rel in prev_state:
+            updated[rel] = digest
+        else:
+            added[rel] = digest
+    removed = sorted(
+        r for r in set(prev_state) - set(state) if not is_manifest(r)
+    )
+
+    manifest_name = f"{label}.manifest.json"
     manifest = {
-        "schema_version": 1,
-        "format_version": int(format_version),
+        "schema_version": _MANIFEST_SCHEMA,
         "kind": kind,
         "rgi_id": rgi_id,
-        "level": int(level),
-        "requires": sorted(int(l) for l in requires),
-        "includes_levels": includes_levels,
-        "artefact_tag": artefact_tag,
-        "artefact_id": artefact_id,
+        "label": label,
+        "parent": parent_ref,
         "border": int(border),
         "rgi_version": str(rgi_version),
         "oggm_version": __version__,
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "files": {"added": added, "updated": updated},
-        "data_store": data_store,
+        "files": {"added": added, "updated": updated, "removed": removed},
     }
+    manifest["id"] = manifest_id(manifest)
     manifest_path = os.path.join(root, manifest_name)
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    changed_paths = (
-        added
-        + updated
-        + [f"{store_name}/{g}" for g in data_store]
-        + [manifest_name]
-    )
+    changed_paths = list(added) + list(updated) + [manifest_name]
     return manifest_path, changed_paths
+
+
+def _unstamped_manifest(path: str) -> bytes | None:
+    """A manifest's content without its ``fetched_from`` field.
+
+    The ``fetched_from`` field shows which layer an archive is linked
+    from, which may be a local path. For security reasons, this field is
+    removed before adding a manifest to published archives.
+
+    Returns
+    -------
+    bytes | None
+        The stripped manifest, or None for other paths and manifests
+        without the field, which are added unchanged.
+    """
+    if not path.endswith(".manifest.json") or not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        m = json.load(f)
+    if not isinstance(m, dict) or "fetched_from" not in m:
+        return None
+    del m["fetched_from"]
+    return json.dumps(m, indent=2).encode()  # as `write_level_manifest`
 
 
 @entity_task(log)
@@ -6101,6 +6129,7 @@ def gdir_to_archive(
     base_dir: str = None,
     delete: bool = True,
     include: list = None,
+    keep_fetched_from: bool = False,
     fmt: str = "zip",
 ) -> str:
     """Writes the content of a glacier directory to an archive file.
@@ -6121,8 +6150,13 @@ def gdir_to_archive(
         Only add these paths (relative to the glacier directory) to the
         archive, e.g. the changed paths from ``write_level_manifest``
         when building a per-level delta, such as
-        ``data_store/<group>.npz``. Directories are added recursively.
+        ``<group>.npz``. Directories are added recursively.
         The default adds the whole directory.
+    keep_fetched_from : bool, default False
+        Keep the ``fetched_from`` field of the manifests, which is
+        otherwise dropped. Only for archives which are never published,
+        since the field may hold local paths: the ``L3a`` directories of
+        a chunked run use it to tell the next stage where L2 came from.
     fmt : str, default 'zip'
         ``zip`` writes ``<rgi_id>.zip`` with stored uncompressed
         members so bundles can be streamed via HTTP-range requests.
@@ -6168,22 +6202,30 @@ def gdir_to_archive(
                             arcbase, os.path.relpath(fp, source_dir)
                         )
 
+    def _content():
+        """(abspath, arcname, stripped manifest bytes or None) triples."""
+        for fp, arcname in _walk_paths():
+            data = None if keep_fetched_from else _unstamped_manifest(fp)
+            yield fp, arcname, data
+
     if fmt == "zip":
         with zipfile.ZipFile(
             opath, "w", zipfile.ZIP_STORED, allowZip64=True
         ) as zf:
-            for fp, arcname in _walk_paths():
-                zf.write(fp, arcname)
+            for fp, arcname, data in _content():
+                if data is None:
+                    zf.write(fp, arcname)
+                else:
+                    zf.writestr(zipfile.ZipInfo.from_file(fp, arcname), data)
     else:
         with tarfile.open(opath, "w:gz") as tar:
-            if include is None:
-                tar.add(source_dir, arcname=arcbase)
-            else:
-                for rel in sorted(set(include)):
-                    tar.add(
-                        os.path.join(source_dir, rel),
-                        arcname=os.path.join(arcbase, rel),
-                    )
+            for fp, arcname, data in _content():
+                if data is None:
+                    tar.add(fp, arcname=arcname)
+                else:
+                    ti = tar.gettarinfo(fp, arcname=arcname)
+                    ti.size = len(data)
+                    tar.addfile(ti, io.BytesIO(data))
 
     if delete:
         shutil.rmtree(source_dir)
@@ -6197,6 +6239,7 @@ def gdir_to_tar(
     base_dir: str = None,
     delete: bool = True,
     include: list = None,
+    keep_fetched_from: bool = False,
 ) -> str:
     """Writes the content of a glacier directory to a tar file.
 
@@ -6204,7 +6247,12 @@ def gdir_to_tar(
     ``fmt='tar'``. See there for the parameters.
     """
     return gdir_to_archive.unwrapped(
-        gdir, base_dir=base_dir, delete=delete, include=include, fmt="tar"
+        gdir,
+        base_dir=base_dir,
+        delete=delete,
+        include=include,
+        keep_fetched_from=keep_fetched_from,
+        fmt="tar",
     )
 
 
