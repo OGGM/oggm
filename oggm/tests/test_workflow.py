@@ -1,6 +1,5 @@
 import os
 import shutil
-import unittest
 from packaging.version import Version
 import pickle
 import warnings
@@ -181,9 +180,17 @@ def random_for_plot(round_smoothed_dem=True):
     return gdirs
 
 
-class TestFullRun(unittest.TestCase):
+def _write_and_read_shp(gdirs, path, reader=salem.read_shapefile, **kwargs):
+    """Write a shapefile and return its HEF rows."""
+    write_centerlines_to_shape(gdirs, path=str(path), **kwargs)
+    shp = reader(path)
+    assert shp is not None
+    return shp.loc[shp.RGIID == 'RGI60-11.00897']
 
-    @pytest.mark.slow
+
+@pytest.mark.slow
+class TestFullRun:
+
     def test_some_characs(self):
 
         gdirs = up_to_inversion(reset=True)
@@ -195,7 +202,7 @@ class TestFullRun(unittest.TestCase):
         assert 'glc_ext_num_perc' in dfc.columns
         assert np.all(np.isfinite(dfc.glc_ext_num_perc.values))
 
-        self.assertFalse(np.all(dfc.terminus_type == 'Land-terminating'))
+        assert not np.all(dfc.terminus_type == 'Land-terminating')
         assert np.all(dfc.iloc[:2].calving_rate_myr.values > 100)
         assert np.all(dfc.inv_volume_km3 > 0)
         assert np.all(dfc.bias == 0)
@@ -209,7 +216,6 @@ class TestFullRun(unittest.TestCase):
         assert np.all(0 < dfc['1980-2010_aar'])
         assert np.all(0.6 > dfc['1980-2010_aar'])
 
-    @pytest.mark.slow
     def test_calibrate_inversion_from_consensus(self):
 
         # test mini params file, define path relative to file location
@@ -315,22 +321,47 @@ class TestFullRun(unittest.TestCase):
             rtol=1e-2)
         assert gdir_0_ref_vol_consensus['year'] == gdir_0_ref_vol['year']
 
-    @pytest.mark.slow
-    def test_shapefile_output(self):
+    @pytest.mark.parametrize(
+        'flowlines_output', [False, True], ids=['centerlines', 'flowlines']
+    )
+    def test_shapefile_lines(self, tmp_path, flowlines_output):
 
         gdirs = up_to_climate(use_mp=True)
 
-        fpath = os.path.join(_TEST_DIR, 'centerlines.shp')
-        write_centerlines_to_shape(gdirs, path=fpath)
+        shp = _write_and_read_shp(
+            gdirs, tmp_path / 'lines.shp', flowlines_output=flowlines_output
+        )
+        assert len(shp) == 3
+        assert shp.loc[shp.LE_SEGMENT.idxmax()].MAIN == 1
 
-        import salem
-        shp = salem.read_shapefile(fpath)
-        self.assertTrue(shp is not None)
-        shp = shp.loc[shp.RGIID == 'RGI60-11.00897']
-        self.assertEqual(len(shp), 3)
-        self.assertEqual(shp.loc[shp.LE_SEGMENT.idxmax()].MAIN, 1)
+        if flowlines_output:
+            shp_c = _write_and_read_shp(gdirs, tmp_path / 'centerlines.shp')
+            # The flowline is cut so shorter
+            assert shp.LE_SEGMENT.max() < shp_c.LE_SEGMENT.max() * 0.8
 
-        fpath = os.path.join(_TEST_DIR, 'centerlines_ext.shp')
+    @pytest.mark.parametrize(
+        'output',
+        ['geometrical_widths_output', 'corrected_widths_output'],
+        ids=['geom', 'corr'],
+    )
+    def test_shapefile_widths(self, tmp_path, output):
+
+        gdirs = up_to_climate(use_mp=True)
+
+        # Salem can't read it
+        shp_w = _write_and_read_shp(
+            gdirs,
+            tmp_path / 'widths.shp',
+            reader=gpd.read_file,
+            **{output: True},
+        )
+        assert len(shp_w) == 91
+
+    def test_shapefile_exterior_match(self, tmp_path):
+
+        gdirs = up_to_climate(use_mp=True)
+
+        fpath = str(tmp_path / 'centerlines_ext.shp')
         write_centerlines_to_shape(gdirs, path=fpath,
                                    ensure_exterior_match=True)
         shp_ext = salem.read_shapefile(fpath)
@@ -339,7 +370,7 @@ class TestFullRun(unittest.TestCase):
         assert_allclose(shp_ext.geometry.length, shp_ext['LE_SEGMENT'],
                         rtol=1e-3)
 
-        fpath = os.path.join(_TEST_DIR, 'centerlines_ext_smooth.shp')
+        fpath = str(tmp_path / 'centerlines_ext_smooth.shp')
         write_centerlines_to_shape(gdirs, path=fpath,
                                    ensure_exterior_match=True,
                                    simplify_line_before=0.2,
@@ -353,31 +384,9 @@ class TestFullRun(unittest.TestCase):
         assert_allclose(shp_ext['LE_SEGMENT'], shp_ext_smooth['LE_SEGMENT'],
                         rtol=0.25)
 
-        fpath = os.path.join(_TEST_DIR, 'flowlines.shp')
-        write_centerlines_to_shape(gdirs, path=fpath, flowlines_output=True)
-        shp_f = salem.read_shapefile(fpath)
-        self.assertTrue(shp_f is not None)
-        shp_f = shp_f.loc[shp_f.RGIID == 'RGI60-11.00897']
-        self.assertEqual(len(shp_f), 3)
-        self.assertEqual(shp_f.loc[shp_f.LE_SEGMENT.idxmax()].MAIN, 1)
-        # The flowline is cut so shorter
-        assert shp_f.LE_SEGMENT.max() < shp.LE_SEGMENT.max() * 0.8
+    def test_shapefile_missing_centerlines(self):
 
-        fpath = os.path.join(_TEST_DIR, 'widths_geom.shp')
-        write_centerlines_to_shape(gdirs, path=fpath, geometrical_widths_output=True)
-        # Salem can't read it
-        shp_w = gpd.read_file(fpath)
-        self.assertTrue(shp_w is not None)
-        shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
-        self.assertEqual(len(shp_w), 91)
-
-        fpath = os.path.join(_TEST_DIR, 'widths_corr.shp')
-        write_centerlines_to_shape(gdirs, path=fpath, corrected_widths_output=True)
-        # Salem can't read it
-        shp_w = gpd.read_file(fpath)
-        self.assertTrue(shp_w is not None)
-        shp_w = shp_w.loc[shp_w.RGIID == 'RGI60-11.00897']
-        self.assertEqual(len(shp_w), 91)
+        gdirs = up_to_climate(use_mp=True)
 
         # Test that one wrong glacier still works
         base_dir = os.path.join(cfg.PATHS['working_dir'], 'dummy_pergla')
@@ -393,7 +402,6 @@ class TestFullRun(unittest.TestCase):
         cfg.PARAMS['continue_on_error'] = True
         write_centerlines_to_shape(gdirs)
 
-    @pytest.mark.slow
     def test_random(self):
 
         # Fake Reset (all these tests are horribly coded)
@@ -444,8 +452,8 @@ class TestFullRun(unittest.TestCase):
             vol = model.volume_km3_ts()
             area = model.area_km2_ts()
 
-            self.assertTrue(np.all(np.isfinite(vol) & vol != 0.))
-            self.assertTrue(np.all(np.isfinite(area) & area != 0.))
+            assert np.all(np.isfinite(vol) & vol != 0.)
+            assert np.all(np.isfinite(area) & area != 0.)
 
             ds_diag = gd.get_filepath('model_diagnostics', filesuffix='_test')
             ds_diag = xr.open_dataset(ds_diag)
