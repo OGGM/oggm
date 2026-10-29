@@ -1755,6 +1755,7 @@ def test_get_prepro_gdir_bundle_cache(monkeypatch):
     assert p1 == "/fake/RGI60-11.00.tar"
     assert p2 == "/fake/RGI60-11.00.tar"
     assert calls == [
+        f"{prefix}RGI60-11.000.zip",  # 1st glacier: v2 zip probe (404)
         f"{prefix}RGI60-11.000.tar",  # 1st glacier: new probe (404)
         f"{prefix}RGI60-11.00.tar",   # 1st glacier: old fallback (hit)
         f"{prefix}RGI60-11.00.tar",   # 2nd glacier: straight to old, no probe
@@ -2333,8 +2334,8 @@ class TestPreproCLI:
                     "b_020",
                     f"L{lev}",
                     rid[:8],
-                    rid[:11],
-                    rid + ".tar.gz",
+                    f"{rid[:-6]}.{rid[-5:-2]}",  # zip bundle
+                    rid + ".zip",
                 )
                 for lev in levels
             ]
@@ -2557,7 +2558,7 @@ class TestPreproCLI:
                 assert_array_equal(ref.rgi_id, new.rgi_id)
                 assert_allclose(ref.volume, new.volume)
 
-        # The tar files of the chunks add up to what one job would write
+        # The bundles of the chunks add up to what one job would write
         for lev in ['L3', 'L4', 'L5']:
             ref = sorted(os.listdir(os.path.join(ref_dir, 'RGI61', 'b_020',
                                                  lev, 'RGI60-11')))
@@ -2570,7 +2571,7 @@ class TestPreproCLI:
         def manifest(root, lev, rgi_id):
             bundle = glob.glob(
                 os.path.join(
-                    root, 'RGI61', 'b_020', f'L{lev}', 'RGI60-11', '*.tar'
+                    root, 'RGI61', 'b_020', f'L{lev}', 'RGI60-11', '*.zip'
                 )
             )
             for tar_base in bundle:
@@ -2888,8 +2889,8 @@ class TestPreproCLI:
                     "b_020",
                     f"L{lev}",
                     rid[:8],
-                    rid[:11],
-                    rid + ".tar.gz",
+                    f"{rid[:-6]}.{rid[-5:-2]}",  # zip bundle
+                    rid + ".zip",
                 )
                 for lev in levels
             ]
@@ -3056,8 +3057,8 @@ class TestPreproCLI:
                         bstr,
                         f"L{lev}",
                         rid[:8],
-                        rid[:11],
-                        rid + ".tar.gz",
+                        f"{rid[:-6]}.{rid[-5:-2]}",  # zip bundle
+                        rid + ".zip",
                     )
                     for lev in levels
                 ]
@@ -3218,8 +3219,8 @@ class TestPreproCLI:
                     "b_020",
                     f"L{lev}",
                     rid[:8],
-                    rid[:11],
-                    rid + ".tar.gz",
+                    f"{rid[:-6]}.{rid[-5:-2]}",  # zip bundle
+                    rid + ".zip",
                 )
                 for lev in levels
             ]
@@ -3349,13 +3350,13 @@ class TestPreproCLI:
             "b_020",
             "L1",
             rid[:8],
-            rid[:8] + f".{rid[-5:-2]}.tar",  # bundle_size=100
+            rid[:8] + f".{rid[-5:-2]}.zip",  # bundle_size=100
         )
         assert os.path.isfile(tarf)
 
         # L1 is the root, like with a single DEM
         tarf = os.path.join(odir, 'RGI61', 'b_020', 'L1',
-                            rid[:8], rid[:11], rid + '.tar.gz')
+                            rid[:8], rid[:11], rid + '.zip')
         assert not os.path.isfile(tarf)
 
         entity = rgidf.iloc[0]
@@ -5188,8 +5189,11 @@ class TestShapefileTar:
             with open(os.path.join(gdir.dir, 'outlines' + ext), 'w') as f:
                 f.write('sibling')
 
-        with mock.patch.dict(cfg.PARAMS, {'use_tar_shapefiles': True}):
-            gdir.write_shapefile(outlines, 'outlines')
+        # write_shapefile writes geoparquet, the v1.6 tar is written by
+        # the converter's helper
+        from oggm.utils._workflow import _write_shape_to_disk
+        _write_shape_to_disk(outlines, gdir.get_filepath('outlines'),
+                             to_tar=True)
 
         for ext in ('.npz', '.parquet'):
             assert os.path.isfile(os.path.join(gdir.dir, 'outlines' + ext))

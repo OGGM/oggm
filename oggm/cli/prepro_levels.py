@@ -29,6 +29,7 @@ from oggm.exceptions import InvalidParamsError, InvalidDEMError, InvalidWorkflow
 
 # Module logger
 from oggm.utils import get_prepro_base_url, file_downloader
+from oggm.utils._downloads import get_lock
 
 log = logging.getLogger(__name__)
 
@@ -383,8 +384,8 @@ def _delta_tar_entries(
     -------
     list
         A list of ``(gdir, {'include': changed_paths})`` entries for
-        ``execute_entity_task(utils.gdir_to_tar, entries, ...)``, so
-        each level tar ships only what the level changed.
+        ``execute_entity_task(utils.gdir_to_archive, entries, ...)``, so
+        each level bundle ships only what the level changed.
     """
     parent = f"L{level - 1}"
     entries = []
@@ -727,8 +728,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             f'({start_level_name}).')
 
     if chunk_idx is not None:
-        # Chunks have to line up with the tar bundles written by
-        # base_dir_to_tar, or two chunk jobs would write the same tar file
+        # Chunks have to line up with the bundles written by
+        # base_dir_to_bundles, or two chunk jobs would write the same bundle
         if chunk_size not in [100, 1000]:
             raise InvalidParamsError('chunk_size must be 100 or 1000, got '
                                      f'{chunk_size}')
@@ -774,11 +775,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                      '{:02d}:{:02d}:{:02d}'.format(int(h), int(m), int(s)))
 
     def _write_level_tars(level, gdirs, deltas=True):
-        """Tar the glacier directories of a level into the output folder.
+        """Bundle the glacier directories of a level into the output folder.
 
-        With `deltas`, the per-glacier delta manifests are written first and
-        each tar ships only what the level changed. `deltas=False` tars the
-        directories whole (L1, the root, and L5, whose manifests are
+        Writes v2 zip bundles. With `deltas`, the per-glacier delta manifests
+        are written first and each archive ships only what the level changed.
+        `deltas=False` archives the directories whole (L1, the root, and L5, whose manifests are
         written by their caller).
 
         A `temp_bias_run` ships no glacier directories at all, so this is
@@ -786,7 +787,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         """
         if temp_bias_run:
             return
-        log.workflow(f'L{level} done. Writing to tar...')
+        log.workflow(f'L{level} done. Writing to zip...')
         entries = gdirs
         if deltas:
             entries = _delta_tar_entries(
@@ -798,12 +799,15 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             )
         level_base_dir = Path(output_base_dir) / f'L{level}'
         workflow.execute_entity_task(
-            utils.gdir_to_tar, entries, delete=False, base_dir=level_base_dir
+            utils.gdir_to_archive,
+            entries,
+            delete=False,
+            base_dir=level_base_dir,
         )
-        utils.base_dir_to_tar(level_base_dir)
+        utils.base_dir_to_bundles(level_base_dir)
 
     def _write_root_tars(gdirs):
-        """Tar the L1 directories, the root of the delta chain: a
+        """Bundle the L1 directories, the root of the delta chain: a
         standalone level shipping every file, and the next levels are
         deltas on this state."""
         if not temp_bias_run:
@@ -968,27 +972,31 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     log.workflow('Number of glaciers: {}'.format(len(rgidf)))
 
     if rgi_version == '70C':
-        fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
-                             'ref_mb_params/oggm_v1.6/inv_rgi7/'
-                             'rgi7c_rgi_year_2025.1.csv')
-        rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
-        rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
+        with get_lock():
+            fp = file_downloader('https://cluster.klima.uni-bremen.de/~oggm/'
+                                 'ref_mb_params/oggm_v1.6/inv_rgi7/'
+                                 'rgi7c_rgi_year_2025.1.csv')
+            rgi_year_by_id = pd.read_csv(fp, index_col=0)['rgi_year'].astype(int).astype(str)
+            rgidf['src_date'] = rgidf['rgi_id'].map(rgi_year_by_id) + '-01-01 00:00:00'
 
     # Add a new default source
     if not dem_source:
         fs_url = 'https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/rgitopo/2025.4/'
         if rgi_version == '62':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI62_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['RGIId'], 'dem_source'].values
         if rgi_version == '70G':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70G_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
         if rgi_version == '70C':
-            fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
-            dfs = pd.read_csv(fs, index_col=0)
-            rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
+            with get_lock():
+                fs = utils.file_downloader(fs_url + 'chosen_dem_RGI70C_20251029.csv')
+                dfs = pd.read_csv(fs, index_col=0)
+                rgidf['dem_source'] = dfs.loc[rgidf['rgi_id'], 'dem_source'].values
 
     # The glacier directories, from the RGI outlines
     if start_level == 0:
@@ -1364,7 +1372,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             # that a whole-region job can calibrate Glen A and finish the
             # level: that calibration needs all the glaciers at once.
             log.workflow('L3a done (no inversion, no summary). '
-                         'Writing to tar...')
+                         'Writing to zip...')
             level_base_dir = Path(output_base_dir) / 'L3a'
             # The L3 delta written after `3a` is against L2, not L3a
             for gdir in gdirs:
@@ -1373,10 +1381,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
                         json.dump(manifest_states[gdir.rgi_id], f)
             # L3a is never published: keep where L2 came from, so that the
             # next stage links L3 to it
-            workflow.execute_entity_task(utils.gdir_to_tar, gdirs, delete=False,
+            workflow.execute_entity_task(utils.gdir_to_archive, gdirs,
+                                         delete=False,
                                          base_dir=level_base_dir,
                                          keep_fetched_from=True)
-            utils.base_dir_to_tar(level_base_dir)
+            utils.base_dir_to_bundles(level_base_dir)
             _time_log()
             return
 
