@@ -4409,6 +4409,82 @@ def mb_calibration_to_rmsd(gdir, *,
     return df
 
 
+def _informed_temp_bias(gdir, temp_bias_file_path):
+    """The temperature bias prior of this glacier, read from the bias file
+    (as used by ``informed_threestep``)."""
+
+    bias_df = get_temp_bias_dataframe(temp_bias_file_path)
+    climinfo = gdir.get_climate_info()
+
+    # Is this file made for this run? RGI versions are not
+    # interchangeable: a file made for another one has no data where the
+    # two disagree on where the glaciers are. Recent files say what they
+    # were made for, older ones don't: for those the file name is all we
+    # have to go by, hence a warning only.
+    file_version = None
+    if 'rgi_version' in bias_df:
+        file_version = bias_df['rgi_version'].iloc[0]
+    if file_version is not None and not pd.isnull(file_version):
+        if str(file_version) != gdir.rgi_version:
+            raise InvalidWorkflowError(
+                f'The temperature bias file was made for RGI version '
+                f'{file_version}, but this run uses {gdir.rgi_version}: '
+                f'set `temp_bias_file_path` to the file matching your '
+                f'setup. File: {temp_bias_file_path}')
+        file_source = bias_df.get('baseline_climate_source')
+        file_source = None if file_source is None else file_source.iloc[0]
+        source = climinfo['baseline_climate_source']
+        if file_source is not None and not pd.isnull(file_source):
+            if str(file_source) != str(source):
+                log.warning(f'The temperature bias file was made with '
+                            f'the {file_source} climate data, but this '
+                            f'run uses {source}: the prior is unlikely '
+                            f'to be a good one. '
+                            f'File: {temp_bias_file_path}')
+    else:
+        name = os.path.basename(str(temp_bias_file_path)).lower()
+        guess = {'rgi70g': '70G', 'rgi70c': '70C', 'rgi6': '60'}
+        guess = next((v for k, v in guess.items() if k in name), None)
+        if guess is not None and guess != gdir.rgi_version:
+            log.warning(f'The name of the temperature bias file suggests '
+                        f'that it was made for RGI{guess}, but this run '
+                        f'uses RGI version {gdir.rgi_version}. Is it the '
+                        f'right file? File: {temp_bias_file_path}')
+
+    # The file is made of climate grid points, and this glacier sits on
+    # one of them: its own grid point is either in the file or it is not.
+    # So we measure the distance in grid cells (spacing taken from the
+    # file itself) and accept one at most - anything further means that
+    # the glacier was not part of the run which made this file.
+    ref_lon = climinfo['baseline_climate_ref_pix_lon']
+    ref_lat = climinfo['baseline_climate_ref_pix_lat']
+    lon_val = bias_df.lon_val.values
+    lat_val = bias_df.lat_val.values
+    nx = np.ptp(bias_df.lon_id.values)
+    ny = np.ptp(bias_df.lat_id.values)
+    dlon = np.ptp(lon_val) / nx if nx else None
+    dlat = np.ptp(lat_val) / ny if ny else None
+    dlon = dlat if dlon is None else dlon
+    dlat = dlon if dlat is None else dlat
+
+    d_lon = np.abs(lon_val - ref_lon)
+    d_lon = np.minimum(d_lon, 360 - d_lon)  # wrap-around at the dateline
+    dis = np.maximum(d_lon / dlon, np.abs(lat_val - ref_lat) / dlat)
+    imin = np.argmin(dis)
+    if dis[imin] > 1:
+        raise InvalidWorkflowError(
+            f'The climate grid point of this glacier ({ref_lon:.2f}°E '
+            f'{ref_lat:.2f}°N) is not in the temperature bias file: the '
+            f'nearest one is {dis[imin]:.1f} grid cells away. This '
+            f'glacier was not part of the run which made this file - is '
+            f'it the right file for this run? '
+            f'File: {temp_bias_file_path}')
+    sel_df = bias_df.iloc[imin]
+    temp_bias = sel_df['median_temp_bias_w_err_grouped']
+    assert np.isfinite(temp_bias), 'Temp bias not finite?'
+    return temp_bias
+
+
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_from_geodetic_mb(gdir, *,
                                     settings_filesuffix='',
@@ -4554,75 +4630,7 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                      'bias prior file: set `temp_bias_file_path` '
                                      'to the file matching your setup (see '
                                      'utils.get_temp_bias_dataframe).')
-        bias_df = get_temp_bias_dataframe(temp_bias_file_path)
-        climinfo = gdir.get_climate_info()
-
-        # Is this file made for this run? RGI versions are not
-        # interchangeable: a file made for another one has no data where the
-        # two disagree on where the glaciers are. Recent files say what they
-        # were made for, older ones don't: for those the file name is all we
-        # have to go by, hence a warning only.
-        file_version = None
-        if 'rgi_version' in bias_df:
-            file_version = bias_df['rgi_version'].iloc[0]
-        if file_version is not None and not pd.isnull(file_version):
-            if str(file_version) != gdir.rgi_version:
-                raise InvalidWorkflowError(
-                    f'The temperature bias file was made for RGI version '
-                    f'{file_version}, but this run uses {gdir.rgi_version}: '
-                    f'set `temp_bias_file_path` to the file matching your '
-                    f'setup. File: {temp_bias_file_path}')
-            file_source = bias_df.get('baseline_climate_source')
-            file_source = None if file_source is None else file_source.iloc[0]
-            source = climinfo['baseline_climate_source']
-            if file_source is not None and not pd.isnull(file_source):
-                if str(file_source) != str(source):
-                    log.warning(f'The temperature bias file was made with '
-                                f'the {file_source} climate data, but this '
-                                f'run uses {source}: the prior is unlikely '
-                                f'to be a good one. '
-                                f'File: {temp_bias_file_path}')
-        else:
-            name = os.path.basename(str(temp_bias_file_path)).lower()
-            guess = {'rgi70g': '70G', 'rgi70c': '70C', 'rgi6': '60'}
-            guess = next((v for k, v in guess.items() if k in name), None)
-            if guess is not None and guess != gdir.rgi_version:
-                log.warning(f'The name of the temperature bias file suggests '
-                            f'that it was made for RGI{guess}, but this run '
-                            f'uses RGI version {gdir.rgi_version}. Is it the '
-                            f'right file? File: {temp_bias_file_path}')
-
-        # The file is made of climate grid points, and this glacier sits on
-        # one of them: its own grid point is either in the file or it is not.
-        # So we measure the distance in grid cells (spacing taken from the
-        # file itself) and accept one at most - anything further means that
-        # the glacier was not part of the run which made this file.
-        ref_lon = climinfo['baseline_climate_ref_pix_lon']
-        ref_lat = climinfo['baseline_climate_ref_pix_lat']
-        lon_val = bias_df.lon_val.values
-        lat_val = bias_df.lat_val.values
-        nx = np.ptp(bias_df.lon_id.values)
-        ny = np.ptp(bias_df.lat_id.values)
-        dlon = np.ptp(lon_val) / nx if nx else None
-        dlat = np.ptp(lat_val) / ny if ny else None
-        dlon = dlat if dlon is None else dlon
-        dlat = dlon if dlat is None else dlat
-
-        d_lon = np.abs(lon_val - ref_lon)
-        d_lon = np.minimum(d_lon, 360 - d_lon)  # wrap-around at the dateline
-        dis = np.maximum(d_lon / dlon, np.abs(lat_val - ref_lat) / dlat)
-        imin = np.argmin(dis)
-        if dis[imin] > 1:
-            raise InvalidWorkflowError(
-                f'The climate grid point of this glacier ({ref_lon:.2f}°E '
-                f'{ref_lat:.2f}°N) is not in the temperature bias file: the '
-                f'nearest one is {dis[imin]:.1f} grid cells away. This '
-                f'glacier was not part of the run which made this file - is '
-                f'it the right file for this run? '
-                f'File: {temp_bias_file_path}')
-        sel_df = bias_df.iloc[imin]
-        temp_bias = sel_df['median_temp_bias_w_err_grouped']
-        assert np.isfinite(temp_bias), 'Temp bias not finite?'
+        temp_bias = _informed_temp_bias(gdir, temp_bias_file_path)
 
         if gdir.settings['prcp_fac'] is not None:
             # A preset prcp_fac replaces the winter precipitation heuristic
@@ -4673,6 +4681,240 @@ def mb_calibration_from_geodetic_mb(gdir, *,
                                              mb_model_class=mb_model_class,
                                              **kwargs
                                              )
+
+
+@entity_task(log)
+def mb_calibration_from_geodetic_mb_adapbs(gdir, *,
+                                           settings_filesuffix='',
+                                           ref_mb_period=None,
+                                           ref_mb=None,
+                                           ref_mb_err=None,
+                                           file_path=None,
+                                           temp_bias_file_path=None,
+                                           obs_err_factor=1.,
+                                           calibrate_params=('melt_f',
+                                                             'prcp_fac',
+                                                             'temp_bias'),
+                                           prior_centre=None,
+                                           prior_bounds=None,
+                                           prior_sd=1.,
+                                           centre_prior=True,
+                                           n_particles=200,
+                                           max_iterations=6,
+                                           neff_threshold=0.3,
+                                           seed=None,
+                                           mb_model_class=MonthlyTIModel,
+                                           **kwargs: dict,
+                                           ):
+    """Bayesian calibration to geodetic MB data with the AdaPBS.
+
+    Experimental. Instead of one parameter set like
+    :py:func:`mb_calibration_from_geodetic_mb`, this returns weighted
+    parameter particles (samples of the posterior distribution), with the
+    adaptive particle batch smoother of MuSA (see :py:mod:`oggm.core.adapbs`).
+    The geometry is fixed (inversion flowlines). Nothing is written to the
+    glacier directory.
+
+    The prior is logit-normal for each parameter (Gaussian in a transformed
+    space, bounded), centred on OGGM's informed guesses by default:
+
+    - melt_f: centre ``cfg.PARAMS['melt_f']``, bounds ``melt_f_min/max``
+    - prcp_fac: centre ``cfg.PARAMS['prcp_fac']`` if set, otherwise from the
+      winter precipitation (:py:func:`decide_winter_precip_factor`), bounds
+      [0.5, 2] times the centre (clipped to ``prcp_fac_min/max``)
+    - temp_bias: centre from the temperature bias file if
+      ``temp_bias_file_path`` is given (otherwise 0), bounds the centre +- 3 K
+
+    The centres are not read from the glacier settings, which hold the
+    calibrated values after a calibration. Use ``prior_centre`` to set them.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory to calibrate
+    settings_filesuffix: str
+        the settings to use
+    ref_mb_period : str or list of str, default: PARAMS['geodetic_mb_period']
+        the geodetic MB period(s), one observation per period. Do not combine
+        overlapping periods (their errors are not independent).
+    ref_mb : float or list of float, optional
+        use these MB values (kg m-2 yr-1, one per period) instead of the
+        geodetic MB file (e.g. for in-situ data).
+    ref_mb_err : float or list of float, optional
+        the errors (1 sigma) of ref_mb, required with ref_mb.
+    file_path : str, optional
+        custom geodetic mass-balance file (see utils.get_geodetic_mb_dataframe)
+    temp_bias_file_path : str, optional
+        temperature bias file, for the centre of the temp_bias prior
+    obs_err_factor : float
+        multiply the observation errors (err_dmdtda) by this factor
+    calibrate_params : list of str
+        the parameters to calibrate. The others stay at their prior centre.
+    prior_centre : dict, optional
+        override the prior centre of some parameters, e.g. {'melt_f': 6}
+    prior_bounds : dict, optional
+        override the bounds of some parameters, e.g. {'temp_bias': (-2, 2)}
+    prior_sd : float or dict
+        prior standard deviation in normal space (default: 1). Above ~1.8 the
+        logit-normal puts most of its mass near the bounds.
+    centre_prior : bool
+        if False, the prior is centred in the middle of the bounds (in normal
+        space, as in MuSA) instead of on the prior centre
+    n_particles : int
+        particles per AdaPBS iteration
+    max_iterations : int
+        maximum number of AdaPBS iterations
+    neff_threshold : float
+        AdaPBS adapts while the effective sample size is below this fraction
+        of n_particles (default 0.3, MuSA uses 0.1)
+    seed : int, optional
+        random seed
+    mb_model_class : MassBalanceModel, default ``MonthlyTIModel``
+        the MassBalanceModel to use (with melt_f, temp_bias, prcp_fac)
+    kwargs : dict
+        kwargs to pass to the mb_model_class instance
+
+    Returns
+    -------
+    an xarray Dataset with all the particles (dimension ``particle``):
+    parameter values, posterior ``weight``, predicted MB (``mb``) and AdaPBS
+    ``iteration``; equally weighted resampled particles (``posterior_*``);
+    per iteration diagnostics; prior and observations in the attributes.
+    """
+    from oggm.core.adapbs import run_adapbs, glogit
+
+    all_params = ['melt_f', 'prcp_fac', 'temp_bias']
+    calibrate_params = list(calibrate_params)
+    for p in calibrate_params:
+        if p not in all_params:
+            raise InvalidParamsError(f'Unknown parameter: {p}. Use one of '
+                                     f'{all_params}.')
+
+    # Observations
+    if ref_mb_period is None:
+        ref_mb_period = gdir.settings['geodetic_mb_period']
+    periods = [ref_mb_period] if isinstance(ref_mb_period, str) else list(ref_mb_period)
+    if ref_mb is not None:
+        if ref_mb_err is None:
+            raise InvalidParamsError('ref_mb_err is required with ref_mb.')
+        obs = np.atleast_1d(np.asarray(ref_mb, dtype=float))
+        obs_err = np.atleast_1d(np.asarray(ref_mb_err, dtype=float))
+        if not (len(obs) == len(obs_err) == len(periods)):
+            raise InvalidParamsError('Need one ref_mb and ref_mb_err per '
+                                     'period.')
+    else:
+        ref_mb_df = get_geodetic_mb_dataframe(file_path=file_path,
+                                              rgi_version=gdir.rgi_version
+                                              ).loc[[gdir.rgi_id]]
+        obs, obs_err = [], []
+        for period in periods:
+            df = ref_mb_df.loc[ref_mb_df['period'] == period]
+            if len(df) != 1:
+                raise InvalidParamsError(f'{gdir.rgi_id}: no geodetic MB '
+                                         f'for period {period}.')
+            # m w.e. yr-1 -> kg m-2 yr-1
+            obs.append(df['dmdtda'].iloc[0] * 1000)
+            obs_err.append(df['err_dmdtda'].iloc[0] * 1000)
+        obs, obs_err = np.array(obs), np.array(obs_err)
+    obs_err = obs_err * obs_err_factor
+    years = []
+    for period in periods:
+        time_resolution, yrs = _floatyears_from_ref_mb_period(period)
+        if time_resolution != 'annual':
+            raise InvalidParamsError('Only periods of full years for now.')
+        years.append(yrs)
+
+    cmb = calving_mb(gdir)
+    if cmb != 0:
+        raise NotImplementedError('Calving with geodetic MB is not '
+                                  'implemented yet.')
+
+    # Prior. Not from gdir.settings: after a calibration, they hold the
+    # calibrated values, not the priors.
+    centre = {'melt_f': cfg.PARAMS['melt_f'],
+              'prcp_fac': cfg.PARAMS['prcp_fac'],
+              'temp_bias': 0.}
+    if centre['prcp_fac'] is None:
+        centre['prcp_fac'] = decide_winter_precip_factor(gdir)
+    if temp_bias_file_path is not None:
+        centre['temp_bias'] = _informed_temp_bias(gdir, temp_bias_file_path)
+    centre.update(prior_centre or {})
+    bounds = {
+        'melt_f': (gdir.settings['melt_f_min'], gdir.settings['melt_f_max']),
+        'prcp_fac': (max(0.5 * centre['prcp_fac'], gdir.settings['prcp_fac_min']),
+                     min(2 * centre['prcp_fac'], gdir.settings['prcp_fac_max'])),
+        'temp_bias': (centre['temp_bias'] - 3, centre['temp_bias'] + 3),
+    }
+    bounds.update(prior_bounds or {})
+    x_min = np.array([bounds[p][0] for p in calibrate_params], dtype=float)
+    x_max = np.array([bounds[p][1] for p in calibrate_params], dtype=float)
+    x_c = np.array([centre[p] for p in calibrate_params], dtype=float)
+    if np.any(x_c <= x_min) or np.any(x_c >= x_max):
+        raise InvalidParamsError(f'Prior centre {x_c} not within the bounds '
+                                 f'{x_min}, {x_max}.')
+    if isinstance(prior_sd, dict):
+        prior_sd = np.array([prior_sd[p] for p in calibrate_params], dtype=float)
+    prior_mean = glogit(x_c, x_min, x_max) if centre_prior else None
+
+    # Forward model: fixed geometry
+    fls = gdir.read_store('inversion_flowlines')
+    mb_kwargs = dict(melt_f=centre['melt_f'], temp_bias=centre['temp_bias'],
+                     prcp_fac=centre['prcp_fac'], check_calib_params=False,
+                     settings_filesuffix=settings_filesuffix, **kwargs)
+    if len(fls) > 1:
+        mb_mod = MultipleFlowlineMassBalance(gdir=gdir, fls=fls,
+                                             mb_model_class=mb_model_class,
+                                             **mb_kwargs)
+    else:
+        mb_mod = mb_model_class(gdir=gdir, **mb_kwargs)
+    for y in np.concatenate(years):
+        if not mb_mod.is_year_valid(y):
+            raise ValueError(f'year {y} out of the valid time bounds: '
+                             f'[{mb_mod.ys_float}, {mb_mod.ye_float}]')
+
+    def forward(theta, iteration):
+        out = np.full((len(theta), len(obs)), np.nan)
+        for i, th in enumerate(theta):
+            for p, v in zip(calibrate_params, th):
+                setattr(mb_mod, p, v)
+            for k, yrs in enumerate(years):
+                out[i, k] = mb_mod.get_specific_mb(fls=fls, year=yrs).mean()
+        return out
+
+    res = run_adapbs(forward, obs, obs_err, x_min, x_max,
+                     prior_mean=prior_mean, prior_sd=prior_sd,
+                     n_particles=n_particles, max_iterations=max_iterations,
+                     neff_threshold=neff_threshold,
+                     rng=np.random.default_rng(seed))
+
+    # Output
+    ds = xr.Dataset(coords={'particle': np.arange(len(res['weights'])),
+                            'resampled': np.arange(n_particles),
+                            'obs': periods})
+    for k, p in enumerate(calibrate_params):
+        ds[p] = ('particle', res['theta'][:, k])
+        ds[f'posterior_{p}'] = ('resampled', res['posterior_theta'][:, k])
+    ds['weight'] = ('particle', res['weights'])
+    ds['iteration'] = ('particle', res['iteration'])
+    ds['mb'] = (('particle', 'obs'), res['pred'])
+    ds['mb'].attrs['units'] = 'kg m-2 yr-1'
+    ds['ref_mb'] = ('obs', obs)
+    ds['ref_mb_err'] = ('obs', obs_err)
+    diag = res['diagnostics'].set_index('iteration')
+    for c in diag.columns:
+        ds[f'adapbs_{c}'] = ('adapbs_iteration', diag[c].values)
+    ds = ds.assign_coords(adapbs_iteration=diag.index.values)
+    ds.attrs.update(rgi_id=gdir.rgi_id,
+                    calibrate_params=calibrate_params,
+                    prior_centre=x_c, prior_min=x_min, prior_max=x_max,
+                    prior_sd=np.broadcast_to(prior_sd, x_c.shape).astype(float),
+                    centre_prior=int(centre_prior),
+                    fixed_params=str({p: centre[p] for p in all_params
+                                      if p not in calibrate_params}),
+                    n_particles=n_particles, max_iterations=max_iterations,
+                    neff_threshold=neff_threshold, obs_err_factor=obs_err_factor,
+                    log_evidence=res['log_evidence'])
+    return ds
 
 
 def _floatyears_from_ref_mb_period(ref_mb_period):
