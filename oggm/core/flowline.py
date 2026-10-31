@@ -5,6 +5,7 @@
 # Builtins
 import logging
 import copy
+import math
 from collections import OrderedDict
 from functools import partial
 from time import gmtime, strftime
@@ -577,6 +578,9 @@ class MixedBedFlowline(Flowline):
     @property
     def widths_m(self):
         """Compute the widths out of H and shape"""
+        if self._do_trapeze and len(self._ptrap) == self.nx:
+            # only trapezoids (e.g. elevation bands): skip the parabola
+            return self._w0_m + self._lambdas * self.thick
         out = np.sqrt(4*self.thick/self.bed_shape)
         if self._do_trapeze:
             out[self._ptrap] = (self._w0_m[self._ptrap] +
@@ -586,9 +590,10 @@ class MixedBedFlowline(Flowline):
 
     @property
     def section(self):
-        out = 2./3. * self.widths_m * self.thick
+        widths_m = self.widths_m
+        out = 2./3. * widths_m * self.thick
         if self._do_trapeze:
-            out[self._ptrap] = ((self.widths_m[self._ptrap] +
+            out[self._ptrap] = ((widths_m[self._ptrap] +
                                  self._w0_m[self._ptrap]) / 2 *
                                 self.thick[self._ptrap])
         return out
@@ -1070,10 +1075,12 @@ class FlowlineModel(object):
             # All calls we replace
             heights = self._mb_current_heights[fl_id]
 
-        date = utils.floatyear_to_date(year)
         if self.mb_elev_feedback in ['annual', 'never']:
-            # ignore month changes
-            date = (date[0], date[0])
+            # ignore month changes: only the year counts, no need to convert
+            y = math.floor(year)
+            date = (y, y)
+        else:
+            date = utils.floatyear_to_date(year)
 
         if self._mb_current_date == date:
             if fl_id not in self._mb_current_out:
@@ -1628,6 +1635,10 @@ class FlowlineModel(object):
             # per unit time
             spinup_vol = np.cumsum(spinup_vol[::-1])[::-1]
 
+        # Write the diagnostics directly into the numpy arrays: going
+        # through the xarray Dataset at every step is slow
+        diag_data = {vn: diag_ds[vn].data for vn in diag_ds.data_vars}
+
         # Run
         prev_state = None  # for the stopping criterion
         run_error = None  # set if the run fails and we still want output
@@ -1758,29 +1769,29 @@ class FlowlineModel(object):
 
             # Diagnostics
             if 'volume' in ovars:
-                diag_ds['volume_m3'].data[i] = self.volume_m3
+                diag_data['volume_m3'][i] = self.volume_m3
                 if self.separate_ice_and_firn:
-                    diag_ds['volume_ice_m3'].data[i] = self.volume_ice_m3
-                    diag_ds['volume_firn_m3'].data[i] = self.volume_firn_m3
+                    diag_data['volume_ice_m3'][i] = self.volume_ice_m3
+                    diag_data['volume_firn_m3'][i] = self.volume_firn_m3
             if 'area' in ovars:
-                diag_ds['area_m2'].data[i] = self.area_m2
+                diag_data['area_m2'][i] = self.area_m2
             if 'length' in ovars:
-                diag_ds['length_m'].data[i] = self.length_m
+                diag_data['length_m'][i] = self.length_m
             if 'mass' in ovars:
-                diag_ds['mass_kg'].data[i] = self.mass_kg
+                diag_data['mass_kg'][i] = self.mass_kg
                 if self.separate_ice_and_firn:
-                    diag_ds['mass_ice_kg'].data[i] = self.mass_ice_kg
-                    diag_ds['mass_firn_kg'].data[i] = self.mass_firn_kg
+                    diag_data['mass_ice_kg'][i] = self.mass_ice_kg
+                    diag_data['mass_firn_kg'][i] = self.mass_firn_kg
             if 'calving' in ovars:
-                diag_ds['calving_m3'].data[i] = self.calving_m3_since_y0
+                diag_data['calving_m3'][i] = self.calving_m3_since_y0
             if 'calving_rate' in ovars:
-                diag_ds['calving_rate_myr'].data[i] = self.calving_rate_myr
+                diag_data['calving_rate_myr'][i] = self.calving_rate_myr
             if 'volume_bsl' in ovars:
-                diag_ds['volume_bsl_m3'].data[i] = self.volume_bsl_m3
+                diag_data['volume_bsl_m3'][i] = self.volume_bsl_m3
             if 'volume_bwl' in ovars:
-                diag_ds['volume_bwl_m3'].data[i] = self.volume_bwl_m3
+                diag_data['volume_bwl_m3'][i] = self.volume_bwl_m3
             if 'area_min_h' in ovars:
-                diag_ds['area_min_h_m2'].data[i] = np.sum([np.sum(
+                diag_data['area_min_h_m2'][i] = np.sum([np.sum(
                     fl.bin_area_m2[fl.thick > min_ice_thick_for_area])
                     for fl in self.fls])
             # Terminus thick is a bit more logic
@@ -1790,7 +1801,7 @@ class FlowlineModel(object):
                 if vn in ovars:
                     if ti is None:
                         ti = self.fls[-1].terminus_index
-                    diag_ds[vn].data[i] = self.fls[-1].thick[ti - gi]
+                    diag_data[vn][i] = self.fls[-1].thick[ti - gi]
 
             # Decide if we continue
             if stop_criterion is not None:
