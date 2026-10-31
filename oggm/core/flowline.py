@@ -5,7 +5,6 @@
 # Builtins
 import logging
 import copy
-import math
 from collections import OrderedDict
 from functools import partial
 from time import gmtime, strftime
@@ -1071,12 +1070,10 @@ class FlowlineModel(object):
             # All calls we replace
             heights = self._mb_current_heights[fl_id]
 
+        date = utils.floatyear_to_date(year)
         if self.mb_elev_feedback in ['annual', 'never']:
-            # ignore month changes: only the year counts, no need to convert
-            y = math.floor(year)
-            date = (y, y)
-        else:
-            date = utils.floatyear_to_date(year)
+            # ignore month changes
+            date = (date[0], date[0])
 
         if self._mb_current_date == date:
             if fl_id not in self._mb_current_out:
