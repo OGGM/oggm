@@ -4,6 +4,8 @@
 # Builtins
 import os
 import sys
+import bisect
+import math
 import logging
 import warnings
 from packaging.version import Version
@@ -823,6 +825,44 @@ def date_to_floatyear(y, m, d=None):
     return y.astype(np.float64) + (doy - 1) / days_in_year
 
 
+_BASE_CUM_END_LIST = _BASE_CUM_END.tolist()
+_ONE_MINUS_EPS = math.nextafter(1.0, 0.0)
+
+
+def _floatyear_to_date_scalar(yr, return_day=False):
+    """Pure python version of floatyear_to_date for a single number.
+
+    Same algorithm as the vectorized version, but much faster for one value
+    (the model calls it at every time step).
+    """
+    yr = float(yr)
+    y = math.floor(yr)
+    f = min(max(yr - y, 0.0), _ONE_MINUS_EPS)
+
+    leap = (y % 4 == 0) and ((y % 100 != 0) or (y % 400 == 0))
+    n = 366 if leap else 365
+
+    # round() is half-to-even, like np.rint
+    doy_minus1 = min(max(round(f * n), 0), n - 1)
+    # Same guard as the vectorized version: step back one day if rounding up
+    # made the date exceed yr
+    if y + doy_minus1 / n > yr:
+        doy_minus1 = min(max(doy_minus1 - 1, 0), n - 1)
+
+    doy = doy_minus1 + 1
+    adj = doy - 1 if (leap and doy > 59) else doy  # collapse leap past Feb
+    m_idx = bisect.bisect_left(_BASE_CUM_END_LIST, adj)  # 0..11
+
+    if not return_day:
+        return np.int64(y), np.int64(m_idx + 1)
+
+    if leap and doy == 60:
+        return np.int64(y), np.int64(2), np.int64(29)
+
+    prev_end = _BASE_CUM_END_LIST[m_idx - 1] if m_idx > 0 else 0
+    return np.int64(y), np.int64(m_idx + 1), np.int64(adj - prev_end)
+
+
 def floatyear_to_date(yr, return_day=False):
     """Converts a float year to an actual (year, month) pair or
     (year, month, day).
@@ -838,6 +878,9 @@ def floatyear_to_date(yr, return_day=False):
         If False a tuple (year, month) will be returned, if True a tuple
         (year, month, day) will be returned. Default is False.
     """
+    if np.ndim(yr) == 0:
+        return _floatyear_to_date_scalar(yr, return_day=return_day)
+
     yr = np.asarray(yr, dtype=np.float64)
     y = np.floor(yr).astype(np.int64)
     f = yr - y
