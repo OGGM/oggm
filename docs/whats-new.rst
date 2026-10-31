@@ -9,9 +9,8 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
-- ``utils.floatyear_to_date`` is much faster for a single number (about
-  25 times), which is how the models call it at every time step. Flowline
-  runs are about 30% faster, with identical results (:pull:`2024`).
+- Various performance improvements to the flowline model runs
+  (:pull:`2024`, :pull:`2025`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
   rounded to the nearest meter before being written to ``dem.tif`` and to
