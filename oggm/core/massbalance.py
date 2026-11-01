@@ -1796,6 +1796,12 @@ class SfcTypeTIModel(MassBalanceModel):
     def mb_heights(self):
         return self._stored_array_as_dataframe(self._mb_heights)
 
+    def _stored_heights(self, year):
+        # heights used at the stored timestep `year`. Same as
+        # self.mb_heights[year], without building the full DataFrame (which
+        # becomes slow for long runs)
+        return self._mb_heights[self._year_to_index[year]]
+
     @property
     def snow_melt(self):
         # melt of buckets younger than one year, in kg m-2 per climate step
@@ -2453,7 +2459,7 @@ class SfcTypeTIModel(MassBalanceModel):
             # to make a distinct call here, even it is potentially already
             # called in _apply_climate_step_and_aging_to_buckets
             t, tmelt, prcp, prcpsol = self.mbmod.get_annual_climate(
-                heights=self.mb_heights[year], year=year)
+                heights=self._stored_heights(year), year=year)
             return annual_mb, t, tmelt, prcp, prcpsol
         else:
             return annual_mb
@@ -2538,7 +2544,7 @@ class SfcTypeTIModel(MassBalanceModel):
             # to make a distinct call here, even it is potentially already
             # called in _apply_climate_step_and_aging_to_buckets
             t, tmelt, prcp, prcpsol = self.mbmod.get_monthly_climate(
-                heights=self.mb_heights[year], year=year)
+                heights=self._stored_heights(year), year=year)
             return monthly_mb, t, tmelt, prcp, prcpsol
         else:
             return monthly_mb
@@ -2629,7 +2635,7 @@ class SfcTypeTIModel(MassBalanceModel):
             # to make a distinct call here, even it is potentially already
             # called in _apply_climate_step_and_aging_to_buckets
             t, tmelt, prcp, prcpsol = self.mbmod.get_daily_climate(
-                heights=self.mb_heights[year], year=year)
+                heights=self._stored_heights(year), year=year)
             return daily_mb, t, tmelt, prcp, prcpsol
         else:
             return daily_mb
