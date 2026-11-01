@@ -357,6 +357,28 @@ class TestFuncs(object):
             assert (y, m) == (2000, 7)
         assert utils.floatyear_to_date(2000) == (2000, 1)
 
+    def test_date_to_floatyear_scalar(self):
+        # the scalar fast path must give the same results as the vectorized one
+        yy, mm, dd = np.meshgrid(np.arange(1800, 2101), np.arange(1, 13),
+                                 np.arange(1, 33))  # incl. day overflows
+        yy, mm, dd = yy.ravel(), mm.ravel(), dd.ravel()
+
+        ref = utils.date_to_floatyear(yy, mm, dd)
+        out = np.array([utils.date_to_floatyear(y, m, d)
+                        for y, m, d in zip(yy, mm, dd)])
+        np.testing.assert_array_equal(ref, out)
+
+        ref = utils.date_to_floatyear(yy, mm)
+        out = np.array([utils.date_to_floatyear(y, m) for y, m in zip(yy, mm)])
+        np.testing.assert_array_equal(ref, out)
+
+        # scalar types
+        for y in [2000, np.int64(2000), np.array(2000), 2000.]:
+            r = utils.date_to_floatyear(y, 7)
+            assert isinstance(r, np.float64)
+            assert r == utils.date_to_floatyear([2000], [7])[0]
+        assert utils.date_to_floatyear(2000, 12, 32) == 2001
+
     def test_get_time_functions(self):
         """Test scalar and array behavior of get_{days,seconds}_of_{year,month}."""
         from oggm.utils._funcs import (get_days_of_year, get_seconds_of_year,

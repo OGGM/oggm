@@ -12,6 +12,10 @@ Enhancements
 - Various performance improvements to the flowline model runs
   (:pull:`2024`, :pull:`2025`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
+  of each time step was growing with the length of the run), and
+  ``utils.date_to_floatyear`` is about 4 times faster for single numbers.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
   rounded to the nearest meter before being written to ``dem.tif`` and to
   ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
