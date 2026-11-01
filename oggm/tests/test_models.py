@@ -1911,6 +1911,66 @@ class TestMassBalanceModels:
         for fl in fls:
             assert fl.volume_m3 > 0
 
+    def test_sfc_type_inversion_firn_volume(self, hef_gdir):
+        """The volume calibration of the inversion matches ice + firn to the
+        reference volume for models with a snow/firn bucket system.
+        """
+        gdir = hef_gdir
+        ref_vol = tasks.get_inversion_volume(gdir)
+        sfx = '_inv_firn'
+        ModelSettings(gdir, filesuffix=sfx, parent_filesuffix='')
+        kwargs = dict(settings_filesuffix=sfx, observations_filesuffix=sfx,
+                      input_filesuffix=sfx, output_filesuffix=sfx)
+
+        # without buckets there is no firn
+        massbalance.apparent_mb_from_any_mb(
+            gdir, settings_filesuffix=sfx, input_filesuffix='',
+            output_filesuffix=sfx, mb_years=(2000, 2003))
+        gdir.settings_filesuffix = sfx
+        assert gdir.settings['inversion_firn_volume_m3'] == 0
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, **kwargs)
+        assert out['vol_firn_m3'] == 0
+        assert_allclose(out['vol_oggm_m3'], ref_vol, rtol=1e-2)
+
+        massbalance.apparent_mb_from_any_mb(
+            gdir, settings_filesuffix=sfx, input_filesuffix='',
+            output_filesuffix=sfx, mb_years=(2000, 2003),
+            mb_model_class=massbalance.SfcTypeTIModel)
+        gdir.settings_filesuffix = sfx
+        firn_vol = gdir.settings['inversion_firn_volume_m3']
+        # several meters of firn on average (~10% of the volume here)
+        assert 0.05 < firn_vol / ref_vol < 0.2
+
+        # entity task version
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, **kwargs)
+        assert out['vol_firn_m3'] == firn_vol
+        assert_allclose(out['vol_oggm_m3'] + firn_vol, ref_vol, rtol=1e-2)
+        assert out['vol_oggm_m3'] < ref_vol - firn_vol / 2
+        # the observation is ice + firn, in the requested observations file
+        gdir.observations_filesuffix = sfx
+        assert_allclose(gdir.observations['ref_volume_m3']['value'],
+                        out['vol_oggm_m3'] + firn_vol)
+
+        # global task version
+        df = workflow.calibrate_inversion_from_ref_table(
+            [gdir], ref_volume_m3=ref_vol, **kwargs)
+        vol_ice = df['vol_oggm_m3'].iloc[0]
+        assert df['vol_firn_m3'].iloc[0] == firn_vol
+        assert_allclose(vol_ice + firn_vol, ref_vol, rtol=1e-2)
+        # the observation is ice + firn
+        gdir.observations_filesuffix = sfx
+        assert_allclose(gdir.observations['ref_volume_m3']['value'],
+                        vol_ice + firn_vol)
+
+        # calibrating again to the stored observation (as done in the dynamic
+        # melt_f calibration) does not remove the firn a second time
+        df = workflow.calibrate_inversion_from_ref_table(
+            [gdir], ref_volume_m3=gdir.observations['ref_volume_m3']['value'],
+            **kwargs)
+        assert_allclose(df['vol_oggm_m3'].iloc[0], vol_ice, rtol=1e-2)
+
     @pytest.mark.slow
     def test_sfc_type_save_load(self, hef_gdir):
         """Test SfcTypeTIModel.save_to_file and load_from_file."""
