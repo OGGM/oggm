@@ -5363,6 +5363,8 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix:str='',
     gdir.write_store(fls, 'inversion_flowlines')
     gdir.write_store({'ela_h': ela_h, 'grad': mb_gradient},
                      'linear_mb_params')
+    # no snow/firn layer with this mb (see apparent_mb_from_any_mb)
+    gdir.settings['inversion_firn_volume_m3'] = 0.
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -5415,6 +5417,15 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         If True we add the snow/firn height of the current mb_model (if
         available) to include this in the elevation feedback of the mb
         calculation.
+
+    Notes
+    -----
+    For mass balance models with a snow/firn bucket system (e.g.
+    ``SfcTypeTIModel``), the volume of the snow and firn layer at the RGI
+    date (computed on the inversion flowlines) is stored in the settings as
+    ``inversion_firn_volume_m3`` (zero for all other models). The volume
+    calibration of the inversion uses it to match ice + firn to the
+    reference volume.
     """
 
     if input_filesuffix is None:
@@ -5450,6 +5461,15 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         # Range
         mb_years = np.arange(*mb_years, 1)
 
+    # Models with a snow/firn bucket system (e.g. SfcTypeTIModel) carry a
+    # firn volume on top of the ice. We store an estimate of it at the
+    # default reference year of the inversion volume (rgi_date + 1, i.e.
+    # the state after computing the year rgi_date), so that the inversion
+    # can calibrate ice + firn to the reference volume. If the RGI date is
+    # outside the mb period, we use the closest year.
+    firn_yr = mb_years[np.argmin(np.abs(np.asarray(mb_years) - gdir.rgi_date))]
+    firn_volume_m3 = 0.
+
     # Unchanged SMB
     rho = gdir.settings['ice_density']
     mb_on_fl = []
@@ -5462,6 +5482,10 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
             widths = np.where(fl.thick > 0, widths, 0)
         except AttributeError:
             pass
+        if isinstance(mb_model, MultipleFlowlineMassBalance):
+            fl_mb_model = mb_model.flowline_mb_models[fl_id]
+        else:
+            fl_mb_model = mb_model
         mbz = 0
         smb = 0
         for yr in mb_years:
@@ -5473,6 +5497,9 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
                                          climatic_mb_or_ice_mb='climatic_mb',
                                          include_mb_model_heights=include_mb_model_heights
                                          )
+            if yr == firn_yr and hasattr(fl_mb_model, 'columns_thickness_m'):
+                firn_volume_m3 += np.sum(fl_mb_model.columns_thickness_m *
+                                         np.where(widths > 0, fl.bin_area_m2, 0))
             amb *= mb_model.sec_in_year(year=yr) * rho
             mbz += amb
             smb += weighted_average_1d(amb, widths)
@@ -5505,10 +5532,13 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
     gdir.settings['apparent_mb_from_any_mb_residual'] = residual
+    gdir.settings['inversion_firn_volume_m3'] = float(firn_volume_m3)
 
     # this is only for backwards compatibility
     if settings_filesuffix == '':
         gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
+        gdir.add_to_diagnostics('inversion_firn_volume_m3',
+                                float(firn_volume_m3))
 
     gdir.write_store(fls, 'inversion_flowlines', filesuffix=output_filesuffix)
 
