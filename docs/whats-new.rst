@@ -10,7 +10,7 @@ Enhancements
 ~~~~~~~~~~~~
 
 - Various performance improvements to the flowline model runs
-  (:pull:`2024`, :pull:`2025`).
+  (:pull:`2024`, :pull:`2025`, :pull:`2026`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
   of each time step was growing with the length of the run), and
