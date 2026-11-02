@@ -792,6 +792,24 @@ def _is_leap_year_vec(y):
     return (y % 4 == 0) & ((y % 100 != 0) | (y % 400 == 0))
 
 
+_BASE_CUM_START_LIST = _BASE_CUM_START.tolist()
+
+
+def _date_to_floatyear_scalar(y, m, d=None):
+    """Pure python version of date_to_floatyear for single numbers.
+
+    Same arithmetic as the vectorized version (including day or month
+    overflows, e.g. 32.12.2000 == 01.01.2001), but much faster for one value
+    (the models call it at every time step).
+    """
+    y = int(y)
+    m = int(m)
+    d = 1 if d is None else int(d)
+    leap = (y % 4 == 0) and ((y % 100 != 0) or (y % 400 == 0))
+    doy = d + _BASE_CUM_START_LIST[m - 1] + (leap and m > 2)
+    return np.float64(y + (doy - 1) / (366 if leap else 365))
+
+
 def date_to_floatyear(y, m, d=None):
     """Converts an integer (year, month) pair or (year, month, day) to a float
     year.
@@ -808,6 +826,9 @@ def date_to_floatyear(y, m, d=None):
     d : int or array_like or None
         the day. If None the 1. of the month is used
     """
+    if np.ndim(y) == 0 and np.ndim(m) == 0 and np.ndim(d) == 0:
+        return _date_to_floatyear_scalar(y, m, d)
+
     y = np.asarray(y, dtype=np.int64)
     m = np.asarray(m, dtype=np.int64)
 
