@@ -479,7 +479,8 @@ Breaking changes
 - Support for reading and writing HDF files with pytables is deprecated. Files
   should instead use parquet with ZSTD compression. This adds ``pyarrow`` as a
   core dependency and removes ``tables`` (pytables), which we are very glad to
-  see go as it was a recurrent source of installation pain (:pull:`1924`).
+  see go as it was a recurrent source of installation pain (:pull:`1924`,
+  pull:`2021`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Added a new way of handling model parameters, settings and observations.
   Previously these were scattered across several locations (``cfg.PARAMS``,
