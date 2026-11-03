@@ -1,12 +1,16 @@
 """Wrappers for the single tasks, multi processor handling."""
 # Built ins
+import json
 import logging
 import os
+import re
 import shutil
 import warnings
-from collections.abc import Sequence
-# External libs
+import tarfile
 import multiprocessing
+from collections.abc import Sequence
+
+# External libs
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -277,6 +281,126 @@ def execute_parallel_tasks(gdir, tasks):
             task(gd, **kw)
 
 
+def _peek_level_manifest(tar_base: str, rgi_id: str, label: str) -> dict | None:
+    """Read a glacier's level manifest from inside a cached bundle tar.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the cached bundle tar file.
+    rgi_id : str
+        The glacier's RGI ID.
+    label : str
+        The label of the manifest to read, e.g. ``"L3"``.
+
+    Returns
+    -------
+    dict | None
+        The parsed ``{label}.manifest.json`` of the glacier's member
+        tarfile, or None for legacy (pre-manifest) bundles.
+    """
+    bundle_dir = os.path.basename(tar_base)
+    if bundle_dir.endswith(".tar"):
+        bundle_dir = bundle_dir[:-4]
+    try:
+        with tarfile.open(tar_base, "r") as tf:
+            member = tf.getmember(os.path.join(bundle_dir, rgi_id + ".tar.gz"))
+            with tf.extractfile(member) as fobj:
+                with tarfile.open(fileobj=fobj, mode="r:gz") as inner:
+                    mf = inner.extractfile(
+                        os.path.join(rgi_id, f"{label}.manifest.json")
+                    )
+                    if mf is None:
+                        return None
+                    with mf:
+                        return json.load(mf)
+    # KeyError means a legacy, pre-manifest bundle
+    # ReadError means a possible truncated download
+    except (KeyError, tarfile.ReadError, OSError):
+        return None
+
+
+def _layered_level_tars(
+    tar_base: str,
+    rgi_id: str,
+    label: str,
+    base_url: str | None,
+    locate,
+    source: str | None = None,
+) -> tuple[list[str], dict[str, str | None]]:
+    """Gets the bundle tars to layer for a glacier, root first.
+
+    A delta names its parent, which may live in another tree. This
+    method walks through links until it reaches a standalone level
+    (e.g. the L1 root). A legacy (cumulative) bundle has no manifest, so
+    it is the only tar.
+
+    .. important::
+        This doesn't check artefact ids. `_finalize_merged_dir` does
+        that after the tars are layered.
+
+    Parameters
+    ----------
+    tar_base : str
+        Path to the bundle tar of the requested label.
+    rgi_id : str
+        The glacier's RGI ID.
+    label : str
+        The requested label, e.g. ``"L3"``.
+    base_url : str | None
+        Base URL of the tree holding ``tar_base``. A parent link of None
+        resolves to the tree of the manifest holding it.
+    locate : callable
+        ``locate(base_url, label)`` returns the path to a bundle tar and
+        the tree root it was found in.
+    source : str | None, optional
+        Tree root of ``tar_base``. Defaults to ``base_url``.
+
+    Returns
+    -------
+    tuple[list[str], dict[str, str | None]]
+        The bundle tars to layer, root first, and the tree root each
+        label was fetched from.
+    """
+
+    tars = [tar_base]
+    sources = {label: source or base_url}
+    m = _peek_level_manifest(tar_base, rgi_id, label)
+    while m and m.get("kind") == "delta" and m.get("parent"):
+        p = m["parent"]
+        base_url = p["base_url"] or base_url  # null = this manifest's tree
+        path, sources[p["label"]] = locate(base_url, p["label"])
+        tars.append(path)
+        m = _peek_level_manifest(path, rgi_id, p["label"])
+    return tars[::-1], sources
+
+
+def _stamp_fetched_from(dirpath: str, sources: dict[str, str | None]):
+    """Records in each layer's manifest the tree root it came from.
+
+    Runs after the tars are layered, so that `_finalize_merged_dir`
+    checks the manifests as they were published. Legacy directories are
+    skipped because they have no manifest.
+    """
+    for label, src in sources.items():
+        fp = os.path.join(dirpath, f"{label}.manifest.json")
+        if not os.path.isfile(fp):
+            continue
+        with open(fp) as f:
+            m = json.load(f)
+        m["fetched_from"] = src
+        with open(fp, "w") as f:
+            json.dump(m, f, indent=2)
+
+
+def _member_tars(tars, rgi_id):
+    """Per-glacier member paths of bundle tars, as one path if alone."""
+    out = [
+        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz") for tb in tars
+    ]
+    return out[0] if len(out) == 1 else out
+
+
 def gdir_from_prepro(entity, from_prepro_level=None,
                      prepro_border=None, prepro_rgi_version=None,
                      base_url=None):
@@ -290,11 +414,27 @@ def gdir_from_prepro(entity, from_prepro_level=None,
 
     tar_base = utils.get_prepro_gdir(prepro_rgi_version, rid, prepro_border,
                                      from_prepro_level, base_url=base_url)
-    from_tar = os.path.join(tar_base.replace('.tar', ''), rid + '.tar.gz')
-    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+    # Legacy bundles without manifest are cumulative so one fetch is enough
+    tars, sources = _layered_level_tars(
+        tar_base,
+        rid,
+        f'L{from_prepro_level}',
+        base_url,
+        lambda url, lbl: (
+            utils.get_prepro_gdir(
+                prepro_rgi_version, rid, prepro_border, lbl[1:], base_url=url
+            ),
+            url,
+        ),
+    )
+    gdir = oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rid))
+    _stamp_fetched_from(gdir.dir, sources)
+    return gdir
 
 
-def gdir_from_tar(entity, from_tar):
+def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
+                  prepro_rgi_version=None):
 
     rgi_id = _rgi_id_of(entity)
 
@@ -303,18 +443,56 @@ def gdir_from_tar(entity, from_tar):
     # TODO: add support for bundle sizes of 10 and 1
     region = rgi_id[:-6]
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
-    new_path = os.path.join(from_tar, region, new_bundle + ".tar")
-    old_path = os.path.join(from_tar, region, rgi_id[:-3] + ".tar")
-    if os.path.exists(new_path):
-        from_tar = new_path
-    elif os.path.exists(old_path):
-        from_tar = old_path
-    else:
+
+    def locate(level_dir):
+        new_path = os.path.join(level_dir, region, new_bundle + ".tar")
+        old_path = os.path.join(level_dir, region, rgi_id[:-3] + ".tar")
+        if os.path.exists(new_path):
+            return new_path
+        if os.path.exists(old_path):
+            return old_path
         raise FileNotFoundError(
-            "Cannot find bundle tar for {} in {}".format(rgi_id, from_tar)
+            "Cannot find bundle tar for {} in {}".format(rgi_id, level_dir)
         )
-    from_tar = os.path.join(from_tar.replace(".tar", ""), rgi_id + ".tar.gz")
-    return oggm.GlacierDirectory(entity, from_tar=from_tar)
+
+    tar_base = locate(from_tar)
+    # A parent in this local tree (so a null link) is a sibling folder,
+    # otherwise it comes from `base_url`. A chunked run writes L3 and L4
+    # to disk, whilst only L1 and L2 are published.
+    root, name = os.path.split(os.path.normpath(from_tar))
+    # A `<tree>/RGIxx/b_yyy/<label>` layout is recorded as `<tree>`, so
+    # that it reads like a `base_url`. Other layouts keep `root`.
+    tree, b_dir = os.path.split(root)
+    local_source = root
+    if re.fullmatch(r"b_\d{3}", b_dir) and os.path.basename(tree).startswith(
+        "RGI"
+    ):
+        local_source = os.path.dirname(tree)
+
+    def locate_label(url, lbl):
+        if url is None:
+            try:
+                return locate(os.path.join(root, lbl)), local_source
+            except FileNotFoundError:
+                if base_url is None:
+                    raise
+            url = base_url
+        path = utils.get_prepro_gdir(
+            prepro_rgi_version or cfg.PARAMS["rgi_version"],
+            rgi_id,
+            prepro_border or int(cfg.PARAMS["border"]),
+            lbl[1:],
+            base_url=url,
+        )
+        return path, url
+
+    # A folder without its own manifest (e.g. L3a) loads as one tar
+    tars, sources = _layered_level_tars(
+        tar_base, rgi_id, name, None, locate_label, source=local_source
+    )
+    gdir = oggm.GlacierDirectory(entity, from_tar=_member_tars(tars, rgi_id))
+    _stamp_fetched_from(gdir.dir, sources)
+    return gdir
 
 
 def _check_rgi_input(rgidf=None, err_on_lvl2=False):
@@ -520,8 +698,10 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         for `from_prepro_level` only: if you want to override the default
         behavior which is to use `cfg.PARAMS['rgi_version']`
     prepro_base_url : str
-        for `from_prepro_level` only: the preprocessed directory url from
-        which to download the directories (became mandatory in OGGM v1.6)
+        for `from_prepro_level`: the preprocessed directory url from
+        which to download the directories (became mandatory in OGGM v1.6).
+        With a `from_tar` level folder, where to download the levels it
+        requires which are not in the sibling folders.
     from_tar : bool or str, default=False
         extract the gdir data from a tar file. If set to `True`,
         will check for a tar file at the expected location in `base_dir`.
@@ -640,8 +820,14 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                         pass
 
             if _isdir(from_tar):
-                gdirs = execute_entity_task(gdir_from_tar, entities,
-                                            from_tar=from_tar)
+                gdirs = execute_entity_task(
+                    gdir_from_tar,
+                    entities,
+                    from_tar=from_tar,
+                    base_url=prepro_base_url,
+                    prepro_border=prepro_border,
+                    prepro_rgi_version=prepro_rgi_version,
+                )
             else:
                 gdirs = execute_entity_task(utils.GlacierDirectory, entities,
                                             reset=reset,
@@ -874,6 +1060,19 @@ def _resolve_ref_volume_table(gdirs, ref_table):
     return df, ref_col
 
 
+def _get_inversion_firn_volume(gdir, settings_filesuffix=''):
+    """The snow/firn volume on top of the ice at the RGI date (m3).
+
+    Stored by `apparent_mb_from_any_mb` for mass balance models with a
+    snow/firn bucket system (e.g. SfcTypeTIModel), zero otherwise.
+    """
+    gdir.settings_filesuffix = settings_filesuffix
+    try:
+        return gdir.settings['inversion_firn_volume_m3']
+    except KeyError:
+        return 0.
+
+
 @global_task(log)
 def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                                        observations_filesuffix='',
@@ -1051,6 +1250,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         df = pd.DataFrame(index=rids_use)
         ref_col = None
 
+    # Mass balance models with a snow/firn bucket system (e.g.
+    # SfcTypeTIModel) have a firn layer on top of the ice: the reference
+    # volume (e.g. from GPR measurements) includes it, so we match ice + firn
+    firn_vol = pd.Series([_get_inversion_firn_volume(gdir, settings_filesuffix)
+                          for gdir in gdirs], index=rids)
+
     # Optimize the diff to ref, using the settings of the first gdir
     gdirs_use[0].settings_filesuffix = settings_filesuffix
     def_a = gdirs_use[0].settings['inversion_glen_a']
@@ -1066,6 +1271,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs_use,
                                           input_filesuffix=output_filesuffix,
                                           add_to_log_file=add_to_log_file)
+        odf['oggm'] += firn_vol.loc[rids_use].values
         # if the user provides a glacier volume all glaciers are considered,
         # dropna() below excludes glaciers with no reference volume available
         if ref_volume_m3 is None:
@@ -1080,7 +1286,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                      'fs={}.'.format(glen_a_factor, fs))
         out_fac = glen_a_factor
         return _apply_inversion_a_factor(
-            gdirs, df, out_fac, def_a, fs,
+            gdirs, df, out_fac, def_a, fs, firn_vol,
             settings_filesuffix=settings_filesuffix,
             observations_filesuffix=observations_filesuffix,
             input_filesuffix=input_filesuffix,
@@ -1154,7 +1360,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                      ''.format(out_fac, fs))
 
     return _apply_inversion_a_factor(
-        gdirs, df, out_fac, def_a, fs,
+        gdirs, df, out_fac, def_a, fs, firn_vol,
         settings_filesuffix=settings_filesuffix,
         observations_filesuffix=observations_filesuffix,
         input_filesuffix=input_filesuffix,
@@ -1165,7 +1371,7 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         add_to_log_file=add_to_log_file)
 
 
-def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, *,
+def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, firn_vol, *,
                               settings_filesuffix, observations_filesuffix,
                               input_filesuffix, output_filesuffix,
                               ref_volume_year, rids, rids_use,
@@ -1188,12 +1394,14 @@ def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, *,
     df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs,
                                             input_filesuffix=output_filesuffix,
                                             add_to_log_file=add_to_log_file)
-    # add the actually derived volume to the observations file
+    df['vol_firn_m3'] = firn_vol.loc[rids].values
+    # add the actually derived volume (ice + firn) to the observations file
     for gdir in gdirs:
         # ensure the observation is written into the correct file
         gdir.observations_filesuffix = observations_filesuffix
 
-        vol_single = df.vol_oggm_m3.loc[gdir.rgi_id]
+        vol_single = (df.vol_oggm_m3.loc[gdir.rgi_id] +
+                      df.vol_firn_m3.loc[gdir.rgi_id])
         if ref_volume_year is None:
             year_single = gdir.rgi_date + 1
         else:
@@ -1455,11 +1663,16 @@ def calibrate_inversion_from_volume(gdir,
                                          add_to_log_file=False)
         return vol
 
+    # Mass balance models with a snow/firn bucket system (e.g.
+    # SfcTypeTIModel) have a firn layer on top of the ice: the reference
+    # volume (e.g. from GPR measurements) includes it, so we match ice + firn
+    firn_vol = _get_inversion_firn_volume(gdir, settings_filesuffix)
+
     def to_minimize(x):
         log.info(f'Volume calibration for {gdir.rgi_id} with '
                  f'A factor: {x} and fs: {fs}')
         vol = compute_vol(x)
-        return ref_volume_m3 - vol
+        return ref_volume_m3 - (vol + firn_vol)
 
     try:
         out_fac, r = optimization.brentq(to_minimize, *a_bounds,
@@ -1494,8 +1707,8 @@ def calibrate_inversion_from_volume(gdir,
         if error_on_mismatch:
             raise ValueError(msg)
 
-        out_fac = a_bounds[int(abs(ref_volume_m3 - vol1) >
-                               abs(ref_volume_m3 - vol2))]
+        out_fac = a_bounds[int(abs(ref_volume_m3 - vol1 - firn_vol) >
+                               abs(ref_volume_m3 - vol2 - firn_vol))]
         log.info(msg)
         log.info(f'We use A factor = {out_fac} and fs = {fs} and move on.')
 
@@ -1523,14 +1736,17 @@ def calibrate_inversion_from_volume(gdir,
                                            input_filesuffix=output_filesuffix,
                                            )
 
-    # save in observation file
+    # save in observation file (ice + firn). The tasks above reset the
+    # observations filesuffix to the default, so set it again
+    gdir.observations_filesuffix = observations_filesuffix
     gdir.observations['ref_volume_m3'] = {
-        'value': final_vol,
+        'value': final_vol + firn_vol,
         'year': gdir.rgi_date + 1 if ref_volume_year is None else ref_volume_year,
     }
 
     return {
         'vol_oggm_m3': final_vol,
+        'vol_firn_m3': firn_vol,
         'glen_a': out_fac * def_a,
         'fs': fs,
         'a_factor': out_fac

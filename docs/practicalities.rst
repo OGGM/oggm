@@ -447,7 +447,8 @@ Some rules and practicalities:
   own folder before copying it to the shared one. The chunk jobs of a stage
   can then all copy into the same tree at the same time: they write different
   tar files and no summary file.
-- ``L3a`` is scratch: delete it once stage 2 has succeeded. ``4a`` needs no
+- ``L3a`` is scratch: delete it once stage 2 has succeeded, and never publish
+  it (the scripts below do this per region, unless ``KEEP_L3A=true``). ``4a`` needs no
   scratch folder, since it holds exactly the L4 directories (only the summary
   files are missing): it writes straight into ``L4``.
 - chain the stages with ``sbatch --dependency=afterok:<jobid>``. On an array

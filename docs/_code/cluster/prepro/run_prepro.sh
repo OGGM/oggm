@@ -88,4 +88,14 @@ EOF
 rsync -a "$OGGM_OUTDIR/" "$SHARED/"
 rm -rf "$JOB_DIR"
 
+# L3a is scratch, and must not be published: once this region's L3 is made
+# from it, delete it. Only this region's folder, since the other regions may
+# still need theirs. KEEP_L3A=true keeps it, e.g. to redo the Glen A
+# calibration later (oggm_prepro --start-level 3a --inversion-glen-a-factor).
+if [ "$FROM" = "3a" ] && [ "${KEEP_L3A:-false}" != "true" ]; then
+    L3A_DIR="${SHARED:?}/RGI$RGI_VERSION/$(printf "b_%03d" "$BORDER")/L3a"
+    rm -rf "$L3A_DIR"/*-"${RGI_REG:?}"
+    rmdir "$L3A_DIR" 2>/dev/null || true  # once all regions are done
+fi
+
 echo "SLURM DONE"

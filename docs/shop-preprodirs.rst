@@ -33,11 +33,10 @@ tutorial.
 Processing levels
 -----------------
 
-There are six available levels of pre-processing:
+There are five available levels of pre-processing:
 
-- **Level 0**: the lowest level, with directories containing the glacier
-  outlines only.
-- **Level 1**: directories now contain the glacier topography data as well.
+- **Level 1**: the lowest level, with directories containing the glacier
+  outlines and topography data.
 - **Level 2**: at this stage, the glacier flowlines and their downstream lines are
   computed and ready to be used.
 - **Level 3**: has the baseline climate timeseries (e.g. W5E5 or ERA5)

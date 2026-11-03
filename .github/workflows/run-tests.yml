@@ -77,7 +77,7 @@ jobs:
     name: Coveralls Finished
     needs: test
     runs-on: ubuntu-latest
-    container: python:3.11-slim
+    container: python:3.12-slim
     continue-on-error: true
     steps:
     - name: Coveralls Finished

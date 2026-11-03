@@ -421,7 +421,7 @@ def get_test_dir():
 
 
 def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
-             flowline_type='centerlines'):
+             flowline_type='centerlines', round_smoothed_dem=True):
     """
 
     Parameters
@@ -433,6 +433,10 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     flowline_type : str
         Select which flowline type should be used.
         Options: 'centerlines' (default), 'elevation_bands'
+    round_smoothed_dem : bool
+        set to False for the tests which were set up with an unrounded
+        topo_smoothed (e.g. image comparisons). These use their own
+        test directory.
 
     Returns
     -------
@@ -446,6 +450,8 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
     if rgi_id is not None:
         testdir = os.path.join(get_test_dir(), f'tmp_border{border}_{rgi_id}')
+    if not round_smoothed_dem:
+        testdir += '_norsd'
 
     if not os.path.exists(testdir):
         os.makedirs(testdir)
@@ -453,6 +459,7 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
 
     # Init
     cfg.initialize(logging_level=logging_level)
+    cfg.PARAMS['round_smoothed_dem'] = round_smoothed_dem
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -589,7 +596,7 @@ def init_columbia(reset=False):
     return gdir
 
 
-def init_columbia_eb(dir_name, reset=False):
+def init_columbia_eb(dir_name, reset=False, round_dem=True):
 
     from oggm.core import gis, centerlines
     import geopandas as gpd
@@ -600,6 +607,9 @@ def init_columbia_eb(dir_name, reset=False):
 
     # Init
     cfg.initialize()
+    # The Columbia DEM is float: round_dem applies to both topo variables
+    cfg.PARAMS['round_dem'] = round_dem
+    cfg.PARAMS['round_smoothed_dem'] = round_dem
     cfg.PATHS['working_dir'] = testdir
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')

@@ -9,6 +9,27 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- Various performance improvements to the flowline model runs
+  (:pull:`2024`, :pull:`2025`, :pull:`2026`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
+  of each time step was growing with the length of the run), and
+  ``utils.date_to_floatyear`` is about 4 times faster for single numbers.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
+  rounded to the nearest meter before being written to ``dem.tif`` and to
+  ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
+  stored as floats (e.g. COPDEM). The data type is unchanged (float32).
+  The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the
+  same for ``topo_smoothed``: it saves about as much space again.
+  This changes the results slightly. Set both to ``False`` to recover
+  the previous behavior (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``compute_downstream_line`` now also finds the domain exits located on
+  flat stretches of the domain edge (equal elevation values, more frequent
+  with rounded DEMs), which were ignored before. This changes the
+  downstream line of a few glaciers. It is also faster.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` can now store two area-weighted air temperature
   diagnostics, i.e. the downscaled temperature (temperature bias and lapse
   rate applied) which the mass balance model actually uses for melt and for
@@ -277,6 +298,16 @@ Enhancements
   to the glacier state of a given simulation year, instead of the default
   largest area during the simulation period (:pull:`1965`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
+- Preprocessed glacier directories are now incremental. Each prepro level ships
+  only the files it added, changed or removed relative to its parent, plus a
+  manifest file recording build information. Clients layer the levels they need
+  into one glacier directory so several experiments can share one set of lower
+  levels. Legacy cumulative datasets can still be read, but new levels can
+  only be built on incremental ones. There is no L0 anymore: L1 (outlines
+  and topography) is the root of the chain, and ``oggm_prepro`` starts from
+  scratch when no ``--start-level`` is given (``--start-level 0`` is no
+  longer accepted) (:pull:`1951`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - Adds a new ``DownloadOutageError`` exception, with a corresponding workflow to
   indicate when this happens in pytest/GitHub Actions. This exception is raised
   when a download fails due to a network outage, rather than a logic error
@@ -286,6 +317,32 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- With ``SfcTypeTIModel``, the volume calibration of the inversion now
+  matches ice + snow/firn to the reference volume. Before, only the ice was
+  matched, and the dynamical model then added the snow/firn buckets on top
+  (in ``volume_m3`` and ``mass_kg``), which overestimated the glacier volume
+  at the RGI date by several percent (more for thin glaciers).
+  ``apparent_mb_from_any_mb`` now stores the snow/firn volume at
+  the RGI date (on the inversion flowlines) as ``inversion_firn_volume_m3``
+  (zero for other mass balance models), which
+  ``calibrate_inversion_from_ref_table`` and
+  ``calibrate_inversion_from_volume`` subtract from the reference volume.
+  The ``ref_volume_m3`` observation is ice + firn. Results with other mass
+  balance models are unchanged.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
+  in the same order as the input list of RGI ids. They were previously
+  sorted by RGI region and by their order in the RGI files (:issue:`1005`).
+  By `monsterlag <https://github.com/monsterlag>`_
+- Fixed several bugs in ``run_dynamic_melt_f_calibration`` (second guess
+  in the wrong direction, step length ignoring ``melt_f_max``, broken
+  error recovery, swapped "part success" / "dynamic spinup only" labels)
+  and added a bisection fallback for non-monotonic responses. This changes
+  the calibrated melt_f of some glaciers. The new
+  ``run_dynamic_melt_f_calibration_stop_reason`` diagnostic stores why the
+  calibration stopped (:pull:`2005`, :pull:`1963`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Nicolas Gampierakis <https://github.com/gampnico>`_
 - The monthly hydrological output of ``run_with_hydro`` (``*_monthly``
   variables) now has the correct ``kg month-1`` unit attribute: the values
   are monthly totals, but the attribute was copied from the annual variables
@@ -434,7 +491,8 @@ Breaking changes
 - Support for reading and writing HDF files with pytables is deprecated. Files
   should instead use parquet with ZSTD compression. This adds ``pyarrow`` as a
   core dependency and removes ``tables`` (pytables), which we are very glad to
-  see go as it was a recurrent source of installation pain (:pull:`1924`).
+  see go as it was a recurrent source of installation pain (:pull:`1924`,
+  pull:`2021`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Added a new way of handling model parameters, settings and observations.
   Previously these were scattered across several locations (``cfg.PARAMS``,
@@ -484,11 +542,15 @@ Breaking changes
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``read_pickle`` and ``write_pickle`` have been removed in favour of
   ``read_store`` and ``write_store``, which store data as npz files in the
-  glacier directory's ``data_store`` folder. Existing pickles from older
-  glacier directories are still read transparently by ``read_store``
-  (:pull:`1908`).
+  glacier directory. Existing pickles from older glacier directories are still
+  supported by ``read_store`` (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-
+- New ``PARAMS['round_dem']`` and ``PARAMS['round_smoothed_dem']`` params
+  changed a bit the centerlines and downstream lines results. This is most
+  noticeable in the centerlines representation (:pull:`2014`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- OGGM now requires Python 3.12 or newer (:pull:`1951`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 
 
 v1.6.3 (April 13, 2026)

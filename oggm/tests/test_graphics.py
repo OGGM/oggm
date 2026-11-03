@@ -101,7 +101,7 @@ def test_centerlines():
 @mpl_image_compare(multi=True)
 def test_raster():
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     gis.gridded_attributes(gdir)
     graphics.plot_raster(gdir, var_name='aspect', cmap='twilight', ax=ax)
     fig.tight_layout()
@@ -133,7 +133,7 @@ def test_downstream():
 @mpl_image_compare(multi=True)
 def test_width():
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     graphics.plot_catchment_width(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -143,7 +143,7 @@ def test_width():
 @mpl_image_compare(multi=True)
 def test_width_corrected():
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     graphics.plot_catchment_width(gdir, ax=ax, corrected=True,
                                   add_intersects=True,
                                   add_touches=True)
@@ -155,7 +155,7 @@ def test_width_corrected():
 @mpl_image_compare(multi=True)
 def test_inversion():
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     graphics.plot_inversion(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -173,6 +173,7 @@ def test_multiple_inversion():
 
     # Init
     cfg.initialize()
+    cfg.PARAMS['round_smoothed_dem'] = False
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -206,7 +207,7 @@ def test_multiple_inversion():
 @mpl_image_compare(multi=True)
 def test_modelsection():
 
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
@@ -221,7 +222,7 @@ def test_modelsection():
 @mpl_image_compare(multi=True)
 def test_modelsection_withtrib():
 
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
@@ -235,7 +236,7 @@ def test_modelsection_withtrib():
 @mpl_image_compare(multi=True)
 def test_modeloutput_map():
 
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
@@ -257,6 +258,7 @@ def test_multiple_models():
 
     # Init
     cfg.initialize()
+    cfg.PARAMS['round_smoothed_dem'] = False
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -297,7 +299,7 @@ def test_multiple_models():
 @mpl_image_compare(multi=True)
 def test_thick_alt():
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     graphics.plot_distributed_thickness(gdir, ax=ax,
                                         varname_suffix='_alt')
     fig.tight_layout()
@@ -308,7 +310,7 @@ def test_thick_alt():
 @mpl_image_compare(multi=True)
 def test_thick_interp():
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = init_hef(round_smoothed_dem=False)
     graphics.plot_distributed_thickness(gdir, ax=ax,
                                         varname_suffix='_interp')
     fig.tight_layout()
@@ -319,7 +321,7 @@ def test_thick_interp():
 @mpl_image_compare(multi=True)
 def test_thick_elev_bands():
     fig, ax = plt.subplots()
-    gdir = init_columbia_eb(dir_name='test_thick_eb')
+    gdir = init_columbia_eb(dir_name='test_thick_eb', round_dem=False)
     workflow.inversion_tasks(utils.tolist(gdir))
     inversion.distribute_thickness_per_altitude(gdir, smooth_radius=None)
     graphics.plot_distributed_thickness(gdir, ax=ax)
@@ -331,7 +333,7 @@ def test_thick_elev_bands():
 @pytest.mark.xfail
 def test_model_section_calving():
     # I have no clue why this test fails on gh sometimes
-    gdir = init_columbia_eb(dir_name='test_thick_eb')
+    gdir = init_columbia_eb(dir_name='test_thick_eb', round_dem=False)
     workflow.inversion_tasks(utils.tolist(gdir))
     flowline.init_present_time_glacier(gdir)
 
@@ -370,6 +372,7 @@ def test_chhota_shigri():
 
     # Init
     cfg.initialize()
+    cfg.PARAMS['round_smoothed_dem'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_chhota_shigri.tif')
     cfg.PARAMS['border'] = 80
     cfg.PARAMS['use_intersects'] = False
@@ -413,6 +416,7 @@ def test_ice_cap():
     utils.mkdir(testdir, reset=True)
 
     cfg.initialize()
+    cfg.PARAMS['round_smoothed_dem'] = False
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-05.08389.tif')
     cfg.PARAMS['border'] = 60
@@ -451,6 +455,7 @@ def test_coxe():
 
     # Init
     cfg.initialize()
+    cfg.PARAMS['round_smoothed_dem'] = False
     cfg.PARAMS['use_intersects'] = False
     cfg.PATHS['dem_file'] = get_demo_file('dem_RGI50-01.10299.tif')
     cfg.PARAMS['border'] = 40
