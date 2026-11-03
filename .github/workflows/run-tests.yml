@@ -13,8 +13,11 @@ on:
 jobs:
   # Check if only changelog has been modified
   changes:
-    name: Detect docs-only changes
+    name: Detect changelog modification
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       docs_only: ${{ steps.diff.outputs.docs_only }}
     steps:
@@ -23,18 +26,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          docs_only=false
           if [ -n "$PR" ]; then
-            files=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate -q '.[].filename') || files=""
-          else
-            files=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" -q '.files[].filename') || files=""
+            commit="repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA"
+            # empty for merge commits
+            parent=$(gh api "$commit" -q 'select((.parents | length) == 1) | .parents[0].sha') || parent=""
+            files=$(gh api "$commit" -q '.files[].filename') || files=""
+            # workflow file path is hardcoded, change if workflow file is moved or renamed
+            if [ -n "$parent" ] && [ "$files" = "docs/whats-new.rst" ]; then
+              runs="repos/$GITHUB_REPOSITORY/actions/workflows/run-tests.yml/runs?head_sha=$parent&per_page=1"
+              status=$(gh api "$runs" -q '.workflow_runs[0].conclusion') || status=""
+              if [ "$status" = "success" ]; then
+                docs_only=true
+              fi
+            fi
           fi
-          if [ "$files" = "docs/whats-new.rst" ]; then
-            echo "docs_only=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
   test:
     name: ${{ matrix.test-env }} on ${{ matrix.container }}
     needs: changes
