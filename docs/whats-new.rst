@@ -9,6 +9,13 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- Various performance improvements to the flowline model runs
+  (:pull:`2024`, :pull:`2025`, :pull:`2026`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
+  of each time step was growing with the length of the run), and
+  ``utils.date_to_floatyear`` is about 4 times faster for single numbers.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - New ``PARAMS['round_dem']`` (``True`` per default): the DEM values are now
   rounded to the nearest meter before being written to ``dem.tif`` and to
   ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
@@ -305,6 +312,19 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- With ``SfcTypeTIModel``, the volume calibration of the inversion now
+  matches ice + snow/firn to the reference volume. Before, only the ice was
+  matched, and the dynamical model then added the snow/firn buckets on top
+  (in ``volume_m3`` and ``mass_kg``), which overestimated the glacier volume
+  at the RGI date by several percent (more for thin glaciers).
+  ``apparent_mb_from_any_mb`` now stores the snow/firn volume at
+  the RGI date (on the inversion flowlines) as ``inversion_firn_volume_m3``
+  (zero for other mass balance models), which
+  ``calibrate_inversion_from_ref_table`` and
+  ``calibrate_inversion_from_volume`` subtract from the reference volume.
+  The ``ref_volume_m3`` observation is ice + firn. Results with other mass
+  balance models are unchanged.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
   in the same order as the input list of RGI ids. They were previously
   sorted by RGI region and by their order in the RGI files (:issue:`1005`).
@@ -459,7 +479,8 @@ Breaking changes
 - Support for reading and writing HDF files with pytables is deprecated. Files
   should instead use parquet with ZSTD compression. This adds ``pyarrow`` as a
   core dependency and removes ``tables`` (pytables), which we are very glad to
-  see go as it was a recurrent source of installation pain (:pull:`1924`).
+  see go as it was a recurrent source of installation pain (:pull:`1924`,
+  pull:`2021`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Added a new way of handling model parameters, settings and observations.
   Previously these were scattered across several locations (``cfg.PARAMS``,
