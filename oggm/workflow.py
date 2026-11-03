@@ -8,6 +8,7 @@ import shutil
 import warnings
 import tarfile
 import multiprocessing
+import zipfile
 from collections.abc import Sequence
 
 # External libs
@@ -282,12 +283,12 @@ def execute_parallel_tasks(gdir, tasks):
 
 
 def _peek_level_manifest(tar_base: str, rgi_id: str, label: str) -> dict | None:
-    """Read a glacier's level manifest from inside a cached bundle tar.
+    """Read a glacier's level manifest from inside a cached bundle.
 
     Parameters
     ----------
     tar_base : str
-        Path to the cached bundle tar file.
+        Path to the cached bundle file: a legacy or v1 tar, or a v2 zip.
     rgi_id : str
         The glacier's RGI ID.
     label : str
@@ -297,11 +298,23 @@ def _peek_level_manifest(tar_base: str, rgi_id: str, label: str) -> dict | None:
     -------
     dict | None
         The parsed ``{label}.manifest.json`` of the glacier's member
-        tarfile, or None for legacy (pre-manifest) bundles.
+        archive, or None for legacy (pre-manifest) bundles.
     """
     bundle_dir = os.path.basename(tar_base)
-    if bundle_dir.endswith(".tar"):
+    if bundle_dir.endswith((".tar", ".zip")):
         bundle_dir = bundle_dir[:-4]
+    if tar_base.endswith(".zip"):
+        # zip-of-zip bundle; member names always use '/'
+        try:
+            with zipfile.ZipFile(tar_base) as outer:
+                with outer.open(f"{bundle_dir}/{rgi_id}.zip") as fobj:
+                    with zipfile.ZipFile(fobj) as inner:
+                        with inner.open(f"{rgi_id}/{label}.manifest.json") as mf:
+                            return json.load(mf)
+        # KeyError means a bundle without a manifest
+        # BadZipFile means a possible truncated download
+        except (KeyError, zipfile.BadZipFile, OSError):
+            return None
     try:
         with tarfile.open(tar_base, "r") as tf:
             member = tf.getmember(os.path.join(bundle_dir, rgi_id + ".tar.gz"))
@@ -394,9 +407,12 @@ def _stamp_fetched_from(dirpath: str, sources: dict[str, str | None]):
 
 
 def _member_tars(tars, rgi_id):
-    """Per-glacier member paths of bundle tars, as one path if alone."""
+    """Per-glacier member paths of bundles, as one path if alone."""
     out = [
-        os.path.join(tb.replace(".tar", ""), rgi_id + ".tar.gz") for tb in tars
+        os.path.join(
+            tb[:-4], rgi_id + (".zip" if tb.endswith(".zip") else ".tar.gz")
+        )
+        for tb in tars
     ]
     return out[0] if len(out) == 1 else out
 
@@ -445,14 +461,15 @@ def gdir_from_tar(entity, from_tar, base_url=None, prepro_border=None,
     new_bundle = f"{region}.{rgi_id[-5:-2]}"
 
     def locate(level_dir):
-        new_path = os.path.join(level_dir, region, new_bundle + ".tar")
-        old_path = os.path.join(level_dir, region, rgi_id[:-3] + ".tar")
-        if os.path.exists(new_path):
-            return new_path
-        if os.path.exists(old_path):
-            return old_path
+        for path in (
+            os.path.join(level_dir, region, new_bundle + ".zip"),
+            os.path.join(level_dir, region, new_bundle + ".tar"),
+            os.path.join(level_dir, region, rgi_id[:-3] + ".tar"),
+        ):
+            if os.path.exists(path):
+                return path
         raise FileNotFoundError(
-            "Cannot find bundle tar for {} in {}".format(rgi_id, level_dir)
+            "Cannot find bundle for {} in {}".format(rgi_id, level_dir)
         )
 
     tar_base = locate(from_tar)

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tarfile
+import zipfile
 from types import SimpleNamespace
 
 import shutil
@@ -176,7 +177,8 @@ def test_write_level_manifest_schema(tmp_path):
 
     state = utils.snapshot_gdir_state(gdir_dir)
     # this needs to be updated whenever the schema changes
-    assert manifest["schema_version"] == "1.0"
+    assert manifest["schema_version"] == "2.0"
+    assert "format_version" not in manifest  # the schema major says so
     assert manifest["kind"] == "delta"
     assert manifest["rgi_id"] == "RGI60-11.00897"
     assert manifest["label"] == "L3"
@@ -528,6 +530,63 @@ class TestLayeredGdir:
         np.testing.assert_allclose(gdir.read_npz("delta_check"), np.ones(4))
         assert gdir.read_store("inversion_flowlines") is not None
 
+    def test_gdir_from_tar_local_zip_tree(self, tmp_path, hef_gdir):
+        """A local tree of zip level bundles, as prepro_levels writes it."""
+        rid = hef_gdir.rgi_id
+        srcbase = str(tmp_path / "src")
+        workdir = os.path.join(srcbase, rid[:-6], rid[:-3], rid)
+        shutil.copytree(hef_gdir.dir, workdir)
+        tree = tmp_path / "tree"
+
+        def publish(label, include=None):
+            level_dir = str(tree / label)
+            utils.gdir_to_archive.unwrapped(
+                _FakeGdir(workdir, srcbase),
+                base_dir=level_dir,
+                delete=False,
+                include=include,
+            )
+            utils.base_dir_to_bundles(level_dir)
+
+        # L1 root, then an L2 delta of only the changed files
+        utils.write_level_manifest(workdir, "L1", {}, kind="standalone", **_DS)
+        publish("L1")
+        prev = utils.snapshot_gdir_state(workdir)
+        with open(os.path.join(workdir, "mb_calib.json"), "w") as f:
+            json.dump({"melt_f": 6.0}, f)
+        _, changed = utils.write_level_manifest(
+            workdir, "L2", prev, parent="L1", **_DS
+        )
+        publish("L2", include=changed)
+        bundle = f"{rid[:-6]}.{rid[-5:-2]}.zip"
+        assert (tree / "L2" / rid[:-6] / bundle).is_file()
+
+        cfg.PATHS["working_dir"] = str(tmp_path / "wd")
+        gdir = workflow.gdir_from_tar(rid, str(tree / "L2"))
+
+        assert Path(gdir.dir, "L1.manifest.json").is_file()
+        assert Path(gdir.dir, "L2.manifest.json").is_file()
+        assert gdir.grid.nx > 0
+        mb_calib = json.loads(Path(gdir.dir, "mb_calib.json").read_text())
+        assert mb_calib["melt_f"] == 6.0
+
+    def test_zip_archive_strips_fetched_from(self, tmp_path):
+        gdir_dir = _make_fake_gdir(tmp_path / "base" / "RGI60-11.00897")
+        utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+        m = _manifest(gdir_dir / "L1.manifest.json")
+        m["fetched_from"] = "/local/tree"
+        with open(gdir_dir / "L1.manifest.json", "w") as f:
+            json.dump(m, f)
+        fake = _FakeGdir(str(gdir_dir), str(tmp_path / "base"))
+
+        for keep in (False, True):
+            zpath = utils.gdir_to_archive.unwrapped(
+                fake, delete=False, keep_fetched_from=keep
+            )
+            with zipfile.ZipFile(zpath) as zf:
+                got = json.loads(zf.read("RGI60-11.00897/L1.manifest.json"))
+            assert ("fetched_from" in got) is keep
+
     @pytest.mark.parametrize("arg_delete", [True, False])
     def test_convert_pickles_to_npz(self, tmp_path, hef_gdir, arg_delete):
         """Pickles are rewritten into the npz store and then removed,
@@ -678,9 +737,13 @@ class TestDeltaServer:
         calls = []
 
         def fake_file_downloader(www_path, **kwargs):
-            calls.append(www_path)
             local = os.path.join(server, www_path.replace(self.BASE_URL, ""))
-            return local if os.path.isfile(local) else None
+            if not os.path.isfile(local):
+                # probe misses (e.g. the .zip probe on a tar-only server)
+                # are not fetches, so don't count them
+                return None
+            calls.append(www_path)
+            return local
 
         monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
         monkeypatch.setattr(_downloads, "_prepro_bundle_format", {})
@@ -908,9 +971,11 @@ class TestParentChain:
         calls = []
 
         def fake_file_downloader(www_path, **kwargs):
-            calls.append(www_path)
             local = server / www_path.replace(self.HOST, "")
-            return str(local) if local.is_file() else None
+            if not local.is_file():
+                return None  # probe misses are not fetches
+            calls.append(www_path)
+            return str(local)
 
         monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
         monkeypatch.setattr(_downloads, "_prepro_bundle_format", {})
@@ -1081,7 +1146,7 @@ def test_level_consistency_mismatch(tmp_path):
 def _raw_manifest(gdir_dir, **overrides):
     """Writes a manifest as is, without `write_level_manifest` checks."""
     m = {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "kind": "delta",
         "rgi_id": "RGI60-11.00897",
         "label": "L2",
@@ -1111,10 +1176,37 @@ def test_finalize_rejects_two_chains(tmp_path):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
 
 
-@pytest.mark.parametrize("version", ["2.0", 2])
+@pytest.mark.parametrize("version", ["3.0", 3])
 def test_finalize_rejects_newer_major(tmp_path, version):
     gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
     utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
     _raw_manifest(gdir_dir, schema_version=version)
-    with pytest.raises(InvalidWorkflowError, match="schema 2"):
+    with pytest.raises(InvalidWorkflowError, match="schema 3"):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
+
+
+def test_finalize_rejects_mixed_majors(tmp_path):
+    """A schema 1 (v1 tar layout) root can't carry a schema 2 delta."""
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+    # the id leaves the schema out, so the chain itself stays valid
+    m = _manifest(gdir_dir / "L1.manifest.json")
+    m["schema_version"] = "1.0"
+    with open(gdir_dir / "L1.manifest.json", "w") as f:
+        json.dump(m, f)
+    utils.write_level_manifest(gdir_dir, "L2", {}, parent="L1", **_DS)
+    with pytest.raises(InvalidWorkflowError, match="schemas 1 and 2"):
+        utils._workflow._finalize_merged_dir(str(gdir_dir))
+
+
+def test_finalize_accepts_schema_1_chain(tmp_path):
+    """Trees published before schema 2 still layer."""
+    gdir_dir = _make_fake_gdir(tmp_path / "RGI60-11.00897")
+    utils.write_level_manifest(gdir_dir, "L1", {}, kind="standalone", **_DS)
+    utils.write_level_manifest(gdir_dir, "L2", {}, parent="L1", **_DS)
+    for label in ("L1", "L2"):
+        m = _manifest(gdir_dir / f"{label}.manifest.json")
+        m["schema_version"] = "1.0"
+        with open(gdir_dir / f"{label}.manifest.json", "w") as f:
+            json.dump(m, f)
+    utils._workflow._finalize_merged_dir(str(gdir_dir))

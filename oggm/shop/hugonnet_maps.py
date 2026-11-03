@@ -21,6 +21,7 @@ except ImportError:
 
 
 from oggm import utils, cfg
+from oggm.core.gis import GriddedNcdfFile
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -181,7 +182,7 @@ def hugonnet_to_gdir(gdir, add_error=False):
         dem_ds.close()
 
     # Write
-    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         vn = 'hugonnet_dhdt'
         if vn in nc.variables:
@@ -213,7 +214,7 @@ def hugonnet_statistics(gdir):
     d['hugonnet_avg_dhdt'] = np.nan
 
     try:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             dhdt = ds['hugonnet_dhdt'].where(ds['glacier_mask'], np.nan).load()
             gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             d['hugonnet_area_km2'] = float((~dhdt.isnull()).sum() * gdir.grid.dx ** 2 * 1e-6)

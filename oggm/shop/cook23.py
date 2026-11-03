@@ -19,6 +19,7 @@ except ImportError:
 
 from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
+from oggm.core.gis import GriddedNcdfFile
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -87,7 +88,7 @@ def cook23_to_gdir(gdir, vars=['thk', 'divflux']):
         ds = ds[vars].load()
 
     # Reproject and write
-    with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+    with GriddedNcdfFile(gdir) as nc:
 
         for var in vars:
 
@@ -131,7 +132,7 @@ def cook23_statistics(gdir):
     d['cook23_perc_cov'] = 0
 
     try:
-        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+        with gdir.open_group('gridded_data') as ds:
             thick = ds['cook23_thk'].where(ds['glacier_mask'], np.nan).load()
             gridded_area = ds['glacier_mask'].sum() * gdir.grid.dx ** 2 * 1e-6
             with warnings.catch_warnings():
