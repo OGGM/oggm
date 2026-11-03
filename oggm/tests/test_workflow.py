@@ -1,7 +1,6 @@
 import os
 import shutil
 from packaging.version import Version
-import pickle
 import warnings
 import pytest
 import json
@@ -22,7 +21,7 @@ import oggm.cfg as cfg
 from oggm import workflow
 from oggm.utils import get_demo_file, write_centerlines_to_shape, ModelSettings
 from oggm.tests import mpl_image_compare, TEMP_BIAS_FILE_W5E5_RGI6
-from oggm.tests.funcs import get_test_dir, use_multiprocessing, characs_apply_func
+from oggm.tests.funcs import use_multiprocessing, characs_apply_func
 from oggm.shop import cru
 from oggm.core import flowline, gis, inversion, centerlines, massbalance
 from oggm import tasks
@@ -36,28 +35,10 @@ from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
 
 # Globals
 pytestmark = pytest.mark.test_env("workflow")
-_TEST_DIR = os.path.join(get_test_dir(), 'tmp_workflow')
-CLI_LOGF = os.path.join(_TEST_DIR, 'clilog.pkl')
 
 
-def clean_dir(testdir):
-    shutil.rmtree(testdir)
-    os.makedirs(testdir)
-
-
-def up_to_climate(reset=False, use_mp=None, params_file=None,
-                  round_smoothed_dem=True):
-    """Run the tasks you want."""
-
-    # test directory
-    if not os.path.exists(_TEST_DIR):
-        os.makedirs(_TEST_DIR)
-    if reset:
-        clean_dir(_TEST_DIR)
-
-    if not os.path.exists(CLI_LOGF):
-        with open(CLI_LOGF, 'wb') as f:
-            pickle.dump('none', f)
+def _init_cfg(working_dir, params_file=None, round_smoothed_dem=True):
+    """Set cfg for the Oetztal test glaciers and return their outlines."""
 
     # Init
     cfg.initialize(file=params_file)
@@ -71,7 +52,7 @@ def up_to_climate(reset=False, use_mp=None, params_file=None,
         cfg.PARAMS['use_multiprocessing'] = use_mp
 
     # Working dir
-    cfg.PATHS['working_dir'] = _TEST_DIR
+    cfg.PATHS['working_dir'] = str(working_dir)
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 
@@ -99,9 +80,6 @@ def up_to_climate(reset=False, use_mp=None, params_file=None,
     # Here as well - we don't do the custom RGI IDs anymore
     rgidf = rgidf.loc[['_d0' not in d for d in rgidf.RGIId]].copy()
 
-    # Be sure data is downloaded
-    cru.get_cru_cl_file()
-
     # Params
     cfg.PARAMS['border'] = 70
     cfg.PARAMS['prcp_fac'] = 1.75
@@ -117,63 +95,83 @@ def up_to_climate(reset=False, use_mp=None, params_file=None,
     # switch off the length filtering (min_ice_thick_for_length default is 2)
     cfg.PARAMS['min_ice_thick_for_length'] = 0
 
-    # Go
-    gdirs = workflow.init_glacier_directories(rgidf)
-
-    try:
-        tasks.catchment_width_correction(gdirs[0])
-    except Exception:
-        reset = True
-
-    if reset:
-        # First preprocessing tasks
-        workflow.gis_prepro_tasks(gdirs)
-
-    return gdirs
+    return rgidf
 
 
-def up_to_inversion(reset=False, params_file=None, round_smoothed_dem=True):
-    """Run the tasks you want."""
+def _open_gdirs(src_wd, dst_wd, **cfg_kwargs):
+    """Copy a built working dir to dst_wd and open its gdirs there."""
+    shutil.copytree(src_wd, dst_wd, dirs_exist_ok=True)
+    rgidf = _init_cfg(dst_wd, **cfg_kwargs)
+    return workflow.init_glacier_directories(rgidf)
 
-    gdirs = up_to_climate(reset=reset, params_file=params_file,
-                          round_smoothed_dem=round_smoothed_dem)
 
-    with open(CLI_LOGF, 'rb') as f:
-        clilog = pickle.load(f)
+@pytest.fixture(scope="module")
+def built_wd(tmp_path_factory):
+    """Build each working dir once per module, on first request.
 
-    if clilog != 'histalp':
-        reset = True
-    else:
+    Call it with ``'climate'`` (GIS prepro) or ``'inversion'`` (GIS prepro,
+    HISTALP climate and inversion), and ``round_smoothed_dem``. Tests must not
+    write to the returned dir: open a copy with ``_open_gdirs``.
+    """
+    cache = {}
+
+    def build(stage, round_smoothed_dem=True):
+        key = (stage, round_smoothed_dem)
+        if key in cache:
+            return cache[key]
+        wd = tmp_path_factory.mktemp(f"{stage}_{round_smoothed_dem}")
+        old_cfg = cfg.pack_config()
         try:
-            tasks.prepare_for_inversion(gdirs[0])
-        except Exception:
-            reset = True
+            if stage == "climate":
+                rgidf = _init_cfg(wd, round_smoothed_dem=round_smoothed_dem)
+                # Be sure data is downloaded
+                cru.get_cru_cl_file()
+                gdirs = workflow.init_glacier_directories(rgidf)
+                workflow.gis_prepro_tasks(gdirs)
+            elif stage == "inversion":
+                # replaces up_to_inversion
+                gdirs = _open_gdirs(
+                    build("climate", round_smoothed_dem),
+                    wd,
+                    round_smoothed_dem=round_smoothed_dem,
+                )
+                # Use histalp for the actual inversion test
+                cfg.PARAMS["baseline_climate"] = "HISTALP"
+                workflow.climate_tasks(
+                    gdirs, overwrite_gdir=True, override_missing=-500
+                )
+                workflow.inversion_tasks(gdirs)
+            else:
+                raise ValueError(stage)
+        finally:
+            cfg.unpack_config(old_cfg)
+        cache[key] = wd
+        return wd
 
-    if reset:
-        # Use histalp for the actual inversion test
-        cfg.PARAMS['baseline_climate'] = 'HISTALP'
-        workflow.climate_tasks(gdirs, overwrite_gdir=True,
-                               override_missing=-500)
-        with open(CLI_LOGF, 'wb') as f:
-            pickle.dump('histalp', f)
-
-        # Inversion
-        workflow.inversion_tasks(gdirs)
-
-    return gdirs
+    return build
 
 
-def random_for_plot(round_smoothed_dem=True):
+@pytest.fixture
+def climate_gdirs(built_wd, tmp_path):
+    return _open_gdirs(built_wd("climate"), tmp_path / "wd")
 
-    # Fake Reset (all these tests are horribly coded)
-    try:
-        with open(CLI_LOGF, 'wb') as f:
-            pickle.dump('none', f)
-    except FileNotFoundError:
-        pass
-    gdirs = up_to_inversion(reset=True,
-                            round_smoothed_dem=round_smoothed_dem)
 
+@pytest.fixture
+def inversion_gdirs(built_wd, tmp_path):
+    return _open_gdirs(built_wd("inversion"), tmp_path / "wd")
+
+
+@pytest.fixture
+def inversion_gdirs_unrounded(built_wd, tmp_path):
+    # The plot reference images were made with an unrounded topo_smoothed
+    return _open_gdirs(
+        built_wd("inversion", round_smoothed_dem=False),
+        tmp_path / "wd",
+        round_smoothed_dem=False,
+    )
+
+
+def random_for_plot(gdirs):
     workflow.execute_entity_task(flowline.init_present_time_glacier, gdirs)
     workflow.execute_entity_task(flowline.run_random_climate, gdirs, y0=1985,
                                  nyears=10, seed=0, output_filesuffix='_plot')
@@ -185,15 +183,15 @@ def _write_and_read_shp(gdirs, path, reader=salem.read_shapefile, **kwargs):
     write_centerlines_to_shape(gdirs, path=str(path), **kwargs)
     shp = reader(path)
     assert shp is not None
-    return shp.loc[shp.RGIID == 'RGI60-11.00897']
+    return shp.loc[shp.RGIID == "RGI60-11.00897"]
 
 
 @pytest.mark.slow
 class TestFullRun:
 
-    def test_some_characs(self):
+    def test_some_characs(self, inversion_gdirs):
 
-        gdirs = up_to_inversion(reset=True)
+        gdirs = inversion_gdirs
 
         # Test the glacier charac
         dfc = utils.compile_glacier_statistics(gdirs,
@@ -216,12 +214,14 @@ class TestFullRun:
         assert np.all(0 < dfc['1980-2010_aar'])
         assert np.all(0.6 > dfc['1980-2010_aar'])
 
-    def test_calibrate_inversion_from_consensus(self):
+    def test_calibrate_inversion_from_consensus(self, built_wd, tmp_path):
 
         # test mini params file, define path relative to file location
         fp_mini_params = os.path.join(os.path.dirname(__file__),
                                       'mini_params_for_test.cfg')
-        gdirs = up_to_inversion(params_file=fp_mini_params)
+        gdirs = _open_gdirs(
+            built_wd("inversion"), tmp_path / "wd", params_file=fp_mini_params
+        )
 
         # check if mini params file is used as expected
         assert cfg.PARAMS['lru_maxsize'] == 123
@@ -324,9 +324,9 @@ class TestFullRun:
     @pytest.mark.parametrize(
         'flowlines_output', [False, True], ids=['centerlines', 'flowlines']
     )
-    def test_shapefile_lines(self, tmp_path, flowlines_output):
+    def test_shapefile_lines(self, climate_gdirs, tmp_path, flowlines_output):
 
-        gdirs = up_to_climate(use_mp=True)
+        gdirs = climate_gdirs
 
         shp = _write_and_read_shp(
             gdirs, tmp_path / 'lines.shp', flowlines_output=flowlines_output
@@ -344,9 +344,9 @@ class TestFullRun:
         ['geometrical_widths_output', 'corrected_widths_output'],
         ids=['geom', 'corr'],
     )
-    def test_shapefile_widths(self, tmp_path, output):
+    def test_shapefile_widths(self, climate_gdirs, tmp_path, output):
 
-        gdirs = up_to_climate(use_mp=True)
+        gdirs = climate_gdirs
 
         # Salem can't read it
         shp_w = _write_and_read_shp(
@@ -357,9 +357,9 @@ class TestFullRun:
         )
         assert len(shp_w) == 91
 
-    def test_shapefile_exterior_match(self, tmp_path):
+    def test_shapefile_exterior_match(self, climate_gdirs, tmp_path):
 
-        gdirs = up_to_climate(use_mp=True)
+        gdirs = climate_gdirs
 
         fpath = str(tmp_path / 'centerlines_ext.shp')
         write_centerlines_to_shape(gdirs, path=fpath,
@@ -384,9 +384,9 @@ class TestFullRun:
         assert_allclose(shp_ext['LE_SEGMENT'], shp_ext_smooth['LE_SEGMENT'],
                         rtol=0.25)
 
-    def test_shapefile_missing_centerlines(self):
+    def test_shapefile_missing_centerlines(self, climate_gdirs):
 
-        gdirs = up_to_climate(use_mp=True)
+        gdirs = climate_gdirs
 
         # Test that one wrong glacier still works
         base_dir = os.path.join(cfg.PATHS['working_dir'], 'dummy_pergla')
@@ -402,14 +402,9 @@ class TestFullRun:
         cfg.PARAMS['continue_on_error'] = True
         write_centerlines_to_shape(gdirs)
 
-    def test_random(self):
+    def test_random(self, inversion_gdirs):
 
-        # Fake Reset (all these tests are horribly coded)
-        if not os.path.exists(_TEST_DIR):
-            os.makedirs(_TEST_DIR)
-        with open(CLI_LOGF, 'wb') as f:
-            pickle.dump('none', f)
-        gdirs = up_to_inversion(reset=False)
+        gdirs = inversion_gdirs
 
         # First tests
         df = utils.compile_glacier_statistics(gdirs)
@@ -494,11 +489,10 @@ class TestFullRun:
 
 
 @pytest.mark.slow
-def test_merge_gridded_data():
-    gdirs = up_to_inversion()
-    workflow.execute_entity_task(tasks.distribute_thickness_per_altitude,
-                                 gdirs
-                                 )
+def test_merge_gridded_data(inversion_gdirs):
+
+    gdirs = inversion_gdirs
+    workflow.execute_entity_task(tasks.distribute_thickness_per_altitude, gdirs)
     ds_merged = workflow.merge_gridded_data(
         gdirs,
         included_variables='distributed_thickness',
@@ -548,90 +542,87 @@ def test_merge_gridded_data():
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(remove_text=True, multi=True)
-def test_plot_region_inversion():
+def test_plot_region_inversion(inversion_gdirs_unrounded):
 
     pytest.importorskip('pytest_mpl')
 
-    try:
-        # The reference image was made with an unrounded topo_smoothed
-        gdirs = up_to_inversion(reset=True, round_smoothed_dem=False)
+    gdirs = inversion_gdirs_unrounded
 
-        # We prepare for the plot, which needs our own map to proceed.
-        # Lets do a local mercator grid
-        g = salem.mercator_grid(center_ll=(10.86, 46.85),
-                                extent=(27000, 21000))
-        # And a map accordingly
-        sm = salem.Map(g, countries=False)
-        sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+    # TODO: refactor this, it's reused elsewhere
+    # We prepare for the plot, which needs our own map to proceed.
+    # Lets do a local mercator grid
+    g = salem.mercator_grid(center_ll=(10.86, 46.85), extent=(27000, 21000))
 
-        # Give this to the plot function
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-        graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5,
-                                vmax=250)
+    # And a map accordingly
+    sm = salem.Map(g, countries=False)
+    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
-        # test automatic definition of larger plotting grid with
-        # extend_plot_limit
-        graphics.plot_inversion(gdirs, ax=ax2, linewidth=1.5, vmax=250,
-                                extend_plot_limit=True)
+    # Give this to the plot function
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_inversion(gdirs, smap=sm, ax=ax1, linewidth=1.5, vmax=250)
 
-        fig.tight_layout()
-        return fig
-    finally:
-        # Don't leave the unrounded gdirs for the next tests
-        clean_dir(_TEST_DIR)
+    # test automatic definition of larger plotting grid with extend_plot_limit
+    graphics.plot_inversion(
+        gdirs, ax=ax2, linewidth=1.5, vmax=250, extend_plot_limit=True
+    )
+
+    fig.tight_layout()
+    return fig
 
 
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(remove_text=True, multi=True)
-def test_plot_region_model():
+def test_plot_region_model(inversion_gdirs_unrounded):
 
     pytest.importorskip('pytest_mpl')
 
-    try:
-        # The reference image was made with an unrounded topo_smoothed
-        gdirs = random_for_plot(round_smoothed_dem=False)
+    gdirs = random_for_plot(inversion_gdirs_unrounded)
 
-        dfc = utils.compile_task_log(gdirs,
-                                     task_names=['run_random_climate_plot'])
-        assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
+    dfc = utils.compile_task_log(gdirs, task_names=['run_random_climate_plot'])
+    assert np.all(dfc['run_random_climate_plot'] == 'SUCCESS')
 
-        # We prepare for the plot, which needs our own map to proceed.
-        # Lets do a local mercator grid
-        g = salem.mercator_grid(center_ll=(10.86, 46.85),
-                                extent=(27000, 21000))
-        # And a map accordingly
-        sm = salem.Map(g, countries=False)
-        sm.set_topography(get_demo_file('srtm_oetztal.tif'))
+    # We prepare for the plot, which needs our own map to proceed.
+    # Lets do a local mercator grid
+    g = salem.mercator_grid(center_ll=(10.86, 46.85), extent=(27000, 21000))
 
-        # Give this to the plot function
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
-        graphics.plot_modeloutput_map(gdirs, smap=sm, ax=ax1,
-                                      filesuffix='_plot', vmax=250,
-                                      modelyr=10, linewidth=1.5)
-        # test automatic definition of larger plotting grid with
-        # extend_plot_limit
-        graphics.plot_modeloutput_map(gdirs, ax=ax2,
-                                      filesuffix='_plot', vmax=250,
-                                      modelyr=10, linewidth=1.5,
-                                      extend_plot_limit=True)
+    # And a map accordingly
+    sm = salem.Map(g, countries=False)
+    sm.set_topography(get_demo_file('srtm_oetztal.tif'))
 
-        fig.tight_layout()
-        return fig
-    finally:
-        # Don't leave the unrounded gdirs for the next tests
-        clean_dir(_TEST_DIR)
+    # Give this to the plot function
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    graphics.plot_modeloutput_map(
+        gdirs,
+        smap=sm,
+        ax=ax1,
+        filesuffix="_plot",
+        vmax=250,
+        modelyr=10,
+        linewidth=1.5,
+    )
+    # test automatic definition of larger plotting grid with
+    # extend_plot_limit
+    graphics.plot_modeloutput_map(
+        gdirs,
+        ax=ax2,
+        filesuffix="_plot",
+        vmax=250,
+        modelyr=10,
+        linewidth=1.5,
+        extend_plot_limit=True,
+    )
+
+    fig.tight_layout()
+    return fig
 
 
-def test_rgi7_glacier_dirs():
-    # create test dir
-    if not os.path.exists(_TEST_DIR):
-        os.makedirs(_TEST_DIR)
+def test_rgi7_glacier_dirs(tmp_path):
     # initialize
     cfg.initialize()
     # Set intersects
     cfg.set_intersects_db(gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp')))
-    cfg.PATHS['working_dir'] = _TEST_DIR
+    cfg.PATHS['working_dir'] = str(tmp_path)
     # load and read test data
     hef_rgi7_df = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
     # create GDIR
@@ -649,13 +640,10 @@ def test_rgi7_glacier_dirs():
     assert gdir.utm_zone == 32
 
 
-def test_rgi7_complex_glacier_dirs():
-    # create test dir
-    if not os.path.exists(_TEST_DIR):
-        os.makedirs(_TEST_DIR)
+def test_rgi7_complex_glacier_dirs(tmp_path):
     # initialize
     cfg.initialize()
-    cfg.PATHS['working_dir'] = _TEST_DIR
+    cfg.PATHS['working_dir'] = str(tmp_path)
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PARAMS['border'] = 5
 
