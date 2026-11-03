@@ -11,8 +11,33 @@ on:
       - dev
 
 jobs:
+  # Check if only changelog has been modified
+  changes:
+    name: Detect docs-only changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - name: List changed files
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$PR" ]; then
+            files=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate -q '.[].filename') || files=""
+          else
+            files=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" -q '.files[].filename') || files=""
+          fi
+          if [ "$files" = "docs/whats-new.rst" ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
   test:
     name: ${{ matrix.test-env }} on ${{ matrix.container }}
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +70,8 @@ jobs:
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
+        # this job passes automatically if only the changelog was modified
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         timeout-minutes: 60
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
         env:
@@ -66,7 +93,7 @@ jobs:
           name: "${{ steps.sanitize-name.outputs.sanitized_name }}"
           path: /tmp/oggm-mpl-results/
       - name: Upload Coverage
-        if: ${{ !contains(matrix.container, 'py3') }}
+        if: ${{ needs.changes.outputs.docs_only != 'true' && !contains(matrix.container, 'py3') }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -75,7 +102,8 @@ jobs:
         run: coveralls
   finish-coveralls:
     name: Coveralls Finished
-    needs: test
+    needs: [changes, test]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     container: python:3.12-slim
     continue-on-error: true
