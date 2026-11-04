@@ -1449,10 +1449,10 @@ class TestWorkflowUtils:
                                         input_filesuffix=filesuffix)
         check_result(ds_2)
 
-    def test_compile_to_netcdf_allows_failing_chunks(self, tmpdir, test_dir):
+    def test_compile_to_netcdf_allows_failing_chunks(self, tmpdir):
 
         logger = mock.Mock()
-        cfg.PATHS['working_dir'] = test_dir
+        cfg.PATHS['working_dir'] = str(tmpdir)
 
         @compile_to_netcdf(logger)
         def _compile_dummy(gdirs, path=True, **kwargs):
@@ -5214,11 +5214,9 @@ class TestELAComputation:
 
 class TestHefBase:
 
-    def test_built_fresh_per_session(self, hef_gdir_base, test_dir,
-                                     tmp_path_factory):
+    def test_built_fresh_per_session(self, hef_gdir_base, tmp_path_factory):
         # get_test_dir() outlives the session, so a base built there can carry
         # files from earlier tests or builds from older library code
-        assert not hef_gdir_base.dir.startswith(test_dir)
         basetemp = str(tmp_path_factory.getbasetemp())
         assert hef_gdir_base.dir.startswith(basetemp)
 
@@ -5236,25 +5234,22 @@ class TestColumbiaHelpers:
             ),
         ],
     )
-    def test_builds_in_base_dir(self, init, tmp_path, test_dir):
+    def test_builds_in_base_dir(self, init, tmp_path):
         # Builds in get_test_dir() are reused by later tests and sessions
         gdir = init(base_dir=str(tmp_path))
         assert gdir.dir.startswith(str(tmp_path))
-        assert not gdir.dir.startswith(test_dir)
 
 
 class TestCaseDirs:
     """Tests that the case directories are temporary."""
 
     # ``get_test_dir()`` returns persistent directories.
-    def test_case_dir_is_temporary(self, case_dir, test_dir, tmp_path_factory):
-        assert not case_dir.startswith(test_dir)
+    def test_case_dir_is_temporary(self, case_dir, tmp_path_factory):
         assert case_dir.startswith(str(tmp_path_factory.getbasetemp()))
 
     def test_class_case_dir_is_temporary(
-        self, class_case_dir, test_dir, tmp_path_factory
+        self, class_case_dir, tmp_path_factory
     ):
-        assert not class_case_dir.startswith(test_dir)
         assert class_case_dir.startswith(str(tmp_path_factory.getbasetemp()))
 
 

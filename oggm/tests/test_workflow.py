@@ -675,16 +675,27 @@ def test_rgi7_complex_glacier_dirs(tmp_path):
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
 
+
 @pytest.fixture(scope='class')
-def with_class_wd(request, test_dir, hef_gdir):
+def with_class_wd(request, tmp_path_factory, hef_gdir):
     # dependency on hef_gdir to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
-    cfg.PATHS['working_dir'] = os.path.join(
-        test_dir, request.cls.__name__ + '_wd')
-    utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+    cfg.PATHS['working_dir'] = str(
+        tmp_path_factory.mktemp(request.cls.__name__ + '_wd')
+    )
     yield
     # teardown
     cfg.PATHS['working_dir'] = prev_wd
+
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestClassWorkingDir:
+
+    # ``get_test_dir()`` outlives the session, so files left there leak
+    # into later tests and sessions.
+    def test_is_temporary(self, tmp_path_factory):
+        wd = cfg.PATHS['working_dir']
+        assert wd.startswith(str(tmp_path_factory.getbasetemp()))
 
 
 @pytest.mark.usefixtures('with_class_wd')

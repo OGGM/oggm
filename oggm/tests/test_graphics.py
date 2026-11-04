@@ -1,9 +1,7 @@
 import warnings
 
 import pytest
-import shutil
 
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -14,7 +12,7 @@ pytest.importorskip('pytest_mpl')
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import init_columbia_eb, get_test_dir
+from oggm.tests.funcs import init_columbia_eb
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
                        massbalance)
@@ -164,12 +162,10 @@ def test_inversion(hef_unrounded_gdir):
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_multiple_inversion():
+def test_multiple_inversion(tmp_path):
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_mdir')
-    if not os.path.exists(testdir):
-        os.makedirs(testdir)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -199,7 +195,6 @@ def test_multiple_inversion():
     fig, ax = plt.subplots()
     graphics.plot_inversion(gdirs, ax=ax)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig
 
 
@@ -250,11 +245,10 @@ def test_modeloutput_map(hef_unrounded_gdir):
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_multiple_models():
+def test_multiple_models(tmp_path):
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_mdir')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -291,7 +285,6 @@ def test_multiple_models():
     graphics.plot_modeloutput_map(gdirs, ax=ax, model=models)
     fig.tight_layout()
 
-    shutil.rmtree(testdir)
     return fig
 
 
@@ -367,10 +360,9 @@ def test_catch_areas(hef_gdir):
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_chhota_shigri():
+def test_chhota_shigri(tmp_path):
 
-    testdir = os.path.join(get_test_dir(), 'tmp_chhota')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -405,17 +397,15 @@ def test_chhota_shigri():
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdirs, ax=ax, model=models)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig
 
 
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_ice_cap():
+def test_ice_cap(tmp_path):
 
-    testdir = os.path.join(get_test_dir(), 'tmp_icecap')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     cfg.initialize()
     cfg.PARAMS['round_smoothed_dem'] = False
@@ -443,17 +433,15 @@ def test_ice_cap():
     graphics.plot_catchment_width(gdirs, ax=ax, add_intersects=True,
                                   add_touches=True, smap=smap)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig
 
 
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_coxe():
+def test_coxe(tmp_path):
 
-    testdir = os.path.join(get_test_dir(), 'tmp_coxe')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -506,5 +494,4 @@ def test_coxe():
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdir, ax=ax, model=model)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig

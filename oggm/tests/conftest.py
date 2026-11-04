@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 from oggm import cfg, tasks
 from oggm.core import flowline
-from oggm.tests.funcs import init_hef, get_test_dir
+from oggm.tests.funcs import init_hef
 from oggm import utils
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 from oggm.workflow import reset_multiprocessing
@@ -197,17 +197,6 @@ def dummy_constant_bed():
     line = shpg.LineString(np.vstack([coords, coords * 0.]).T)
     return [flowline.RectangularBedFlowline(line, dx, map_dx, surface_h,
                                             bed_h, widths)]
-
-
-@pytest.fixture(scope='session')
-def test_dir():
-    """ Provides a reference to the test directory for the entire test session.
-
-        Named after the current git revision.
-        As a session-scoped fixture, this will only be created once and
-        then injected to each test that depends on it.
-    """
-    return get_test_dir()
 
 
 def _setup_case_dir(call, tmp_path_factory):
