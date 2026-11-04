@@ -319,9 +319,11 @@ def test_thick_interp(hef_unrounded_gdir):
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_thick_elev_bands():
+def test_thick_elev_bands(tmp_path):
     fig, ax = plt.subplots()
-    gdir = init_columbia_eb(dir_name='test_thick_eb', round_dem=False)
+    gdir = init_columbia_eb(
+        dir_name='test_thick_eb', round_dem=False, base_dir=str(tmp_path)
+    )
     workflow.inversion_tasks(utils.tolist(gdir))
     inversion.distribute_thickness_per_altitude(gdir, smooth_radius=None)
     graphics.plot_distributed_thickness(gdir, ax=ax)
@@ -330,10 +332,10 @@ def test_thick_elev_bands():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-@pytest.mark.xfail
-def test_model_section_calving():
-    # I have no clue why this test fails on gh sometimes
-    gdir = init_columbia_eb(dir_name='test_thick_eb', round_dem=False)
+def test_model_section_calving(tmp_path):
+    gdir = init_columbia_eb(
+        dir_name='test_thick_eb', round_dem=False, base_dir=str(tmp_path)
+    )
     workflow.inversion_tasks(utils.tolist(gdir))
     flowline.init_present_time_glacier(gdir)
 

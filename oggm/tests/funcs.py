@@ -561,13 +561,21 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     return gdir
 
 
-def init_columbia(reset=False):
+def init_columbia(reset=False, base_dir=None):
+    """
+    Parameters
+    ----------
+    base_dir : str, optional
+        Directory to build into. Defaults to ``get_test_dir()``, which
+        is kept across sessions, so pass a temporary directory to start
+        from a fresh build.
+    """
 
     from oggm.core import gis, centerlines
     import geopandas as gpd
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_columbia')
+    testdir = os.path.join(base_dir or get_test_dir(), 'tmp_columbia')
     if not os.path.exists(testdir):
         os.makedirs(testdir)
         reset = True
@@ -602,13 +610,21 @@ def init_columbia(reset=False):
     return gdir
 
 
-def init_columbia_eb(dir_name, reset=False, round_dem=True):
+def init_columbia_eb(dir_name, reset=False, round_dem=True, base_dir=None):
+    """
+    Parameters
+    ----------
+    base_dir : str, optional
+        Directory to build into. Defaults to ``get_test_dir()``, which
+        is kept across sessions, so pass a temporary directory to start
+        from a fresh build.
+    """
 
     from oggm.core import gis, centerlines
     import geopandas as gpd
 
     # test directory
-    testdir = os.path.join(get_test_dir(), dir_name)
+    testdir = os.path.join(base_dir or get_test_dir(), dir_name)
     mkdir(testdir, reset=reset)
 
     # Init

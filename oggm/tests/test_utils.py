@@ -27,7 +27,8 @@ from oggm.cfg import SEC_IN_YEAR
 from oggm.utils._workflow import compile_to_netcdf
 from oggm.tests import TEMP_BIAS_FILE_W5E5_RGI6, GEODETIC_MB_REGIONAL_AVG
 from oggm.tests.funcs import (TempEnvironmentVariable,
-                              characs_apply_func)
+                              characs_apply_func, init_columbia,
+                              init_columbia_eb)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
                              InvalidWorkflowError,
@@ -5222,17 +5223,37 @@ class TestHefBase:
         assert hef_gdir_base.dir.startswith(basetemp)
 
 
+class TestColumbiaHelpers:
+
+    @pytest.mark.parametrize(
+        "init",
+        [
+            pytest.param(
+                lambda **kw: init_columbia_eb("eb", **kw), id="init_columbia_eb"
+            ),
+            pytest.param(
+                init_columbia, id="init_columbia", marks=pytest.mark.slow
+            ),
+        ],
+    )
+    def test_builds_in_base_dir(self, init, tmp_path, test_dir):
+        # Builds in get_test_dir() are reused by later tests and sessions
+        gdir = init(base_dir=str(tmp_path))
+        assert gdir.dir.startswith(str(tmp_path))
+        assert not gdir.dir.startswith(test_dir)
+
+
 class TestCaseDirs:
     """Tests that the case directories are temporary."""
-    
+
     # ``get_test_dir()`` returns persistent directories.
-    def test_case_dir_is_temporary(self, case_dir, test_dir,
-                                   tmp_path_factory):
+    def test_case_dir_is_temporary(self, case_dir, test_dir, tmp_path_factory):
         assert not case_dir.startswith(test_dir)
         assert case_dir.startswith(str(tmp_path_factory.getbasetemp()))
 
-    def test_class_case_dir_is_temporary(self, class_case_dir, test_dir,
-                                         tmp_path_factory):
+    def test_class_case_dir_is_temporary(
+        self, class_case_dir, test_dir, tmp_path_factory
+    ):
         assert not class_case_dir.startswith(test_dir)
         assert class_case_dir.startswith(str(tmp_path_factory.getbasetemp()))
 
