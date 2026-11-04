@@ -353,10 +353,10 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
 
 
 @pytest.fixture(scope="class")
-def hef_unrounded_gdir(hef_gdir_base_unrounded, class_case_dir):
+def hef_unrounded_gdir(hef_unrounded_gdir_base, class_case_dir):
     """Same as hef_gdir but with an unrounded topo_smoothed."""
     return tasks.copy_to_basedir(
-        hef_gdir_base_unrounded, base_dir=class_case_dir, setup="all"
+        hef_unrounded_gdir_base, base_dir=class_case_dir, setup="all"
     )
 
 
