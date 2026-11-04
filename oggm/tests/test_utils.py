@@ -5222,6 +5222,21 @@ class TestHefBase:
         assert hef_gdir_base.dir.startswith(basetemp)
 
 
+class TestCaseDirs:
+    """Tests that the case directories are temporary."""
+    
+    # ``get_test_dir()`` returns persistent directories.
+    def test_case_dir_is_temporary(self, case_dir, test_dir,
+                                   tmp_path_factory):
+        assert not case_dir.startswith(test_dir)
+        assert case_dir.startswith(str(tmp_path_factory.getbasetemp()))
+
+    def test_class_case_dir_is_temporary(self, class_case_dir, test_dir,
+                                         tmp_path_factory):
+        assert not class_case_dir.startswith(test_dir)
+        assert class_case_dir.startswith(str(tmp_path_factory.getbasetemp()))
+
+
 class TestShapefileTar:
 
     def test_keeps_siblings(self, tmp_path, hef_gdir):
