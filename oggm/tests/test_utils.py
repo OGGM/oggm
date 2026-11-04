@@ -27,7 +27,7 @@ from oggm import cfg
 from oggm.cfg import SEC_IN_YEAR
 from oggm.utils._workflow import compile_to_netcdf
 from oggm.tests import TEMP_BIAS_FILE_W5E5_RGI6, GEODETIC_MB_REGIONAL_AVG
-from oggm.tests.funcs import (get_test_dir, init_hef, TempEnvironmentVariable,
+from oggm.tests.funcs import (get_test_dir, TempEnvironmentVariable,
                               characs_apply_func)
 from oggm.utils import shape_factor_adhikari
 from oggm.exceptions import (InvalidParamsError, InvalidDEMError,
@@ -1219,6 +1219,10 @@ class TestWorkflowTools(unittest.TestCase):
     def reset_dir(self):
         utils.mkdir(self.testdir, reset=True)
 
+    @pytest.fixture(autouse=True)
+    def _hef(self, hef_gdir):
+        self.hef_gdir = hef_gdir
+
     def test_leclercq_data(self):
 
         hef_file = utils.get_demo_file('Hintereisferner_RGI6.shp')
@@ -1232,7 +1236,7 @@ class TestWorkflowTools(unittest.TestCase):
 
     def test_glacier_statistics_and_climate(self):
 
-        gdir = init_hef()
+        gdir = self.hef_gdir
 
         df = utils.compile_glacier_statistics([gdir],
                                               apply_func=characs_apply_func,
@@ -1282,7 +1286,7 @@ class TestWorkflowTools(unittest.TestCase):
         # cfg.PARAMS isn't re-shipped on every multiprocessing task
         import pickle
 
-        gdir = init_hef()
+        gdir = self.hef_gdir
 
         state = gdir.__getstate__()
         assert 'settings' not in state
@@ -1306,7 +1310,7 @@ class TestWorkflowTools(unittest.TestCase):
         # end-to-end check that gdirs sent through a real worker pool
         # can still read settings correctly after being rebuilt via
         # GlacierDirectory.__setstate__
-        gdir = init_hef()
+        gdir = self.hef_gdir
         orig_prcp_fac = gdir.settings['prcp_fac']
         gdir.settings['prcp_fac'] = 42
 
@@ -1325,7 +1329,7 @@ class TestWorkflowTools(unittest.TestCase):
         # return value collected by execute_entity_task - with
         # multiprocessing this is what gets pickled back to the main process
         # and kept, one per glacier, until the whole region is done
-        gdir = init_hef()
+        gdir = self.hef_gdir
 
         assert _task_with_costly_return.workflow_return_value is False
         assert _task_with_cheap_return.workflow_return_value is True
@@ -5190,10 +5194,18 @@ class TestSkyIsFalling(unittest.TestCase):
 
 
 class TestELAComputation(unittest.TestCase):
+
+    @pytest.fixture(autouse=True)
+    def _hef(self, hef_gdir, class_case_dir):
+        self.hef_gdir = hef_gdir
+        # compile_ela writes into working_dir, which init_hef points to
+        # at the shared base
+        cfg.PATHS['working_dir'] = class_case_dir
+
     def test_computing_ela(self):
         from oggm.core.massbalance import MonthlyTIModel, compute_ela
 
-        gdir = init_hef()
+        gdir = self.hef_gdir
 
         ys = 1990
         ye = 2000
@@ -5216,7 +5228,7 @@ class TestELAComputation(unittest.TestCase):
             assert ela.shape == (1 + (ye - ys),)
 
     def test_compile(self):
-        gdir = init_hef()
+        gdir = self.hef_gdir
 
         ys = 1990
         ye = 2000
@@ -5228,6 +5240,17 @@ class TestELAComputation(unittest.TestCase):
         ela2 = pd.read_parquet(fpath.replace('.csv', '.parquet'))
 
         assert_allclose(ela1, ela2, rtol=1e-3)
+
+
+class TestHefBase:
+
+    def test_built_fresh_per_session(self, hef_gdir_base, test_dir,
+                                     tmp_path_factory):
+        # get_test_dir() outlives the session, so a base built there can carry
+        # files from earlier tests or builds from older library code
+        assert not hef_gdir_base.dir.startswith(test_dir)
+        basetemp = str(tmp_path_factory.getbasetemp())
+        assert hef_gdir_base.dir.startswith(basetemp)
 
 
 class TestShapefileTar:

@@ -421,7 +421,8 @@ def get_test_dir():
 
 
 def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
-             flowline_type='centerlines', round_smoothed_dem=True):
+             flowline_type='centerlines', round_smoothed_dem=True,
+             base_dir=None):
     """
 
     Parameters
@@ -437,6 +438,10 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
         set to False for the tests which were set up with an unrounded
         topo_smoothed (e.g. image comparisons). These use their own
         test directory.
+    base_dir : str, optional
+        Directory to build into. Defaults to ``get_test_dir()``, which
+        is kept across sessions, so pass a temporary directory to start
+        from a fresh build.
 
     Returns
     -------
@@ -447,9 +452,10 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     import geopandas as gpd
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_border{}'.format(border))
+    root = base_dir or get_test_dir()
+    testdir = os.path.join(root, 'tmp_border{}'.format(border))
     if rgi_id is not None:
-        testdir = os.path.join(get_test_dir(), f'tmp_border{border}_{rgi_id}')
+        testdir = os.path.join(root, f'tmp_border{border}_{rgi_id}')
     if not round_smoothed_dem:
         testdir += '_norsd'
 
