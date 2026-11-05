@@ -166,6 +166,24 @@ class Test_millan22:
         assert df['millan_vel_perc_cov'] > 0.92
         assert df['millan_vol_km3'] > 174
 
+        # reuse vx/vy because the test server doesn't have error files
+        lookup = millan22._get_lookup_velocity().copy()
+        lookup["err_vx"] = lookup["vx"]
+        lookup["err_vy"] = lookup["vy"]
+        # duplicate rows to cover the else block
+        lookup = pd.concat([lookup, lookup], ignore_index=True)
+        monkeypatch.setattr(millan22, "_lookup_velocity", lookup)
+
+        millan22.millan_velocity_to_gdir(gdir, add_error=True)
+
+        with xr.open_dataset(gdir.get_filepath("gridded_data")) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            err_vx = ds.millan_err_vx.where(mask).data
+            err_vy = ds.millan_err_vy.where(mask).data
+
+        assert np.isfinite(err_vx).sum() / mask.sum() > 0.9
+        assert np.isfinite(err_vy).sum() / mask.sum() > 0.9
+
 
 class Test_cook23:
 
