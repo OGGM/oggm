@@ -1,9 +1,6 @@
 # Python imports
-import unittest
 import numpy as np
 import pandas as pd
-import os
-import shutil
 import xarray as xr
 import pytest
 import oggm
@@ -17,7 +14,6 @@ gpd = pytest.importorskip('geopandas')
 import oggm.cfg as cfg
 from oggm import tasks, utils, workflow
 from oggm.workflow import execute_entity_task
-from oggm.tests.funcs import get_test_dir
 from oggm.utils import get_demo_file
 from oggm.core import gis, centerlines
 from oggm.core.massbalance import ConstantMassBalance
@@ -27,7 +23,7 @@ pytestmark = pytest.mark.test_env("benchmark")
 do_plot = False
 
 
-class TestSouthGlacier(unittest.TestCase):
+class TestSouthGlacier:
 
     # Test case obtained from ITMIX
     # Data available at:
@@ -39,13 +35,11 @@ class TestSouthGlacier(unittest.TestCase):
     # dynamics and future prognosis of a slowly surging glacier.
     # The Cryosphere, 5, 299-313. DOI: 10.5194/tc-5-299-2011, 2011.
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self, tmp_path):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = str(tmp_path)
 
         # Init
         cfg.initialize()
@@ -58,16 +52,6 @@ class TestSouthGlacier(unittest.TestCase):
 
         self.tf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.tmp.dat.nc')
         self.pf = get_demo_file('cru_ts4.01.1901.2016.SouthGlacier.pre.dat.nc')
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def get_ref_data(self, gdir):
 
@@ -460,17 +444,15 @@ class TestSouthGlacier(unittest.TestCase):
 
 
 @pytest.mark.slow
-class TestCoxeGlacier(unittest.TestCase):
+class TestCoxeGlacier:
 
     # Test case for a tidewater glacier
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self, tmp_path):
 
         # test directory
-        self.testdir = os.path.join(get_test_dir(), 'tmp')
-        if not os.path.exists(self.testdir):
-            os.makedirs(self.testdir)
-        self.clean_dir()
+        self.testdir = str(tmp_path)
 
         self.rgi_file = get_demo_file('rgi_RGI50-01.10299.shp')
 
@@ -485,16 +467,6 @@ class TestCoxeGlacier(unittest.TestCase):
         cfg.PARAMS['prcp_fac'] = 2.5
         cfg.PARAMS['baseline_climate'] = 'CRU'
         cfg.PARAMS['evolution_model'] = 'FluxBased'
-
-    def tearDown(self):
-        self.rm_dir()
-
-    def rm_dir(self):
-        shutil.rmtree(self.testdir)
-
-    def clean_dir(self):
-        shutil.rmtree(self.testdir)
-        os.makedirs(self.testdir)
 
     def test_set_width(self):
         entity = gpd.read_file(self.rgi_file).iloc[0]
