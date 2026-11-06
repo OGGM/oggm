@@ -308,6 +308,9 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Changelog updates no longer trigger the entire test suite if a previous commit
+  passed its tests (:pull:`2028`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
