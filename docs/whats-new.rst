@@ -20,9 +20,9 @@ Enhancements
   rounded to the nearest meter before being written to ``dem.tif`` and to
   ``gridded_data.nc`` (``topo``). This saves a lot of disk space for DEMs
   stored as floats (e.g. COPDEM). The data type is unchanged (float32).
-  The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the 
-  same for ``topo_smoothed``: it saves about as much space again. 
-  This changes the results slightly. Set both to ``False`` to recover 
+  The new ``PARAMS['round_smoothed_dem']`` (``True`` per default) does the
+  same for ``topo_smoothed``: it saves about as much space again.
+  This changes the results slightly. Set both to ``False`` to recover
   the previous behavior (:pull:`2014`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``compute_downstream_line`` now also finds the domain exits located on
@@ -308,6 +308,11 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Adds a new ``DownloadOutageError`` exception, with a corresponding workflow to
+  indicate when this happens in pytest/GitHub Actions. This exception is raised
+  when a download fails due to a network outage, rather than a logic error
+  (:pull:`2012`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Bug fixes
 ~~~~~~~~~
@@ -424,6 +429,13 @@ Bug fixes
   ``error_during_run`` flags of the latter. Both files' attributes are now
   kept, the first file still winning on the keys they share (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Truncated downloads of tar files are now detected and redownloaded. This
+  would cause silent failures that could only be resolved by deleting OGGM's
+  cache (:pull:`2012`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
+- Fixed a urllib3 change which prevented downloads from retrying correctly
+  (:pull:`2012`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
@@ -534,7 +546,7 @@ Breaking changes
   supported by ``read_store`` (:pull:`1908`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 - New ``PARAMS['round_dem']`` and ``PARAMS['round_smoothed_dem']`` params
-  changed a bit the centerlines and downstream lines results. This is most 
+  changed a bit the centerlines and downstream lines results. This is most
   noticeable in the centerlines representation (:pull:`2014`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - OGGM now requires Python 3.12 or newer (:pull:`1951`).

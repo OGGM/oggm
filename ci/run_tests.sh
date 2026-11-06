@@ -35,8 +35,12 @@ export COVERAGE_RCFILE="$PWD/.coveragerc"
 
 coverage erase
 
+rc=0  # to separate logic failures from download outage
 coverage run --source=./oggm --parallel-mode --module \
-    pytest --verbose --durations=0 --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm
+    pytest --verbose --durations=0 --mpl-results-path="/tmp/oggm-mpl-results/${MPL_OUTPUT_OGGM_SUBDIR/:/_}/${OGGM_TEST_ENV/:/_}" $OGGM_MPL --run-slow --run-test-env $OGGM_TEST_ENV oggm || rc=$?
+# 75: every failure was a download outage (this error code is defined in conftest)
+[[ $rc == 75 ]] && echo "::error title=Infrastructure outage::all failures were caused by download outages. Please retry the tests later."
+[[ $rc == 0 ]] || exit $rc
 
 coverage combine
 coverage xml
