@@ -859,7 +859,37 @@ class TestCenterlines:
             # In this case the fit is simply very good (plot it if you want!)
             assert utils.rmsd(zref, myz) < 20
 
+        # Trapezoid lambdas fitted to the valley, within the allowed range
+        lam = out['lambdas']
+        assert len(lam) == len(out['w0s'])
+        assert np.all(lam >= cfg.PARAMS['downstream_min_lambda'])
+        assert np.all(lam <= cfg.PARAMS['downstream_max_lambda'])
+        assert np.all(out['w0s'] >= cfg.PARAMS['trapezoid_min_bottom_width'])
+        assert np.std(lam) > 0
+
         cfg.PARAMS['border'] = default_b
+
+    def test_trapezoid_from_parabola(self):
+
+        # The trapezoid matches the parabola at the terrain height h:
+        # same surface width and same cross section area
+        h = np.array([10., 50., 100., 200.])
+        ps = np.array([0.0005, 0.001, 0.003, 0.01])
+        lam = centerlines._trapezoidal_lambdas_from_parabola(h, ps, 0, 1e9)
+        w0 = centerlines._trapezoidal_bottom_width_from_terrain_cross_section_area(
+            h, ps, lam, 0)
+        w = 2 * np.sqrt(h / ps)
+        np.testing.assert_allclose(w0 + lam * h, w)
+        np.testing.assert_allclose((w0 + w) / 2 * h, 2 / 3 * w * h)
+        np.testing.assert_allclose(w0, w / 3)
+
+        # Clipped lambdas: the area is still preserved by the bottom width
+        lam = centerlines._trapezoidal_lambdas_from_parabola(h, ps, 1, 3)
+        assert np.all((lam >= 1) & (lam <= 3))
+        assert np.any(lam == 1) and np.any(lam == 3)
+        w0 = centerlines._trapezoidal_bottom_width_from_terrain_cross_section_area(
+            h, ps, lam, 0)
+        np.testing.assert_allclose((2 * w0 + lam * h) / 2 * h, 2 / 3 * w * h)
 
     @pytest.mark.slow
     def test_baltoro_centerlines(self):
@@ -2545,6 +2575,23 @@ class TestInversion:
 
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt1 = inversion.mass_conservation_inversion(gdir)
+
+        # Where lambda=2 has no solution, the largest lambda which works
+        # is used (a triangle), not a rectangle
+        n_reduced = 0
+        for cl in gdir.read_store('inversion_output'):
+            lam, w, h = cl['lambdas'], cl['width'], cl['thick']
+            assert np.all(cl['is_trapezoid'])
+            assert not np.any(cl['is_rectangular'])
+            assert np.all((lam > 0) & (lam <= 2))
+            reduced = lam < 2
+            n_reduced += reduced.sum()
+            # these are triangles: bottom width of zero
+            np.testing.assert_allclose(w[reduced], lam[reduced] * h[reduced])
+            assert np.all(w - lam * h >= -1e-6)
+            np.testing.assert_allclose(cl['volume'],
+                                       (2 * w - lam * h) / 2 * h * cl['dx'])
+        assert n_reduced > 0
 
         gdir.settings['trapezoid_lambdas'] = 1
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)

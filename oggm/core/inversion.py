@@ -217,7 +217,9 @@ def sia_thickness_via_optim(slope, width, flux, settings=None,
     width : section width in m
     flux : mass flux in m3 s-1
     settings : the settings to use, defaults to cfg.PARAMS
-    shape : 'rectangular', 'trapezoid' or 'parabolic'
+    shape : 'rectangular', 'trapezoid', 'parabolic' or 'triangle'
+        ('triangle' is the limit case of the trapezoid with a bottom width
+        of zero, i.e. the trapezoid with the largest possible lambda).
     glen_a : Glen A, defaults to settings
     fs : sliding, defaults to settings
     t_lambda: the trapezoid lambda, defaults to settings
@@ -252,9 +254,10 @@ def sia_thickness_via_optim(slope, width, flux, settings=None,
         fs = settings['inversion_fs']
     if t_lambda is None:
         t_lambda = settings['trapezoid_lambdas']
-    if shape not in ['parabolic', 'rectangular', 'trapezoid']:
-        raise InvalidParamsError('shape must be `parabolic`, `trapezoid` '
-                                 'or `rectangular`, not: {}'.format(shape))
+    if shape not in ['parabolic', 'rectangular', 'trapezoid', 'triangle']:
+        raise InvalidParamsError('shape must be `parabolic`, `trapezoid`, '
+                                 '`triangle` or `rectangular`, not: '
+                                 '{}'.format(shape))
 
     # Ice flow params
     n = settings['glen_n']
@@ -272,6 +275,8 @@ def sia_thickness_via_optim(slope, width, flux, settings=None,
         elif shape == 'trapezoid':
             w0m = width - t_lambda * h
             sect = (width + w0m) / 2 * h
+        elif shape == 'triangle':
+            sect = width / 2 * h
         else:
             sect = width * h
         return sect * u - flux
@@ -360,8 +365,33 @@ def find_sia_flux_from_thickness(slope, width, thick, settings=None,
     return flux
 
 
+def get_inversion_lambdas(cl, def_lambda):
+    """The trapezoid lambda of each grid point of an inversion output.
+
+    Inversion outputs written by older OGGM versions don't store them:
+    they are then derived from the shape flags.
+
+    Parameters
+    ----------
+    cl : dict
+        one flowline of the inversion output
+    def_lambda : float
+        the default lambda (gdir.settings['trapezoid_lambdas'])
+
+    Returns
+    -------
+    the lambdas (0 for rectangular, NaN for parabolic grid points)
+    """
+    if 'lambdas' in cl:
+        return np.asarray(cl['lambdas'], dtype=float).copy()
+    lambdas = np.asarray(cl['thick'], dtype=float) * np.nan
+    lambdas[cl['is_trapezoid']] = def_lambda
+    lambdas[cl['is_rectangular']] = 0.
+    return lambdas
+
+
 def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
-                     is_rectangular, is_trapezoid, fac, t_lambda,
+                     is_rectangular, is_trapezoid, fac, lambdas,
                      dx, water_level):
     bsl = (bed_h < water_level) & (thick > 0)
     n_thick = np.copy(thick)
@@ -374,7 +404,7 @@ def _vol_below_water(surface_h, bed_h, bed_shape, thick, widths,
     out = fac * n_thick * n_w * dx
     # Trap
     it = is_trapezoid
-    out[it] = (n_w[it] + n_w[it] - t_lambda*n_thick[it]) / 2*n_thick[it]*dx
+    out[it] = (n_w[it] + n_w[it] - lambdas[it]*n_thick[it]) / 2*n_thick[it]*dx
     return out
 
 
@@ -415,7 +445,11 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
         to compute volume below water level - adds an entry to the output dict
     t_lambda : float
         defining the angle of the trapezoid walls (see documentation). Defaults
-        to gdir.settings.
+        to gdir.settings. Where no trapezoid with this lambda can carry the
+        flux (the bottom width would have to be negative), the largest lambda
+        which works is used instead, i.e. the section is a triangle. The
+        lambda of each grid point is written in the output (``lambdas``, 0 for
+        rectangular and NaN for parabolic grid points).
     """
 
     # Defaults
@@ -458,8 +492,13 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
         fac = np.where(is_rect, 1, 2./3.)
         volume = fac * out_thick * w * cl['dx']
 
-        # Now recompute thickness where parabola is too flat
+        # Trapezoid lambda of each grid point (0 for rectangular, NaN for
+        # parabolic). It can be lower than t_lambda (see below)
         is_trap = cl['is_trapezoid']
+        lambdas = np.where(is_trap, t_lambda, np.nan)
+        lambdas[is_rect] = 0.
+
+        # Now recompute thickness where parabola is too flat
         if cl['invert_with_trapezoid']:
             min_shape = gdir.settings['mixed_min_shape']
             bed_shape = 4 * out_thick / w ** 2
@@ -474,19 +513,20 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
                                                            t_lambda=t_lambda,
                                                            glen_a=glen_a,
                                                            fs=fs)
-                    sect = (2*w[i] - t_lambda * out_thick[i]) / 2 * out_thick[i]
-                    volume[i] = sect * cl['dx']
+                    lambdas[i] = t_lambda
                 except ValueError:
-                    # no solution error - we do with rect
+                    # No solution: with t_lambda the bottom width would have
+                    # to be negative. We use the largest lambda which works
+                    # instead, i.e. a triangle (bottom width of zero).
                     out_thick[i] = sia_thickness_via_optim(slope[i], w[i],
                                                            cl['flux'][i],
                                                            settings=gdir.settings,
-                                                           shape='rectangular',
+                                                           shape='triangle',
                                                            glen_a=glen_a,
                                                            fs=fs)
-                    is_rect[i] = True
-                    is_trap[i] = False
-                    volume[i] = out_thick[i] * w[i] * cl['dx']
+                    lambdas[i] = w[i] / out_thick[i]
+                sect = (2*w[i] - lambdas[i] * out_thick[i]) / 2 * out_thick[i]
+                volume[i] = sect * cl['dx']
 
         # Sanity check
         if np.any(out_thick <= -1e-2):
@@ -499,6 +539,7 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
         if write:
             cl['is_trapezoid'] = is_trap
             cl['is_rectangular'] = is_rect
+            cl['lambdas'] = lambdas
             cl['thick'] = out_thick
             cl['volume'] = volume
 
@@ -512,7 +553,7 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
                                                         w,
                                                         cl['is_rectangular'],
                                                         cl['is_trapezoid'],
-                                                        fac, t_lambda,
+                                                        fac, lambdas,
                                                         cl['dx'], 0)
                 if water_level is not None and np.any(bed_h < water_level):
                     cl['volume_bwl'] = _vol_below_water(cl['hgt'], bed_h,
@@ -520,7 +561,7 @@ def mass_conservation_inversion(gdir, settings_filesuffix='',
                                                         w,
                                                         cl['is_rectangular'],
                                                         cl['is_trapezoid'],
-                                                        fac, t_lambda,
+                                                        fac, lambdas,
                                                         cl['dx'],
                                                         water_level)
             except KeyError:
@@ -614,6 +655,11 @@ def filter_inversion_output(gdir, settings_filesuffix='',
     cl_width = cl['width'][n_smoothing:]
     cl_is_trap = cl['is_trapezoid'][n_smoothing:]
     cl_is_rect = cl['is_rectangular'][n_smoothing:]
+    def_lambda = gdir.settings['trapezoid_lambdas']
+    if 'lambdas' not in cl:
+        # inversion output from older versions
+        cl['lambdas'] = get_inversion_lambdas(cl, def_lambda)
+    cl_lambdas = cl['lambdas'][n_smoothing:]
     cl_bed_h = cl_sfc_h - cl_thick
     try:
         downstream_sfc_h = dic_ds['surface_h'][:5]
@@ -635,13 +681,11 @@ def filter_inversion_output(gdir, settings_filesuffix='',
         cl_bed_h = cl_bed_h + all_bed_h_changes
 
     # define new thick and clip, maximum value needed to avoid geometrical
-    # inconsistencies with trapezoidal bed shape
+    # inconsistencies with trapezoidal bed shape (w0 >= 0, triangles are OK)
     new_thick = cl_sfc_h - cl_bed_h
     # max
-    max_h = np.where(cl_is_trap,
-                     # -1. to get w0 > 0 at the end and not w0 = 0
-                     cl_width / gdir.settings['trapezoid_lambdas'] - 1.,
-                     1e4)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        max_h = np.where(cl_is_trap, cl_width / cl_lambdas, 1e4)
     new_thick = np.where(new_thick > max_h, max_h, new_thick)
     # min
     new_thick = np.where(new_thick < min_ice_thick, min_ice_thick, new_thick)
@@ -654,17 +698,20 @@ def filter_inversion_output(gdir, settings_filesuffix='',
     new_is_trapezoid = ((cl_is_trap |
                          (new_bed_shape < gdir.settings['mixed_min_shape'])) &
                         ~cl_is_rect)
+    # new trapezoids get the default lambda
+    new_lambdas = np.where(new_is_trapezoid & ~cl_is_trap, def_lambda,
+                           cl_lambdas)
 
     # and calculate new volumes depending on shape
     new_volume = np.where(
         new_is_trapezoid,
-        cl_width * new_thick - gdir.settings['trapezoid_lambdas'] / 2 *
-        new_thick ** 2,
+        cl_width * new_thick - new_lambdas / 2 * new_thick ** 2,
         np.where(cl_is_rect, 1, 2 / 3) * cl_width * new_thick) * cl['dx']
 
     # define new values
     cl['thick'][n_smoothing:] = new_thick
     cl['is_trapezoid'][n_smoothing:] = new_is_trapezoid
+    cl['lambdas'][n_smoothing:] = new_lambdas
     cl['volume'][n_smoothing:] = new_volume
 
     gdir.write_store(cls, 'inversion_output', filesuffix=output_filesuffix)

@@ -38,7 +38,8 @@ from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    MonthlyTIModel,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
-from oggm.core.inversion import find_sia_flux_from_thickness
+from oggm.core.inversion import (find_sia_flux_from_thickness,
+                                 get_inversion_lambdas)
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR
@@ -565,9 +566,14 @@ class MixedBedFlowline(Flowline):
 
         self._w0_m[~is_trapezoid] = np.nan
 
-        if (np.any(self._w0_m[self._ptrap] <= 0) or
-                np.any(~np.isfinite(self._w0_m[self._ptrap]))):
-            raise ValueError('Trapezoid beds need to have origin widths > 0.')
+        # w0 = 0 is a triangle, which is allowed. The conversion from the
+        # section is not exact: values a hair below zero are numerical noise.
+        pt = self._ptrap
+        w0 = self._w0_m[pt]
+        tol = 1e-9 * (np.abs(lambdas[pt] * thick[pt]) + 1)
+        if np.any(w0 < -tol) or np.any(~np.isfinite(w0)):
+            raise ValueError('Trapezoid beds need to have origin widths >= 0.')
+        self._w0_m[pt] = utils.clip_min(w0, 0)
 
         assert np.all(self.bed_shape[~is_trapezoid] > 0)
 
@@ -3786,9 +3792,7 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
 
             bed_shape = 4 * inv['thick'] / widths_m ** 2
 
-            lambdas = inv['thick'] * np.nan
-            lambdas[inv['is_trapezoid']] = def_lambda
-            lambdas[inv['is_rectangular']] = 0.
+            lambdas = get_inversion_lambdas(inv, def_lambda)
 
             # Where the flux and the thickness is zero we just assume trapezoid:
             lambdas[bed_shape == 0] = def_lambda
@@ -3836,8 +3840,11 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
                 widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
             elif gdir.settings['downstream_line_shape'] == 'trapezoidal':
                 bed_shape = np.append(bed_shape, dic_ds['bedshapes'] * np.nan)
-                lambdas = np.append(lambdas, np.ones(len(dic_ds['w0s'])) *
-                                    def_lambda)
+                # older directories don't have the fitted lambdas
+                ds_lambdas = dic_ds.get('lambdas',
+                                        np.ones(len(dic_ds['w0s'])) *
+                                        def_lambda)
+                lambdas = np.append(lambdas, ds_lambdas)
                 widths_m = np.append(widths_m, dic_ds['w0s'])
             else:
                 raise InvalidParamsError(
