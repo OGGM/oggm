@@ -48,6 +48,13 @@ from oggm.cfg import G, GAUSSIAN_KERNEL
 # Module logger
 log = logging.getLogger(__name__)
 
+# Minimum origin (bottom) width of trapezoid beds in MixedBedFlowline,
+# relative to the width of the walls (lambda * thick). Triangles (w0 = 0)
+# come out of the inversion, but the semi-implicit model divides by the width
+# of ice-free grid points: we keep them a hair open. Relative, so that the
+# section is unchanged within 2e-6.
+TRAPEZOID_MIN_W0_FAC = 1e-6
+
 # Internal flag: when True, `flowline_model_run` returns a partially completed
 # model (with `.run_error` set) instead of re-raising on a mid-run error.
 # Only `run_with_hydro` sets this (around its `run_task` call) so it can add
@@ -566,14 +573,17 @@ class MixedBedFlowline(Flowline):
 
         self._w0_m[~is_trapezoid] = np.nan
 
-        # w0 = 0 is a triangle, which is allowed. The conversion from the
-        # section is not exact: values a hair below zero are numerical noise.
+        # w0 = 0 is a triangle, which is allowed but kept a hair open
+        # (TRAPEZOID_MIN_W0_FAC). The conversion from the section is not
+        # exact (e.g. after writing and reading the flowline): values a hair
+        # below zero are numerical noise.
         pt = self._ptrap
         w0 = self._w0_m[pt]
-        tol = 1e-9 * (np.abs(lambdas[pt] * thick[pt]) + 1)
-        if np.any(w0 < -tol) or np.any(~np.isfinite(w0)):
+        wall_w = np.abs(lambdas[pt] * thick[pt])
+        if (np.any(w0 < -1e-9 * (wall_w + 1)) or
+                np.any(~np.isfinite(w0))):
             raise ValueError('Trapezoid beds need to have origin widths >= 0.')
-        self._w0_m[pt] = utils.clip_min(w0, 0)
+        self._w0_m[pt] = np.maximum(w0, TRAPEZOID_MIN_W0_FAC * wall_w)
 
         assert np.all(self.bed_shape[~is_trapezoid] > 0)
 

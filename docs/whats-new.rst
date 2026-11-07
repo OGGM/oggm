@@ -440,6 +440,9 @@ Breaking changes
   conservative at that location (less ice than the flux would dictate) 
   and changes the volume of some glaciers, mostly small ones 
   (on a sample of 100 Alpine glaciers, 52 are affected, -0.2% in total).
+  ``MixedBedFlowline`` accepts these triangles and keeps them a hair open
+  (bottom width of 1e-6 times the wall width), since the semi-implicit
+  model divides by the width of ice-free grid points.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The trapezoidal downstream line (``compute_downstream_bedshape``) now uses
   lambdas fitted to the valley shape instead of the default
