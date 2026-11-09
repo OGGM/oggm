@@ -428,21 +428,13 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
-- ``mass_conservation_inversion``: where no trapezoid with the requested
-  lambda (``PARAMS['trapezoid_lambdas']``) can carry the flux (the bottom
-  width would have to be negative), the grid point is now inverted with the
-  largest lambda which works (a triangle, i.e. a bottom width of zero)
-  instead of falling back to a rectangle. The lambda of each grid point is
-  stored in the inversion output (``lambdas``) and used by
+- ``mass_conservation_inversion`` now reduces the trapezoid lambda where
+  necessary to retain a minimum bottom width of 1 m, instead of falling
+  back to a rectangle.
+  The per-point lambdas are stored in the inversion output and used by
   ``filter_inversion_output`` and ``init_present_time_glacier``.
-  ``filter_inversion_output`` now also allows a bottom width of zero (it
-  used to keep a margin of 1 m of ice thickness). This isn't mass 
-  conservative at that location (less ice than the flux would dictate) 
-  and changes the volume of some glaciers, mostly small ones 
-  (on a sample of 100 Alpine glaciers, 52 are affected, -0.2% in total).
-  ``MixedBedFlowline`` accepts these triangles and keeps them a hair open
-  (bottom width of 1e-6 times the wall width), since the semi-implicit
-  model divides by the width of ice-free grid points.
+  Filtering also reduces lambda where necessary to preserve this minimum
+  bottom width after smoothing and conversion to trapezoidal beds.
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The trapezoidal downstream line (``compute_downstream_bedshape``) now uses
   lambdas fitted to the valley shape instead of the default
@@ -456,7 +448,8 @@ Breaking changes
   The lambdas are clipped to the new ``PARAMS['downstream_min_lambda']`` (2)
   and ``PARAMS['downstream_max_lambda']`` (10), and stored in the
   ``downstream_line`` file. Before, with a large default lambda, the bottom
-  width was often clipped to ``PARAMS['trapezoid_min_bottom_width']``,
+  width was often clipped to ``PARAMS['downstream_min_bottom_width']``
+  (renamed from ``PARAMS['trapezoid_min_bottom_width']``),
   which made the valley too wide. On a sample of 100 Alpine glaciers, 
   the median fitted lambda is about 10 for glaciers smaller than 0.1 km2 
   and about 4 for glaciers larger than 2 km2. Directories processed with older 

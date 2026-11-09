@@ -43,8 +43,7 @@ from oggm.core.flowline import (FluxBasedModel, FlowlineModel, MassRedistributio
                                 run_constant_climate, run_random_climate,
                                 run_from_climate_data, equilibrium_stop_criterion,
                                 run_with_hydro, SemiImplicitModel,
-                                stabilize_trapezoid_section,
-                                TRAPEZOID_MIN_W0_FAC)
+                                stabilize_trapezoid_section)
 from oggm.core.dynamic_spinup import (
     run_dynamic_spinup, run_dynamic_melt_f_calibration,
     dynamic_melt_f_run_with_dynamic_spinup,
@@ -152,7 +151,7 @@ class TestInitPresentDayFlowline:
             assert np.all(~np.isfinite(fl.bed_shape[~ice_mask]))
             # check that bottom width of downstream line is larger than minimum
             assert np.all(fl._w0_m[~ice_mask] >
-                          gdir.settings['trapezoid_min_bottom_width'])
+                          gdir.settings['downstream_min_bottom_width'])
 
         if do_plot:
             plt.plot(fls[-1].bed_h, color='k')
@@ -3687,9 +3686,9 @@ class TestModelFlowlines():
     def test_trapezoid_at_min_section(self):
         # A trapezoid whose section sits exactly at its physical minimum
         # (lambda * thick**2 / 2) is the degenerate, triangular case with
-        # w0 = 0. It is constructible, with the origin width kept a hair open
-        # (TRAPEZOID_MIN_W0_FAC), also when the surface_h -> bed_h -> thick
-        # round trip puts it a few ulp below zero.
+        # w0 = 0. It is not constructible, but a section a hair above the
+        # minimum must be - in particular the origin width must not be eaten
+        # by the surface_h -> bed_h -> thick round trip.
         map_dx = 100.
         dx = 1.
         nx = 5
@@ -3707,22 +3706,17 @@ class TestModelFlowlines():
         min_section = lambdas * (surface_h - bed_h) ** 2 / 2
         section = min_section * (1 + 64 * np.finfo(np.float64).eps)
 
-        for sec in [section, min_section]:
-            fl = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
-                                  surface_h=surface_h, bed_h=bed_h,
-                                  section=sec, bed_shape=np.zeros(nx),
-                                  is_trapezoid=is_trap, lambdas=lambdas)
-            assert np.all(fl._w0_m > 0)
-            assert_allclose(fl._w0_m, TRAPEZOID_MIN_W0_FAC * lambdas *
-                            (surface_h - bed_h), rtol=1e-6)
-            assert_allclose(fl.section, sec, rtol=1e-5)
+        fl = MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
+                              surface_h=surface_h, bed_h=bed_h,
+                              section=section, bed_shape=np.zeros(nx),
+                              is_trapezoid=is_trap, lambdas=lambdas)
+        assert np.all(fl._w0_m > 0)
+        assert_allclose(fl.section, section)
 
-        # materially below the minimum: this is a real error
         with pytest.raises(ValueError, match='origin widths'):
             MixedBedFlowline(line=line, dx=dx, map_dx=map_dx,
                              surface_h=surface_h, bed_h=bed_h,
-                             section=min_section * 0.99,
-                             bed_shape=np.zeros(nx),
+                             section=min_section, bed_shape=np.zeros(nx),
                              is_trapezoid=is_trap, lambdas=lambdas)
 
     def test_stabilize_trapezoid_section(self):
@@ -8622,11 +8616,8 @@ class TestMergedHEF:
 class TestSemiImplicitModel:
 
     @pytest.mark.slow
-    def test_triangles(self, hef_elev_gdir_base, tmp_path):
-        # Where no trapezoid with the requested lambda has a solution, the
-        # inversion uses a triangle (w0 = 0). Check that these grid points
-        # survive writing and reading the flowlines, and that both models
-        # cope with them becoming ice free and ice covered again.
+    def test_narrow_trapezoids(self, hef_elev_gdir_base, tmp_path):
+        # Narrow trapezoids survive serialization, retreat and regrowth.
         gdir = tasks.copy_to_basedir(hef_elev_gdir_base,
                                      base_dir=str(tmp_path), setup='all')
         gdir.settings['trapezoid_lambdas'] = 12
@@ -8636,10 +8627,18 @@ class TestSemiImplicitModel:
         inversion.filter_inversion_output(gdir)
         init_present_time_glacier(gdir)
 
+        for inv in gdir.read_store('inversion_output'):
+            is_trap = inv['is_trapezoid']
+            w0 = inv['width'] - inv['lambdas'] * inv['thick']
+            w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+            assert np.all(w0[is_trap] >=
+                          np.minimum(w0_min, inv['width'][is_trap]) - 1e-6)
+
         # this is a write / read round trip
         fls = gdir.read_store('model_flowlines')
         fl = fls[-1]
-        is_tri = fl.is_trapezoid & (fl.thick > 0) & (fl._w0_m < 1e-2)
+        is_tri = (fl.is_trapezoid & (fl.thick > 0) &
+                  (fl._w0_m < inversion.TRAPEZOID_MIN_BOTTOM_WIDTH + 0.01))
         assert is_tri.sum() > 10
         assert np.all(fl._w0_m[is_tri] > 0)
 
@@ -8652,7 +8651,7 @@ class TestSemiImplicitModel:
             model = model_class(fls, mb_model=mb, y0=0, glen_a=glen_a,
                                 fs=fs)
             model.run_until(100)
-            # the triangles are ice free
+            # the narrow trapezoids are ice free
             assert np.all(model.fls[-1].thick[is_tri] == 0)
             mb.temp_bias = 0
             model.run_until(400)

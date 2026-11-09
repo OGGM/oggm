@@ -864,7 +864,7 @@ class TestCenterlines:
         assert len(lam) == len(out['w0s'])
         assert np.all(lam >= cfg.PARAMS['downstream_min_lambda'])
         assert np.all(lam <= cfg.PARAMS['downstream_max_lambda'])
-        assert np.all(out['w0s'] >= cfg.PARAMS['trapezoid_min_bottom_width'])
+        assert np.all(out['w0s'] >= cfg.PARAMS['downstream_min_bottom_width'])
         assert np.std(lam) > 0
 
         cfg.PARAMS['border'] = default_b
@@ -2559,6 +2559,33 @@ class TestInversion:
         np.testing.assert_allclose(glen_a_target, out['glen_a'],
                                    rtol=2e-3)
 
+    def test_trapezoid_min_bottom_width(self):
+
+        slope = np.deg2rad(5.)
+        flux = 0.05
+        w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+
+        # wide enough: the requested lambda works
+        h, lam = inversion._trapezoid_thickness(slope, 500., flux, 2.)
+        assert lam == 2.
+        assert 500. - lam * h > w0_min
+
+        # too narrow: lambda is reduced to give the minimum bottom width,
+        # and the flux is unchanged. 15 m is narrow enough for the mean
+        # width of the trapezoid to be below MIN_WIDTH_FOR_INV.
+        for w in [15., 50.]:
+            h, lam = inversion._trapezoid_thickness(slope, w, flux, 2.)
+            assert h > 0
+            assert 0 < lam < 2.
+            np.testing.assert_allclose(w - lam * h, w0_min)
+            h_ref = inversion.sia_thickness_via_optim(slope, w, flux,
+                                                      shape='trapezoid',
+                                                      t_lambda=lam)
+            np.testing.assert_allclose(h, h_ref, rtol=1e-6)
+
+        # no flux, no ice
+        assert inversion._trapezoid_thickness(slope, 50., 0., 2.)[0] == 0
+
     @pytest.mark.slow
     def test_invert_hef_shapes(self, hef_entity):
 
@@ -2576,8 +2603,8 @@ class TestInversion:
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt1 = inversion.mass_conservation_inversion(gdir)
 
-        # Where lambda=2 has no solution, the largest lambda which works
-        # is used (a triangle), not a rectangle
+        # Where lambda=2 gives a bottom width below 1 m, reduce lambda
+        # and solve again while preserving the inversion flux.
         n_reduced = 0
         for cl in gdir.read_store('inversion_output'):
             lam, w, h = cl['lambdas'], cl['width'], cl['thick']
@@ -2586,11 +2613,25 @@ class TestInversion:
             assert np.all((lam > 0) & (lam <= 2))
             reduced = lam < 2
             n_reduced += reduced.sum()
-            # these are triangles: bottom width of zero
-            np.testing.assert_allclose(w[reduced], lam[reduced] * h[reduced])
-            assert np.all(w - lam * h >= -1e-6)
+            # reduced lambdas give the minimum bottom width
+            w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+            np.testing.assert_allclose(w[reduced] - lam[reduced] * h[reduced],
+                                       w0_min)
+            assert np.all(w - lam * h >= np.minimum(w0_min, w) - 1e-6)
             np.testing.assert_allclose(cl['volume'],
                                        (2 * w - lam * h) / 2 * h * cl['dx'])
+            settings = gdir.settings
+            min_slope = ('min_slope_ice_caps' if gdir.is_icecap
+                         else 'min_slope')
+            slope = np.clip(cl['slope_angle'],
+                            np.deg2rad(settings[min_slope]), np.pi / 2)
+            n = settings['glen_n']
+            velocity = ((settings['ice_density'] * cfg.G * slope) ** n *
+                        (2 / (n + 2) * settings['inversion_glen_a'] *
+                         h ** (n + 1) + settings['inversion_fs'] *
+                         h ** (n - 1)))
+            np.testing.assert_allclose(
+                cl['volume'] / cl['dx'] * velocity, cl['flux'], atol=1e-8)
         assert n_reduced > 0
 
         gdir.settings['trapezoid_lambdas'] = 1

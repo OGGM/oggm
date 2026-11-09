@@ -1348,7 +1348,7 @@ def compute_downstream_bedshape(gdir):
         depths, bs, cfg.PARAMS['downstream_min_lambda'],
         cfg.PARAMS['downstream_max_lambda'])
     assert np.all(np.isfinite(lambdas)), 'np.all(np.isfinite(lambdas))'
-    w0_min = cfg.PARAMS['trapezoid_min_bottom_width']
+    w0_min = cfg.PARAMS['downstream_min_bottom_width']
     w0s = _trapezoidal_bottom_width_from_terrain_cross_section_area(
         depths, bs, lambdas, w0_min)
     assert len(w0s) == cl.nx, 'len(w0s) == cl.nx'
