@@ -21,12 +21,12 @@ Enhancements
   ``has_fast_mb_series``). ``get_specific_mb`` uses them when they are
   fast, with identical results: 6 times faster for 50 years of annual MB,
   25 times for 600 months (Hintereisferner). This speeds up all the
-  calibrations on a fixed geometry. ``ConstantMassBalance`` uses them too.
+  calibrations on a fixed geometry (:pull:`2036`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``get_days_of_year``, ``get_seconds_of_year``, ``get_days_of_month`` and
   ``get_seconds_of_month`` (and the ``sec_in_month`` and ``sec_in_year``
   methods of the MB models which use them) are 6 to 30 times faster for
-  scalar input, as used by the MB models at every time step.
+  scalar input, as used by the MB models at every time step (:pull:`2036`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
   of each time step was growing with the length of the run), and
