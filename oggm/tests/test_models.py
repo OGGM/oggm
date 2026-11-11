@@ -213,8 +213,10 @@ class TestInitPresentDayFlowline:
         assert_allclose(fdf['widths_m'], fl.widths_m)
         assert_allclose(fdf.index, np.arange(fl.nx) * fl.dx_meter)
 
-        # Running it twice changes nothing
-        tasks.bin_gridded_variables(gdir, bin_variables=vn)
+        # Running it twice changes nothing. The totals follow their
+        # variable when one is missing
+        tasks.bin_gridded_variables(gdir, bin_variables=['foo', vn],
+                                    preserve_totals=[False, True])
         pd.testing.assert_frame_equal(
             pd.read_csv(fp, index_col=0, float_precision='round_trip'), df)
 

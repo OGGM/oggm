@@ -2597,7 +2597,8 @@ def bin_gridded_variables(gdir, bin_variables, preserve_totals=True):
         the gridded_data variables to bin. The ones not found in
         gridded_data are skipped with a warning.
     preserve_totals : bool or list of bool
-        whether or not to preserve the variables totals (e.g. volume)
+        whether or not to preserve the variables totals (e.g. volume). Use
+        False for intensive quantities like velocities.
 
     Raises
     ------
@@ -2614,9 +2615,12 @@ def bin_gridded_variables(gdir, bin_variables, preserve_totals=True):
             '`fixed_dx_elevation_band_flowline`).')
 
     bin_variables = utils.tolist(bin_variables)
+    preserve = dict(zip(bin_variables,
+                        utils.tolist(preserve_totals,
+                                     length=len(bin_variables))))
     glacier_mask, topo, bin_variables, out_vars, out_totals = \
         _read_binning_data(gdir, bin_variables)
-    preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
+    preserve_totals = [preserve[v] for v in bin_variables]
     if not bin_variables:
         return
 

@@ -2263,7 +2263,7 @@ class TestPreproCLI:
         funcs = {'fake:task': fake_to_gdir, 'fake:stats': compile_fake_statistics}
         monkeypatch.setitem(prepro_addons.ADDON_PRODUCTS, 'fake', dict(
             task='fake:task', variables=['fake_v', 'fake_err'],
-            statistics='fake:stats', source='test'))
+            statistics='fake:stats', source='test', preserve_totals=False))
         monkeypatch.setattr(prepro_addons, '_import', funcs.get)
 
         inter, rgidf = _read_shp()
@@ -2319,7 +2319,12 @@ class TestPreproCLI:
         with open(os.path.join(gdir.dir, 'fake.manifest.json')) as f:
             m = json.load(f)
         assert m['addon'] == {'variables': ['fake_v'], 'source': 'test',
-                              'version': 'v0'}
+                              'version': 'v0',
+                              'preserve_totals': {'fake_v': False}}
+        # a velocity-like product: binned values are not rescaled
+        fp = gdir.get_filepath('elevation_band_flowline',
+                               filesuffix='_fixed_dx')
+        assert_allclose(pd.read_csv(fp, index_col=0)['fake_v'], 2.)
 
         # Add-on on L1: no flowline to bin onto
         gdir = oggm.GlacierDirectory(entity, from_tar=lev_tars(1))

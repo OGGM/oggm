@@ -33,8 +33,9 @@ from oggm.utils import entity_task
 log = logging.getLogger(__name__)
 
 # The add-on products: the shop task adding them to gridded_data, the
-# variables it writes, the task compiling their statistics, and where the
-# data comes from
+# variables it writes, the task compiling their statistics, where the data
+# comes from, and whether binning preserves their totals (True by default,
+# for thicknesses and elevation changes, but meaningless for velocities)
 ADDON_PRODUCTS = {
     'consensus': dict(
         task='oggm.shop.bedtopo:add_consensus_thickness',
@@ -45,7 +46,8 @@ ADDON_PRODUCTS = {
         task='oggm.shop.its_live:itslive_velocity_to_gdir',
         variables=['itslive_v', 'itslive_vx', 'itslive_vy'],
         statistics='oggm.shop.its_live:compile_itslive_statistics',
-        source='ITS_LIVE, https://its-live.jpl.nasa.gov'),
+        source='ITS_LIVE, https://its-live.jpl.nasa.gov',
+        preserve_totals=False),
     'millan_thickness': dict(
         task='oggm.shop.millan22:millan_thickness_to_gdir',
         variables=['millan_ice_thickness'],
@@ -55,7 +57,8 @@ ADDON_PRODUCTS = {
         task='oggm.shop.millan22:millan_velocity_to_gdir',
         variables=['millan_v', 'millan_vx', 'millan_vy'],
         statistics='oggm.shop.millan22:compile_millan_statistics',
-        source='Millan et al. (2022), doi:10.1038/s41561-021-00885-z'),
+        source='Millan et al. (2022), doi:10.1038/s41561-021-00885-z',
+        preserve_totals=False),
     'hugonnet': dict(
         task='oggm.shop.hugonnet_maps:hugonnet_to_gdir',
         variables=['hugonnet_dhdt'],
@@ -77,7 +80,7 @@ def _import(path):
 
 @entity_task(log, name_kwarg='label')
 def _write_product_addon(gdir, label=None, variables=None, output_dir=None,
-                         source=None, version=None):
+                         source=None, version=None, preserve_totals=True):
     """Write the variables of a product found in gridded_data as an add-on.
 
     A glacier without any of the variables (e.g. outside the product's
@@ -89,7 +92,8 @@ def _write_product_addon(gdir, label=None, variables=None, output_dir=None,
         log.info('(%s) no %s data: no add-on.', gdir.rgi_id, label)
         return
     utils.write_addon(gdir, label=label, variables=found,
-                      output_dir=output_dir, source=source, version=version)
+                      output_dir=output_dir, source=source, version=version,
+                      preserve_totals=preserve_totals)
 
 
 def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
@@ -216,7 +220,9 @@ def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
                                      label=product,
                                      variables=spec['variables'],
                                      output_dir=str(out),
-                                     source=spec['source'], version=version)
+                                     source=spec['source'], version=version,
+                                     preserve_totals=spec.get(
+                                         'preserve_totals', True))
         utils.base_dir_to_tar(str(out))
 
         sum_dir = out / f'RGI{rgi_version}' / f'b_{border:03d}' / 'summary'

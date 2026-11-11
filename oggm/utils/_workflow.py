@@ -6328,6 +6328,7 @@ def write_addon(
     output_dir: str,
     source: str | None = None,
     version: str | None = None,
+    preserve_totals: bool | list = True,
 ) -> str:
     """Packs gridded variables of a glacier as an add-on.
 
@@ -6355,6 +6356,11 @@ def write_addon(
         Where the data comes from, recorded in the manifest.
     version : str, optional
         The version of the data, recorded in the manifest.
+    preserve_totals : bool or list of bool, default True
+        For each variable, whether binning it onto the flowlines (see
+        :func:`apply_addon`) preserves its total over the glacier. True
+        for extensive quantities (e.g. a thickness, whose total is the
+        volume), False for intensive ones (e.g. a velocity).
 
     Returns
     -------
@@ -6372,7 +6378,9 @@ def write_addon(
     mkdir(root, reset=True)
     _write_nc_patch(gdir.get_filepath("gridded_data"),
                     os.path.join(root, f"{label}.nc"), variables)
-    meta = {"variables": variables}
+    preserve_totals = tolist(preserve_totals, length=len(variables))
+    meta = {"variables": variables,
+            "preserve_totals": dict(zip(variables, map(bool, preserve_totals)))}
     if source is not None:
         meta["source"] = source
     if version is not None:
@@ -6478,11 +6486,15 @@ def apply_addon(
         with open(os.path.join(gdir.dir, f"{addon}.manifest.json"), "w") as f:
             json.dump(m, f, indent=2)
 
-    variables = (m.get("addon") or {}).get("variables", [])
+    meta = m.get("addon") or {}
+    variables = meta.get("variables", [])
     if not (bin and variables):
         return
     if gdir.get_diagnostics().get("flowline_type") == "elevation_band":
-        bin_gridded_variables(gdir, bin_variables=variables)
+        preserve = meta.get("preserve_totals", {})
+        bin_gridded_variables(
+            gdir, bin_variables=variables,
+            preserve_totals=[preserve.get(v, True) for v in variables])
     else:
         log.info("(%s) %s: no elevation band flowline, the variables are "
                  "not binned.", rid, addon)

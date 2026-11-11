@@ -1468,7 +1468,8 @@ class TestAddons:
         m = _manifest(Path(addon.dst.dir) / "itslive.manifest.json")
         assert m["kind"] == "addon"
         assert m["addon"] == {"variables": ["itslive_v"], "source": "test",
-                              "version": "1"}
+                              "version": "1",
+                              "preserve_totals": {"itslive_v": True}}
         assert m["fetched_from"] == str(addon.out)
 
     def test_apply_addon_from_url(self, addon, monkeypatch):
@@ -1544,10 +1545,13 @@ class TestAddons:
     def test_apply_addon_bins(self, tmp_path, hef_elev_gdir):
         src = self.copy(tmp_path, hef_elev_gdir, "src")
         dst = self.copy(tmp_path, hef_elev_gdir, "dst")
+        # a velocity (no total) and a thickness (its total is the volume)
         _add_nc_var(src.get_filepath("gridded_data"), "itslive_v", 3.5)
+        _add_nc_var(src.get_filepath("gridded_data"), "thick", 100.)
         out = tmp_path / "addons" / "itslive"
-        utils.write_addon(src, label="itslive", variables=["itslive_v"],
-                          output_dir=str(out))
+        utils.write_addon(src, label="itslive",
+                          variables=["itslive_v", "thick"],
+                          output_dir=str(out), preserve_totals=[False, True])
         utils.base_dir_to_tar(str(out))
 
         fls = Path(dst.get_store_filepath("inversion_flowlines")).read_bytes()
@@ -1555,11 +1559,14 @@ class TestAddons:
         df = pd.read_csv(dst.get_filepath("elevation_band_flowline"),
                          index_col=0)
         np.testing.assert_allclose(df["itslive_v"], 3.5)
-        # the fixed dx widths match the RGI area, and the totals are kept
+        # the fixed dx widths match the RGI area, not the glacier mask: the
+        # velocity is not rescaled to it, the thickness is (volume kept)
         fp = dst.get_filepath("elevation_band_flowline", filesuffix="_fixed_dx")
         fdf = pd.read_csv(fp, index_col=0)
-        np.testing.assert_allclose((fdf["itslive_v"] * fdf["area_m2"]).sum(),
-                                   (df["itslive_v"] * df["area"]).sum())
+        np.testing.assert_allclose(fdf["itslive_v"], 3.5)
+        np.testing.assert_allclose((fdf["thick"] * fdf["area_m2"]).sum(),
+                                   (df["thick"] * df["area"]).sum())
+        assert not np.allclose(fdf["thick"], 100.)
         assert Path(dst.get_store_filepath("inversion_flowlines")).read_bytes() \
             == fls
 
