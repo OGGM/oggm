@@ -2937,13 +2937,17 @@ class TestPreproCLI:
             )
 
         # The grids are made at L1, but the centerline masks replace the
-        # elevation band ones, so this L2 delta ships gridded_data.nc
+        # elevation band ones: the L2 delta ships them, not the whole file
         with open(os.path.join(gdir.dir, "L1.manifest.json")) as f:
             m1 = json.load(f)
         with open(os.path.join(gdir.dir, "L2.manifest.json")) as f:
             m2 = json.load(f)
         assert 'gridded_data.nc' in m1["files"]["added"]
-        assert 'gridded_data.nc' in m2["files"]["updated"]
+        assert 'gridded_data.nc' not in m2["files"]["updated"]
+        sec = m2["files"]["variables"]["gridded_data.nc"]
+        assert 'glacier_mask' in sec["updated"]
+        assert 'topo' not in sec["updated"]
+        assert m1["grid_id"] == m2["grid_id"]
 
         # L5 is standalone: a single tar suffices
         tarf = _lev_tars(5)[0]

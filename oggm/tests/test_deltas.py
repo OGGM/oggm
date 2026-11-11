@@ -10,12 +10,13 @@ from types import SimpleNamespace
 import shutil
 
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
 import oggm
 from oggm import cfg, utils, workflow
-from oggm.exceptions import InvalidWorkflowError
+from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.utils import _compat, _downloads
 from oggm.utils.transcoder import encode_npz
 
@@ -226,6 +227,14 @@ def _add_nc_var(fp, name, value, like="topo"):
                               zlib=True, fill_value=np.nan)
         v.units = "m yr-1"
         v[:] = np.full(nc.variables[like].shape, value, dtype=np.float32)
+
+
+def _apply_nc_removal(fp, name):
+    """Removes a variable from a netCDF file."""
+    patch = fp + ".rm.nc"
+    utils._workflow._write_nc_patch(fp, patch, [])
+    utils._workflow._apply_nc_patch(fp, patch, removed=[name])
+    os.remove(patch)
 
 
 def test_write_level_manifest_parent(tmp_path):
@@ -852,13 +861,16 @@ class TestParentChain:
                 tf.add(member, arcname=f"{bundle}/{rid}.tar.gz")
             os.remove(member)
 
-        def level(wdir, label, parent=None, url=None, write=None, rm=()):
+        def level(wdir, label, parent=None, url=None, write=None, rm=(),
+                  nc=None):
             # The root has nothing below it, so ships every file
             prev = utils.snapshot_gdir_state(wdir) if parent else {}
             for name, text in (write or {}).items():
                 (wdir / name).write_text(text)
             for name in rm:
                 os.remove(wdir / name)
+            if nc is not None:
+                nc(str(wdir / "gridded_data.nc"))
             _, changed = utils.write_level_manifest(
                 wdir,
                 label,
@@ -917,6 +929,36 @@ class TestParentChain:
             "rm", "L4", wdir, level(wdir, "L4", "L3", write={"l2.txt": "back"})
         )
 
+        # gridded_data.nc changes: patches, and whole files when the grid
+        # changes (here, after or before a patch)
+        def add_v(fp):
+            _add_nc_var(fp, "itslive_v", 3.5)
+
+        def edit_ext(fp):
+            with utils.ncDataset(fp, "a") as nc:
+                nc.variables["glacier_ext"][:] = 0
+                nc.patched_by = "test"
+
+        def swap_v(fp):
+            _apply_nc_removal(fp, "itslive_v")
+            _add_nc_var(fp, "millan_v", 2.0)
+
+        def shift_x(fp):
+            with utils.ncDataset(fp, "a") as nc:
+                nc.variables["x"][:] = nc.variables["x"][:] + 0.5
+
+        for tree, l3, l4 in [("grid", [add_v, edit_ext], [swap_v]),
+                             ("whole_then_patch", [shift_x], [add_v]),
+                             ("patch_then_whole", [add_v], [shift_x])]:
+            wdir = fork("base", tree)
+
+            def run(funcs):
+                return lambda fp: [f(fp) for f in funcs]
+
+            publish(tree, "L3", wdir, level(wdir, "L3", "L2", self.url("base"),
+                                            nc=run(l3)))
+            publish(tree, "L4", wdir, level(wdir, "L4", "L3", nc=run(l4)))
+
         calls = []
 
         def fake_file_downloader(www_path, **kwargs):
@@ -932,6 +974,7 @@ class TestParentChain:
         cfg.PARAMS["has_internet"] = False
         return SimpleNamespace(
             rid=rid,
+            server=server,
             calls=calls,
             workdir=workdir,
             publish=publish,
@@ -995,6 +1038,62 @@ class TestParentChain:
         assert Path(gdir.dir, "l2.txt").read_text() == "back"
         assert not Path(gdir.dir, "inversion_flowlines.npz").exists()
         _assert_matches_build(gdir.dir, chain.workdir("rm"))
+
+    def test_gridded_data_patches(self, chain):
+        """Levels changing some gridded_data variables ship only these."""
+        rid = chain.rid
+        server = chain.server
+        bundle = f"{rid[:-6]}.{rid[-5:-2]}"
+        for label in ("L3", "L4"):
+            tar_fp = (server / "grid" / "RGI62" / "b_080" / label /
+                      rid[:-6] / f"{bundle}.tar")
+            with tarfile.open(tar_fp) as outer:
+                inner = outer.extractfile(f"{bundle}/{rid}.tar.gz")
+                with tarfile.open(fileobj=inner, mode="r:gz") as tar:
+                    names = {os.path.basename(n) for n in tar.getnames()}
+            assert f"gridded_data.{label}.patch.nc" in names
+            assert "gridded_data.nc" not in names
+
+        built = chain.workdir("grid")
+        l3 = _manifest(built / "L3.manifest.json")["files"]
+        sec = l3["variables"]["gridded_data.nc"]
+        assert list(sec["added"]) == ["itslive_v"]
+        assert list(sec["updated"]) == ["@attrs", "glacier_ext"]
+        assert sec["removed"] == []
+        assert "gridded_data.nc" not in l3["added"]
+        assert "gridded_data.nc" not in l3["updated"]
+        l4 = _manifest(built / "L4.manifest.json")["files"]
+        sec = l4["variables"]["gridded_data.nc"]
+        assert list(sec["added"]) == ["millan_v"]
+        assert sec["removed"] == ["itslive_v"]
+
+        # The layered directory is the build, variable by variable
+        gdir = self.load(chain, "grid", 4)
+        _assert_matches_build(gdir.dir, built)
+        assert not list(Path(gdir.dir).glob("*.patch.nc"))
+        with xr.open_dataset(gdir.get_filepath("gridded_data")) as ds:
+            assert "itslive_v" not in ds
+            assert (ds.millan_v == 2).all()
+            assert (ds.glacier_ext == 0).all()
+            assert ds.attrs["patched_by"] == "test"
+        gdir = self.load(chain, "grid", 3)
+        with xr.open_dataset(gdir.get_filepath("gridded_data")) as ds:
+            assert (ds.itslive_v == 3.5).all()
+            assert "millan_v" not in ds
+
+    @pytest.mark.parametrize("tree", ["whole_then_patch", "patch_then_whole"])
+    def test_gridded_data_new_grid(self, chain, tree):
+        """A level changing the grid ships the whole file, and the
+        patches of the levels below it are not applied on top."""
+        built = chain.workdir(tree)
+        whole = "L3" if tree == "whole_then_patch" else "L4"
+        files = _manifest(built / f"{whole}.manifest.json")["files"]
+        assert "gridded_data.nc" in files["updated"]
+        assert "variables" not in files
+
+        gdir = self.load(chain, tree, 4)
+        _assert_matches_build(gdir.dir, built)
+        assert not list(Path(gdir.dir).glob("*.patch.nc"))
 
     def test_regenerated_parent_raises(self, chain):
         wdir = chain.workdir("base_l1")
@@ -1146,7 +1245,8 @@ class TestNcPatch:
 
     def test_digests_ignore_how_the_file_was_written(self, grids):
         ref = utils._workflow._nc_var_digests(grids.src)
-        assert {"@global", "x", "y", "topo", "glacier_mask"} <= set(ref)
+        assert {"@attrs", "@dims", "topo", "glacier_mask"} <= set(ref)
+        assert "x" not in ref  # coordinates are in @dims
 
         # Same content, rewritten with xarray and another compression
         with xr.open_dataset(grids.src, decode_cf=False) as ds:
@@ -1318,41 +1418,58 @@ class TestAddons:
         utils._workflow._extract_tars([l1, l2], str(layered))
         assert not (layered / "log.txt").exists()
 
+
+    @staticmethod
+    def copy(tmp_path, gdir, name):
+        rid = gdir.rgi_id
+        workdir = tmp_path / name / rid[:-6] / rid[:-3] / rid
+        shutil.copytree(gdir.dir, workdir)
+        return oggm.GlacierDirectory(rid, base_dir=tmp_path / name)
+
     @pytest.fixture
     def addon(self, tmp_path, hef_gdir):
-        """An `itslive` add-on built from one copy of HEF, and a second copy
-        to apply it to."""
-        rid = hef_gdir.rgi_id
-
-        def copy(name):
-            workdir = tmp_path / name / rid[:-6] / rid[:-3] / rid
-            shutil.copytree(hef_gdir.dir, workdir)
-            return oggm.GlacierDirectory(rid, base_dir=tmp_path / name)
-
-        src, dst = copy("src"), copy("dst")
+        """`itslive` and `millan` add-ons built from one copy of HEF, and a
+        second copy to apply them to."""
+        src = self.copy(tmp_path, hef_gdir, "src")
+        dst = self.copy(tmp_path, hef_gdir, "dst")
         _add_nc_var(src.get_filepath("gridded_data"), "itslive_v", 3.5)
+        _add_nc_var(src.get_filepath("gridded_data"), "millan_v", 2.0)
 
-        out = tmp_path / "addons" / "itslive"
-        utils.write_addon(
-            src, label="itslive", variables=["itslive_v"], output_dir=str(out)
-        )
-        utils.base_dir_to_tar(str(out))
-        return SimpleNamespace(src=src, dst=dst, out=out)
+        root = tmp_path / "addons"
+        for label, var in [("itslive", "itslive_v"), ("millan", "millan_v")]:
+            utils.write_addon(src, label=label, variables=[var],
+                              output_dir=str(root / label),
+                              source="test", version="1")
+            utils.base_dir_to_tar(str(root / label))
+        return SimpleNamespace(src=src, dst=dst, out=root / "itslive",
+                               root=root)
+
+    def test_write_addon(self, addon, tmp_path):
+        rid = addon.src.rgi_id
+        keys = f"RGI{cfg.PARAMS['rgi_version']}/b_{cfg.PARAMS['border']:03d}"
+        tar_fp = addon.out / keys / rid[:-6] / f"{rid[:-6]}.{rid[-5:-2]}.tar"
+        assert tar_fp.is_file()
+        with pytest.raises(InvalidParamsError, match="level"):
+            utils.write_addon(addon.src, label="L2", variables=["itslive_v"],
+                              output_dir=str(tmp_path / "bad"))
 
     def test_apply_addon_from_local_dir(self, addon):
-        with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
-            before = ds.load()
+        fp = addon.dst.get_filepath("gridded_data")
+        before = utils._workflow._nc_var_digests(fp)
         assert "itslive_v" not in before
 
-        utils.apply_addon(addon.dst, base_url=str(addon.out))
+        utils.apply_addon(addon.dst, addon="itslive", base_url=str(addon.out))
 
-        with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
-            after = ds.load()
-        np.testing.assert_array_equal(after["itslive_v"], 3.5)
-        for var in before.data_vars:
-            np.testing.assert_array_equal(after[var], before[var])
+        after = utils._workflow._nc_var_digests(fp)
+        assert set(after) - set(before) == {"itslive_v"}
+        assert all(after[k] == before[k] for k in before if k != "@attrs")
+        with xr.open_dataset(fp) as ds:
+            np.testing.assert_array_equal(ds["itslive_v"], 3.5)
         m = _manifest(Path(addon.dst.dir) / "itslive.manifest.json")
         assert m["kind"] == "addon"
+        assert m["addon"] == {"variables": ["itslive_v"], "source": "test",
+                              "version": "1"}
+        assert m["fetched_from"] == str(addon.out)
 
     def test_apply_addon_from_url(self, addon, monkeypatch):
         host = "https://addons.invalid/"
@@ -1360,18 +1477,21 @@ class TestAddons:
 
         def fake_file_downloader(www_path, **kwargs):
             calls.append(www_path)
-            local = addon.out.parent / www_path.replace(host, "")
+            local = addon.root / www_path.replace(host, "")
             return str(local) if local.is_file() else None
 
         monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
-        utils.apply_addon(addon.dst, base_url=host + "itslive")
-        assert calls == [host + "itslive/RGI50-11/RGI50-11.008.tar"]
+        utils.apply_addon(addon.dst, addon="itslive",
+                          base_url=host + "itslive")
+        keys = f"RGI{cfg.PARAMS['rgi_version']}/b_{cfg.PARAMS['border']:03d}"
+        assert calls == [host + f"itslive/{keys}/RGI50-11/RGI50-11.008.tar"]
         with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
             assert "itslive_v" in ds
 
-    def test_apply_addon_refuses_other_grid(self, addon):
-        from oggm.exceptions import InvalidWorkflowError
+        with pytest.raises(InvalidParamsError, match="base_url"):
+            utils.apply_addon(addon.dst, addon="unknown")
 
+    def test_apply_addon_refuses_other_grid(self, addon):
         self.shifted(addon.dst.grid, x0=addon.dst.grid.dx).to_json(
             addon.dst.get_filepath("glacier_grid")
         )
@@ -1381,6 +1501,71 @@ class TestAddons:
         fp = Path(dst.get_filepath("gridded_data"))
         before = fp.read_bytes()
         with pytest.raises(InvalidWorkflowError, match="grid"):
-            utils.apply_addon(dst, base_url=str(addon.out))
+            utils.apply_addon(dst, addon="itslive", base_url=str(addon.out))
         assert fp.read_bytes() == before
         assert not (Path(dst.dir) / "itslive.manifest.json").exists()
+
+    def test_apply_addon_refuses_no_gridded_data(self, addon):
+        os.remove(addon.dst.get_filepath("gridded_data"))
+        with pytest.raises(InvalidWorkflowError, match="L5"):
+            utils.apply_addon(addon.dst, addon="itslive",
+                              base_url=str(addon.out))
+
+    def test_two_addons_with_auto_skip(self, addon, monkeypatch):
+        monkeypatch.setitem(cfg.PARAMS, "auto_skip_task", True)
+        workflow.apply_addons([addon.dst], addons=["itslive", "millan"],
+                              base_urls={k: str(addon.root / k)
+                                         for k in ("itslive", "millan")})
+        with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
+            assert "itslive_v" in ds
+            assert "millan_v" in ds
+        assert addon.dst.get_task_status("apply_addon_itslive") == "SUCCESS"
+        assert addon.dst.get_task_status("apply_addon_millan") == "SUCCESS"
+
+    def test_levels_leave_addons_out(self, addon):
+        """A level built on a gdir with an add-on applied doesn't ship it."""
+        d = addon.dst.dir
+        # the dataset keys of the add-on tree
+        keys = dict(border=cfg.PARAMS["border"],
+                    rgi_version=cfg.PARAMS["rgi_version"])
+        utils.write_level_manifest(d, "L1", {}, kind="standalone", **keys)
+        prev = utils.snapshot_gdir_state(d)
+        utils.apply_addon(addon.dst, addon="itslive", base_url=str(addon.out))
+        _add_nc_var(addon.dst.get_filepath("gridded_data"), "level_v", 1.0)
+        _, changed = utils.write_level_manifest(d, "L2", prev, parent="L1",
+                                                **keys)
+        sec = _manifest(Path(d) / "L2.manifest.json")["files"]["variables"]
+        assert list(sec["gridded_data.nc"]["added"]) == ["level_v"]
+        with xr.open_dataset(Path(d) / "gridded_data.L2.patch.nc") as ds:
+            assert "itslive_v" not in ds
+            assert "level_v" in ds
+        assert "itslive.manifest.json" not in changed
+
+    def test_apply_addon_bins(self, tmp_path, hef_elev_gdir):
+        src = self.copy(tmp_path, hef_elev_gdir, "src")
+        dst = self.copy(tmp_path, hef_elev_gdir, "dst")
+        _add_nc_var(src.get_filepath("gridded_data"), "itslive_v", 3.5)
+        out = tmp_path / "addons" / "itslive"
+        utils.write_addon(src, label="itslive", variables=["itslive_v"],
+                          output_dir=str(out))
+        utils.base_dir_to_tar(str(out))
+
+        fls = Path(dst.get_store_filepath("inversion_flowlines")).read_bytes()
+        utils.apply_addon(dst, addon="itslive", base_url=str(out))
+        df = pd.read_csv(dst.get_filepath("elevation_band_flowline"),
+                         index_col=0)
+        np.testing.assert_allclose(df["itslive_v"], 3.5)
+        # the fixed dx widths match the RGI area, and the totals are kept
+        fp = dst.get_filepath("elevation_band_flowline", filesuffix="_fixed_dx")
+        fdf = pd.read_csv(fp, index_col=0)
+        np.testing.assert_allclose((fdf["itslive_v"] * fdf["area_m2"]).sum(),
+                                   (df["itslive_v"] * df["area"]).sum())
+        assert Path(dst.get_store_filepath("inversion_flowlines")).read_bytes() \
+            == fls
+
+        # bin=False leaves the tables alone
+        dst = self.copy(tmp_path, hef_elev_gdir, "dst2")
+        utils.apply_addon(dst, addon="itslive", base_url=str(out), bin=False)
+        df = pd.read_csv(dst.get_filepath("elevation_band_flowline"),
+                         index_col=0)
+        assert "itslive_v" not in df
