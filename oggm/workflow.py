@@ -838,6 +838,33 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
 
 
 @global_task(log)
+def apply_addons(gdirs, addons, base_urls=None, bin=True):
+    """Add optional gridded data (add-ons) to glacier directories.
+
+    Add-ons (e.g. velocity or thickness products) can be added to glacier
+    directories at any level from L1 to L4. Their variables are added to
+    ``gridded_data.nc`` and, if ``bin``, binned onto the elevation band
+    flowlines. See :py:func:`oggm.tasks.apply_addon`.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory`
+        the glacier directories
+    addons : str or list of str
+        the add-on names, e.g. ``['itslive', 'millan_thickness']``
+    base_urls : dict, optional
+        the URL (or local path) of each add-on tree, for add-ons which are
+        not in ``utils.ADDON_URLS``
+    bin : bool, default True
+        bin the variables onto the elevation band flowlines
+    """
+    base_urls = base_urls or {}
+    for addon in utils.tolist(addons):
+        execute_entity_task(tasks.apply_addon, gdirs, addon=addon,
+                            base_url=base_urls.get(addon), bin=bin)
+
+
+@global_task(log)
 def gis_prepro_tasks(gdirs):
     """Run all flowline preprocessing tasks on a list of glaciers.
 

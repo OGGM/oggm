@@ -25,6 +25,7 @@ from oggm.core.centerlines import catchment_width_correction
 from oggm.core.centerlines import terminus_width_correction
 from oggm.core.centerlines import elevation_band_flowline
 from oggm.core.centerlines import fixed_dx_elevation_band_flowline
+from oggm.core.centerlines import bin_gridded_variables
 from oggm.core.climate import process_climate_data
 from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import historical_delta_method
@@ -68,3 +69,5 @@ from oggm.core.dynamic_spinup import run_dynamic_melt_f_calibration
 from oggm.utils import copy_to_basedir
 from oggm.utils import gdir_to_tar
 from oggm.utils import merge_consecutive_run_outputs
+from oggm.utils import write_addon
+from oggm.utils import apply_addon

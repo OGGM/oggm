@@ -15,6 +15,7 @@ References::
         doi:10.5194/tc-8-503-2014
 """
 # Built ins
+import os
 import warnings
 import logging
 import copy
@@ -55,7 +56,8 @@ from oggm.utils import (tuple2int, line_interpol, interp_nans, lazy_property,
                         SuperclassMeta)
 from oggm import entity_task
 from oggm.exceptions import (InvalidParamsError, InvalidGeometryError,
-                             GeometryError, InvalidDEMError)
+                             GeometryError, InvalidDEMError,
+                             InvalidWorkflowError)
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -2219,6 +2221,183 @@ def intersect_downstream_lines(gdir, candidates=None):
     return tributaries
 
 
+def _read_binning_data(gdir, bin_variables):
+    """Read what the elevation band binning needs from gridded_data.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        the glacier directory
+    bin_variables : list of str
+        the variables to bin. The ones not in gridded_data are dropped
+        with a warning.
+
+    Returns
+    -------
+    (glacier_mask, topo, bin_variables, out_vars, out_totals): the glacier
+    mask and the smoothed topography (2D), the variables found, their
+    values on the glacier mask and their totals (e.g. the volume) to
+    preserve.
+    """
+    out_vars = []
+    out_totals = []
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+        glacier_mask = nc.variables['glacier_mask'][:] == 1
+        topo = nc.variables['topo_smoothed'][:].astype(np.float64)
+
+        # Check if there and do not raise when not available
+        keep = []
+        for var in bin_variables:
+            if var in nc.variables:
+                keep.append(var)
+            else:
+                log.warning('{}: var `{}` not found in gridded_data.'
+                            ''.format(gdir.rgi_id, var))
+        for var in keep:
+            data = nc.variables[var][:].astype(np.float64)
+            if var == 'consensus_ice_thickness':
+                # individual handling for consensus thickness as they use a
+                # different glacier mask than oggm (which was already applied)
+                data_sum = np.nansum(data)
+            else:
+                # use oggm glacier mask for all other data
+                data_sum = np.nansum(data[glacier_mask])
+            out_totals.append(data_sum * gdir.grid.dx ** 2)
+            out_vars.append(data[glacier_mask])
+
+    return glacier_mask, topo, keep, out_vars, out_totals
+
+
+def _elevation_band_bins(topo, rgi_id):
+    """The elevation bins of the elevation band flowline.
+
+    Parameters
+    ----------
+    topo : ndarray
+        the topography of the glacier pixels (1D)
+    rgi_id : str
+        for the error message
+
+    Returns
+    -------
+    (bins, bsize): the bin edges and the bin size
+    """
+    bsize = cfg.PARAMS['elevation_band_flowline_binsize']
+
+    # Make nice bins ensuring to cover the full range with the given bin size
+    maxb = utils.nicenumber(np.max(topo), bsize)
+    minb = utils.nicenumber(np.min(topo), bsize, lower=True)
+    bins = np.arange(minb, maxb + 0.01, bsize)
+
+    if len(bins) < 3:
+        # Very low elevation range
+        bsize = cfg.PARAMS['elevation_band_flowline_binsize'] / 3
+        maxb = utils.nicenumber(np.max(topo), bsize)
+        minb = utils.nicenumber(np.min(topo), bsize, lower=True)
+        bins = np.arange(minb, maxb + 0.01, bsize)
+        if len(bins) < 3:
+            # Ok this just not gonna work
+            raise InvalidDEMError('({}) DEM altidude range too small.'
+                                  .format(rgi_id))
+    return bins, bsize
+
+
+def _bin_to_bands(topo_digi, bin_ids, area, data, in_total, preserve_total):
+    """Average a variable per elevation band.
+
+    Parameters
+    ----------
+    topo_digi : ndarray
+        the bin index of each glacier pixel
+    bin_ids : ndarray
+        the bin indices of the bands (the rows of the flowline table)
+    area : ndarray
+        the area of each band
+    data : ndarray
+        the variable on the glacier pixels
+    in_total : float
+        the total of the variable (e.g. the volume)
+    preserve_total : bool
+        scale the band values so that their total is ``in_total``
+
+    Returns
+    -------
+    ndarray: the band averages. A band without valid data is NaN.
+    """
+    with warnings.catch_warnings():
+        # This can trigger an empty mean warning
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
+        out = np.array([np.nanmean(data[topo_digi == bi]) for bi in bin_ids])
+        if preserve_total:
+            out_total = np.nansum(out * area)
+            if out_total > 0:
+                out *= in_total / out_total
+    return out
+
+
+def _fixed_dx_points(df, dx_meter):
+    """The points of the fixed dx flowline along the elevation bands.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        the elevation band flowline table
+    dx_meter : float
+        the grid spacing of the fixed dx flowline
+
+    Returns
+    -------
+    ndarray: the distance along the elevation band flowline of each point
+    """
+    nx = int(df.dx.sum() / dx_meter)
+    dis_along_flowline = dx_meter / 2 + np.arange(nx) * dx_meter
+
+    while dis_along_flowline[-1] > df.index[-1]:
+        # do not extrapolate
+        dis_along_flowline = dis_along_flowline[:-1]
+
+    while dis_along_flowline[0] < df.index[0]:
+        # do not extrapolate
+        dis_along_flowline = dis_along_flowline[1:]
+
+    return dis_along_flowline
+
+
+def _bands_to_fixed_dx(df, var, dis_along_flowline, widths_m, dx_meter,
+                       preserve_total):
+    """Interpolate a binned variable onto the fixed dx flowline.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        the elevation band flowline table
+    var : str
+        the variable (a column of df)
+    dis_along_flowline : ndarray
+        the points of the fixed dx flowline, see `_fixed_dx_points`
+    widths_m : ndarray
+        the widths of the fixed dx flowline
+    dx_meter : float
+        the grid spacing of the fixed dx flowline
+    preserve_total : bool
+        scale the values so that their total is the one of the bands
+
+    Returns
+    -------
+    ndarray: the variable on the fixed dx flowline
+    """
+    interp = np.interp(dis_along_flowline, df.index, df[var])
+    if preserve_total:
+        in_total = np.nansum(df[var] * df['area'])
+        out_total = np.nansum(interp * widths_m * dx_meter)
+        if out_total > 0:
+            with warnings.catch_warnings():
+                # This can trigger a double error
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
+                interp *= in_total / out_total
+    return interp
+
+
 @entity_task(log, writes=['elevation_band_flowline'])
 def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     """Compute "squeezed" or "collapsed" glacier flowlines from Huss 2012.
@@ -2242,40 +2421,19 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     gdir : :py:class:`oggm.GlacierDirectory`
         where to write the data
     bin_variables : str or list of str
-        variables to add to the binned flowline
+        variables to add to the binned flowline. They do not change the
+        flowline geometry: a band without valid data for a variable is
+        kept, with NaN for that variable. To add variables later on, e.g.
+        after the flowlines were calibrated, use
+        :py:func:`bin_gridded_variables`.
     preserve_totals : bool or list of bool
         whether or not to preserve the variables totals (e.g. volume)
     """
 
     # Variables
     bin_variables = [] if bin_variables is None else utils.tolist(bin_variables)
-    out_vars = []
-    out_totals = []
-    grids_file = gdir.get_filepath('gridded_data')
-    with utils.ncDataset(grids_file) as nc:
-        glacier_mask = nc.variables['glacier_mask'][:] == 1
-        topo = nc.variables['topo_smoothed'][:].astype(np.float64)
-
-        # Check if there and do not raise when not available
-        keep = []
-        for var in bin_variables:
-            if var in nc.variables:
-                keep.append(var)
-            else:
-                log.warning('{}: var `{}` not found in gridded_data.'
-                            ''.format(gdir.rgi_id, var))
-        bin_variables = keep
-        for var in bin_variables:
-            data = nc.variables[var][:].astype(np.float64)
-            if var == 'consensus_ice_thickness':
-                # individual handling for consensus thickness as they use a
-                # different glacier mask than oggm (which was already applied)
-                data_sum = np.nansum(data)
-            else:
-                # use oggm glacier mask for all other data
-                data_sum = np.nansum(data[glacier_mask])
-            out_totals.append(data_sum * gdir.grid.dx ** 2)
-            out_vars.append(data[glacier_mask])
+    glacier_mask, topo, bin_variables, out_vars, out_totals = \
+        _read_binning_data(gdir, bin_variables)
 
     preserve_totals = utils.tolist(preserve_totals, length=len(bin_variables))
 
@@ -2289,27 +2447,11 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
     topo = topo[glacier_mask]
     slope = slope[glacier_mask]
 
-    bsize = cfg.PARAMS['elevation_band_flowline_binsize']
-
-    # Make nice bins ensuring to cover the full range with the given bin size
-    maxb = utils.nicenumber(np.max(topo), bsize)
-    minb = utils.nicenumber(np.min(topo), bsize, lower=True)
-    bins = np.arange(minb, maxb + 0.01, bsize)
+    bins, bsize = _elevation_band_bins(topo, gdir.rgi_id)
 
     # Some useful constants
     min_alpha = np.deg2rad(0.4)
     max_alpha = np.deg2rad(60)
-
-    if len(bins) < 3:
-        # Very low elevation range
-        bsize = cfg.PARAMS['elevation_band_flowline_binsize'] / 3
-        maxb = utils.nicenumber(np.max(topo), bsize)
-        minb = utils.nicenumber(np.min(topo), bsize, lower=True)
-        bins = np.arange(minb, maxb + 0.01, bsize)
-        if len(bins) < 3:
-            # Ok this just not gonna work
-            raise InvalidDEMError('({}) DEM altidude range too small.'
-                                  .format(gdir.rgi_id))
 
     # Go - binning
     df = pd.DataFrame()
@@ -2349,35 +2491,19 @@ def elevation_band_flowline(gdir, bin_variables=None, preserve_totals=True):
         # Final clip as in Werder et al 2019
         df.loc[bi, 'slope'] = utils.clip_scalar(avg_s, min_alpha, max_alpha)
 
-        # Binned variables
-        with warnings.catch_warnings():
-            # This can trigger an empty mean warning
-            warnings.filterwarnings("ignore", category=RuntimeWarning)
-            for var, data in zip(bin_variables, out_vars):
-                df.loc[bi, var] = np.nanmean(data[bin_coords])
-
     # The grid point's grid spacing and widths
     df['bin_elevation'] = (bins[1:] + bins[:-1]) / 2
     df['dx'] = bsize / np.tan(df['slope'])
     df['width'] = df['area'] / df['dx']
 
-    # Remove possible nans from above
-    if not bin_variables:
-        df = df.dropna()
-    else:
-        # only remove if all bin_variables are nan
-        df = df.dropna(how='all', subset=bin_variables)
+    # Remove the empty bands: the geometry does not depend on the variables
+    df = df.dropna()
 
-    # Check for binned vars
-    with warnings.catch_warnings():
-        # This can trigger an invalid value
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
-        for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
-                                             preserve_totals):
-            if do_p:
-                out_total = np.nansum(df[var] * df['area'])
-                if out_total > 0:
-                    df[var] *= in_total / out_total
+    # Binned variables
+    for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
+                                         preserve_totals):
+        df[var] = _bin_to_bands(topo_digi, df.index, df['area'].values,
+                                data, in_total, do_p)
 
     # In OGGM we go from top to bottom
     df = df[::-1]
@@ -2419,17 +2545,7 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
     map_dx = gdir.grid.dx
     dx = cfg.PARAMS['flowline_dx']
     dx_meter = dx * map_dx
-    nx = int(df.dx.sum() / dx_meter)
-    dis_along_flowline = dx_meter / 2 + np.arange(nx) * dx_meter
-
-    while dis_along_flowline[-1] > df.index[-1]:
-        # do not extrapolate
-        dis_along_flowline = dis_along_flowline[:-1]
-
-    while dis_along_flowline[0] < df.index[0]:
-        # do not extrapolate
-        dis_along_flowline = dis_along_flowline[1:]
-
+    dis_along_flowline = _fixed_dx_points(df, dx_meter)
     nx = len(dis_along_flowline)
 
     # Interpolate the data we need
@@ -2463,16 +2579,8 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
         odf['widths_m'] = widths_m
         odf['area_m2'] = widths_m * dx_meter
         for var, do_p in zip(bin_variables, preserve_totals):
-            interp = np.interp(dis_along_flowline, df.index, df[var])
-            if do_p:
-                in_total = np.nansum(df[var] * df['area'])
-                out_total = np.nansum(interp * widths_m * dx_meter)
-                if out_total > 0:
-                    with warnings.catch_warnings():
-                        # This can trigger a double error
-                        warnings.filterwarnings("ignore", category=RuntimeWarning)
-                        interp *= in_total / out_total
-            odf[var] = interp
+            odf[var] = _bands_to_fixed_dx(df, var, dis_along_flowline,
+                                          widths_m, dx_meter, do_p)
         # Match how OGGM computes distance along flowline
         odf.index = np.arange(nx) * dx_meter
         odf.to_csv(gdir.get_filepath('elevation_band_flowline',
@@ -2492,3 +2600,113 @@ def fixed_dx_elevation_band_flowline(gdir, bin_variables=None,
 
     gdir.write_store([fl], 'inversion_flowlines')
     gdir.add_to_diagnostics('flowline_type', 'elevation_band')
+
+
+@entity_task(log, writes=['elevation_band_flowline'])
+def bin_gridded_variables(gdir, bin_variables, preserve_totals=True):
+    """Bin gridded_data variables onto the existing elevation band flowline.
+
+    This adds the variables as columns to the elevation band tables
+    (``elevation_band_flowline.csv`` and its ``_fixed_dx`` version, which
+    is created if missing), at any processing level from L2 on. It gives
+    the same values as the ``bin_variables`` argument of
+    :py:func:`elevation_band_flowline` and
+    :py:func:`fixed_dx_elevation_band_flowline`, but it doesn't touch
+    anything else: the flowline geometry, the inversion flowlines and
+    their calibration stay as they are. Use it for data added after the
+    flowlines were computed, e.g. with an add-on.
+
+    Variables already in the tables are overwritten.
+
+    Parameters
+    ----------
+    gdir : :py:class:`oggm.GlacierDirectory`
+        where to write the data
+    bin_variables : str or list of str
+        the gridded_data variables to bin. The ones not found in
+        gridded_data are skipped with a warning.
+    preserve_totals : bool or list of bool
+        whether or not to preserve the variables totals (e.g. volume). Use
+        False for intensive quantities like velocities.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        if the glacier directory has no elevation band flowline (e.g.
+        centerlines), or if the flowline was not computed from the
+        glacier mask and topography currently in gridded_data.
+    """
+
+    if gdir.get_diagnostics().get('flowline_type') != 'elevation_band':
+        raise InvalidWorkflowError(
+            f'({gdir.rgi_id}) bin_gridded_variables needs elevation band '
+            'flowlines (computed by `elevation_band_flowline` and '
+            '`fixed_dx_elevation_band_flowline`).')
+
+    bin_variables = utils.tolist(bin_variables)
+    preserve = dict(zip(bin_variables,
+                        utils.tolist(preserve_totals,
+                                     length=len(bin_variables))))
+    glacier_mask, topo, bin_variables, out_vars, out_totals = \
+        _read_binning_data(gdir, bin_variables)
+    preserve_totals = [preserve[v] for v in bin_variables]
+    if not bin_variables:
+        return
+
+    # The bands of the existing table. round_trip, so that the geometry
+    # columns are written back unchanged
+    fp = gdir.get_filepath('elevation_band_flowline')
+    df = pd.read_csv(fp, index_col=0, float_precision='round_trip')
+
+    # Find the bin of each band, with the same bins as the flowline
+    topo = topo[glacier_mask]
+    bins, bsize = _elevation_band_bins(topo, gdir.rgi_id)
+    topo_digi = np.digitize(topo, bins) - 1
+    centers = (bins[1:] + bins[:-1]) / 2
+    bin_ids = np.round((df['bin_elevation'].values - centers[0]) / bsize)
+    bin_ids = bin_ids.astype(int)
+    area = np.bincount(topo_digi[topo_digi < len(centers)],
+                       minlength=len(centers)) * gdir.grid.dx ** 2
+    ok = ((bin_ids >= 0) & (bin_ids < len(centers))).all()
+    if ok:
+        ok = (np.allclose(centers[bin_ids], df['bin_elevation'].values) and
+              np.allclose(area[bin_ids], df['area'].values))
+    if not ok:
+        raise InvalidWorkflowError(
+            f'({gdir.rgi_id}) the elevation band flowline does not match '
+            'the glacier mask and topography of gridded_data: they changed '
+            'since the flowline was computed.')
+
+    for var, data, in_total, do_p in zip(bin_variables, out_vars, out_totals,
+                                         preserve_totals):
+        df[var] = _bin_to_bands(topo_digi, bin_ids, df['area'].values,
+                                data, in_total, do_p)
+    df.to_csv(fp)
+
+    # The fixed dx table, on the points of the inversion flowline. Its
+    # widths are the ones of the flowline, which is what
+    # `init_present_time_glacier` expects
+    fl = gdir.read_store('inversion_flowlines')[-1]
+    dx_meter = fl.dx * gdir.grid.dx
+    dis_along_flowline = _fixed_dx_points(df, dx_meter)
+    if len(dis_along_flowline) != fl.nx:
+        raise InvalidWorkflowError(
+            f'({gdir.rgi_id}) the inversion flowline does not match the '
+            'elevation band flowline.')
+    widths_m = fl.widths * gdir.grid.dx
+
+    fp = gdir.get_filepath('elevation_band_flowline', filesuffix='_fixed_dx')
+    odf = None
+    if os.path.exists(fp):
+        odf = pd.read_csv(fp, index_col=0, float_precision='round_trip')
+        if len(odf) != fl.nx:
+            odf = None  # from another flowline: start again
+    if odf is None:
+        odf = pd.DataFrame(index=np.arange(fl.nx) * dx_meter)
+        odf.index.name = 'dis_along_flowline'
+    odf['widths_m'] = widths_m
+    odf['area_m2'] = widths_m * dx_meter
+    for var, do_p in zip(bin_variables, preserve_totals):
+        odf[var] = _bands_to_fixed_dx(df, var, dis_along_flowline,
+                                      widths_m, dx_meter, do_p)
+    odf.to_csv(fp)

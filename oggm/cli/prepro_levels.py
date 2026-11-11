@@ -513,24 +513,11 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     keep_dem_folders : bool
         if `select_source_from_dir` is used, wether to keep the original
         DEM folders in or not.
-    add_consensus_thickness : bool
-        adds (reprojects) the consensus estimates thickness to the glacier
-        directories. With elev_bands=True, the data will also be binned.
-    add_itslive_velocity : bool
-        adds (reprojects) the ITS_LIVE velocity to the glacier
-        directories. With elev_bands=True, the data will also be binned.
-    add_millan_thickness : bool
-        adds (reprojects) the millan thickness to the glacier
-        directories. With elev_bands=True, the data will also be binned.
-    add_millan_velocity : bool
-        adds (reprojects) the millan velocity to the glacier
-        directories. With elev_bands=True, the data will also be binned.
-    add_hugonnet_dhdt : bool
-        adds (reprojects) the hugonnet dhdt maps to the glacier
-        directories. With elev_bands=True, the data will also be binned.
-    add_bedmachine : bool
-        adds (reprojects) the bedmachine ice thickness maps to the glacier
-        directories. With elev_bands=True, the data will also be binned.
+    add_consensus_thickness, add_itslive_velocity, add_millan_thickness,
+    add_millan_velocity, add_hugonnet_dhdt, add_bedmachine : bool
+        not supported anymore: the gridded shop products are add-ons now,
+        made by :py:func:`oggm.cli.prepro_addons.run_prepro_addons` and
+        added to any level with :py:func:`oggm.workflow.apply_addons`.
     add_glathida : bool
         adds (reprojects) the glathida thickness data to the glacier
         directories. Data points are stored as csv files.
@@ -669,6 +656,16 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         command (the grouping of climate grid points crosses RGI region
         borders, so this has to be done over all the regions at once).
     """
+
+    if any([add_consensus_thickness, add_itslive_velocity,
+            add_millan_thickness, add_millan_velocity, add_hugonnet_dhdt,
+            add_bedmachine]):
+        raise InvalidParamsError(
+            'The gridded shop products (consensus, ITS_LIVE, Millan, '
+            'Hugonnet, BedMachine) are not part of the levels anymore: they '
+            'are add-ons, made with `oggm_prepro_addons` from the L1 '
+            'directories and added to any level with '
+            '`workflow.apply_addons`.')
 
     # The temp bias preset overrides a couple of options. We log about it
     # further down, once cfg.initialize() has set the logging up.
@@ -1165,31 +1162,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
-        bin_variables = []
-        if add_consensus_thickness:
-            from oggm.shop.bedtopo import add_consensus_thickness
-            workflow.execute_entity_task(add_consensus_thickness, gdirs)
-            bin_variables.append('consensus_ice_thickness')
-        if add_itslive_velocity:
-            from oggm.shop.its_live import itslive_velocity_to_gdir
-            workflow.execute_entity_task(itslive_velocity_to_gdir, gdirs)
-            bin_variables.append('itslive_v')
-        if add_millan_thickness:
-            from oggm.shop.millan22 import millan_thickness_to_gdir
-            workflow.execute_entity_task(millan_thickness_to_gdir, gdirs)
-            bin_variables.append('millan_ice_thickness')
-        if add_millan_velocity:
-            from oggm.shop.millan22 import millan_velocity_to_gdir
-            workflow.execute_entity_task(millan_velocity_to_gdir, gdirs)
-            bin_variables.append('millan_v')
-        if add_hugonnet_dhdt:
-            from oggm.shop.hugonnet_maps import hugonnet_to_gdir
-            workflow.execute_entity_task(hugonnet_to_gdir, gdirs)
-            bin_variables.append('hugonnet_dhdt')
-        if add_bedmachine:
-            from oggm.shop.bedmachine import bedmachine_to_gdir
-            workflow.execute_entity_task(bedmachine_to_gdir, gdirs)
-            bin_variables.append('bedmachine_ice_thickness')
+        # The gridded shop products (velocities, thicknesses...) are not
+        # part of the levels: they are add-ons, made by `oggm_prepro_addons`
         if add_glathida:
             from oggm.shop.glathida import glathida_to_gdir
             workflow.execute_entity_task(glathida_to_gdir, gdirs)
@@ -1197,21 +1171,13 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             # Some additional data for the 70C glaciers
             workflow.execute_entity_task(tasks.rgi7g_to_complex, gdirs)
 
-        if bin_variables and gdirs_band:
-            workflow.execute_entity_task(tasks.elevation_band_flowline,
-                                         gdirs_band,
-                                         bin_variables=bin_variables)
-            workflow.execute_entity_task(tasks.fixed_dx_elevation_band_flowline,
-                                         gdirs_band,
-                                         bin_variables=bin_variables)
-        else:
-            # HH2015 method without it
-            task_list = [
-                tasks.elevation_band_flowline,
-                tasks.fixed_dx_elevation_band_flowline,
-            ]
-            for task in task_list:
-                workflow.execute_entity_task(task, gdirs_band)
+        # HH2015 method
+        task_list = [
+            tasks.elevation_band_flowline,
+            tasks.fixed_dx_elevation_band_flowline,
+        ]
+        for task in task_list:
+            workflow.execute_entity_task(task, gdirs_band)
 
         # Centerlines OGGM
         task_list = [
@@ -1243,26 +1209,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
 
-        if add_itslive_velocity:
-            from oggm.shop.its_live import compile_itslive_statistics
-            opath = sum_dir / f'itslive_statistics_{rgi_reg}.csv'
-            compile_itslive_statistics(gdirs, path=opath)
-        if add_millan_thickness or add_millan_velocity:
-            from oggm.shop.millan22 import compile_millan_statistics
-            opath = sum_dir / f'millan_statistics_{rgi_reg}.csv'
-            compile_millan_statistics(gdirs, path=opath)
-        if add_consensus_thickness:
-            from oggm.shop.bedtopo import compile_consensus_statistics
-            opath = sum_dir / f'consensus_statistics_{rgi_reg}.csv'
-            compile_consensus_statistics(gdirs, path=opath)
-        if add_hugonnet_dhdt:
-            from oggm.shop.hugonnet_maps import compile_hugonnet_statistics
-            opath = sum_dir / f'hugonnet_statistics_{rgi_reg}.csv'
-            compile_hugonnet_statistics(gdirs, path=opath)
-        if add_bedmachine:
-            from oggm.shop.bedmachine import compile_bedmachine_statistics
-            opath = sum_dir / f'bedmachine_statistics_{rgi_reg}.csv'
-            compile_bedmachine_statistics(gdirs, path=opath)
         if add_glathida:
             from oggm.shop.glathida import compile_glathida_statistics
             opath = sum_dir / f'glathida_statistics_{rgi_reg}.csv'
@@ -1810,36 +1756,6 @@ def parse_args(args):
     parser.add_argument('--keep-dem-folders', action='store_true',
                         help='if `select_source_from_dir` is used, wether to keep '
                         'the original DEM folders in or not.')
-    parser.add_argument('--add-consensus-thickness', action='store_true',
-                        help='adds (reprojects) the consensus thickness '
-                             'estimates to the glacier directories. '
-                             'With --elev-bands, the data will also be '
-                             'binned.')
-    parser.add_argument('--add-itslive-velocity', action='store_true',
-                        help='adds (reprojects) the ITS_LIVE velocity '
-                             'estimates to the glacier directories. '
-                             'With --elev-bands, the data will also be '
-                             'binned.')
-    parser.add_argument('--add-millan-thickness', action='store_true',
-                        help='adds (reprojects) the millan thickness '
-                             'estimates to the glacier directories. '
-                             'With --elev-bands, the data will also be '
-                             'binned.')
-    parser.add_argument('--add-millan-velocity', action='store_true',
-                        help='adds (reprojects) the millan velocity '
-                             'estimates to the glacier directories. '
-                             'With --elev-bands, the data will also be '
-                             'binned.')
-    parser.add_argument('--add-hugonnet-dhdt', action='store_true',
-                        help='adds (reprojects) the hugonnet dhdt '
-                             'maps to the glacier directories. '
-                             'With --elev-bands, the data will also be '
-                             'binned.')
-    parser.add_argument('--add-bedmachine', action='store_true',
-                        help='adds (reprojects) the Bedmachine ice thickness '
-                             'maps to the glacier directories. '
-                             'With --elev-bands, the data will also be '
-                             'binned.')
     parser.add_argument('--add-glathida', action='store_true',
                         help='adds (reprojects) the glathida point thickness '
                              'observations to the glacier directories. '
@@ -2023,12 +1939,6 @@ def parse_args(args):
                 centerlines=args.centerlines,
                 select_source_from_dir=args.select_source_from_dir,
                 keep_dem_folders=args.keep_dem_folders,
-                add_consensus_thickness=args.add_consensus_thickness,
-                add_millan_thickness=args.add_millan_thickness,
-                add_itslive_velocity=args.add_itslive_velocity,
-                add_millan_velocity=args.add_millan_velocity,
-                add_hugonnet_dhdt=args.add_hugonnet_dhdt,
-                add_bedmachine=args.add_bedmachine,
                 add_glathida=args.add_glathida,
                 add_distributed_thickness=args.add_distributed_thickness,
                 add_export_thickness_geotiff=args.add_export_thickness_geotiff,

@@ -85,6 +85,7 @@ tests = [
 [project.scripts]
 oggm_prepro = "oggm.cli.prepro_levels:main"
 oggm_prepro_chunks = "oggm.cli.prepro_chunks:main"
+oggm_prepro_addons = "oggm.cli.prepro_addons:main"
 oggm_temp_bias = "oggm.cli.temp_bias:main"
 oggm_prepro_diag = "oggm.cli.prepro_diag:main"
 oggm_benchmark = "oggm.cli.benchmark:main"
