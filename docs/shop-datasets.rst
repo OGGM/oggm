@@ -21,6 +21,9 @@ For example, to add ITS_LIVE velocity data to a glacier directory:
     from oggm.shop import its_live
     its_live.itslive_velocity_to_gdir(gdir)
 
+The gridded datasets can also be added to the preprocessed directories as
+**add-ons**, see :ref:`shop-addons`.
+
 Below is a brief description of the available datasets. To explore them in
 practice, see the
 `OGGM as an accelerator tutorial <https://tutorials.oggm.org/stable/notebooks/10minutes/machine_learning.html>`_.
@@ -129,3 +132,31 @@ Bedmachine ice thickness
 and `Greenland (v5) <https://nsidc.org/data/idbmg4/versions/5>`_
 for glaciers where these products are available.
 Refer to the original product pages on NSIDC for reference.
+
+.. _shop-addons:
+
+Add-ons
+-------
+
+The gridded datasets above (ITS_LIVE, consensus and Millan thickness, Millan
+velocity, Hugonnet dh/dt, BedMachine) are also published as **add-ons**:
+preprocessed data which you can add to the preprocessed glacier directories,
+at any level from L1 to L4 (L5 directories have no gridded data). An add-on
+is matched to a glacier directory by its grid, so the same add-on works
+whatever the flowline type, climate or calibration of the directory. Its
+variables are added to ``gridded_data.nc`` and, by default, binned onto the
+elevation band flowlines (see :py:func:`tasks.bin_gridded_variables`),
+without touching the flowlines or their calibration:
+
+.. code-block:: python
+
+    gdirs = workflow.init_glacier_directories(rgi_ids, from_prepro_level=3,
+                                              prepro_border=80,
+                                              prepro_base_url=base_url)
+    workflow.apply_addons(gdirs, addons=['itslive', 'millan_thickness'],
+                          base_urls={'itslive': itslive_url,
+                                     'millan_thickness': millan_url})
+
+The add-on variables are never part of a prepro level: they are optional
+data, which OGGM does not use operationally. The add-on trees are made from
+the L1 directories with the ``oggm_prepro_addons`` command.
