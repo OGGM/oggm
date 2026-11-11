@@ -434,7 +434,7 @@ Breaking changes
   The per-point lambdas are stored in the inversion output and used by
   ``filter_inversion_output`` and ``init_present_time_glacier``.
   Filtering also reduces lambda where necessary to preserve this minimum
-  bottom width after smoothing and conversion to trapezoidal beds.
+  bottom width after smoothing and conversion to trapezoidal beds (:pull:`2034`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The trapezoidal downstream line (``compute_downstream_bedshape``) now uses
   lambdas fitted to the valley shape instead of the default
@@ -453,7 +453,7 @@ Breaking changes
   which made the valley too wide. On a sample of 100 Alpine glaciers, 
   the median fitted lambda is about 10 for glaciers smaller than 0.1 km2 
   and about 4 for glaciers larger than 2 km2. Directories processed with older 
-  versions still use the default lambda downstream.
+  versions still use the default lambda downstream (:pull:`2034`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The boolean flags of the ``oggm_prepro``, ``oggm_benchmark`` and
   ``oggm_temp_bias`` commands (``--elev-bands``, ``--test``, ``--disable-mp``,
