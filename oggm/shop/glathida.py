@@ -46,7 +46,10 @@ def glathida_to_gdir(gdir):
 
     Returns
     -------
-    the dataframe, or None if there is no data for this glacier.
+    df : pandas.DataFrame
+        The GlaThiDa data for this glacier or None if there is no data
+        for this glacier. Note that the index starts at 0, not at the
+        row position in the regional file.
     """
 
     rgi_version = gdir.rgi_version
@@ -57,8 +60,7 @@ def glathida_to_gdir(gdir):
     gtd_file = utils.file_downloader(base_url)
 
     if str(gtd_file).endswith('.parquet'):
-        df = pd.read_parquet(gtd_file)
-        df = df[df['rgi_id'] == gdir.rgi_id].copy()
+        df = pd.read_parquet(gtd_file, filters=[("rgi_id", "==", gdir.rgi_id)])
         if df.empty:
             log.debug(f'({gdir.rgi_id}): no GlaThiDa data for this glacier')
             return None

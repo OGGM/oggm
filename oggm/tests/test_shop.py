@@ -166,6 +166,24 @@ class Test_millan22:
         assert df['millan_vel_perc_cov'] > 0.92
         assert df['millan_vol_km3'] > 174
 
+        # reuse vx/vy because the test server doesn't have error files
+        lookup = millan22._get_lookup_velocity().copy()
+        lookup["err_vx"] = lookup["vx"]
+        lookup["err_vy"] = lookup["vy"]
+        # duplicate rows to cover the else block
+        lookup = pd.concat([lookup, lookup], ignore_index=True)
+        monkeypatch.setattr(millan22, "_lookup_velocity", lookup)
+
+        millan22.millan_velocity_to_gdir(gdir, add_error=True)
+
+        with xr.open_dataset(gdir.get_filepath("gridded_data")) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            err_vx = ds.millan_err_vx.where(mask).data
+            err_vy = ds.millan_err_vy.where(mask).data
+
+        assert np.isfinite(err_vx).sum() / mask.sum() > 0.9
+        assert np.isfinite(err_vy).sum() / mask.sum() > 0.9
+
 
 class Test_cook23:
 
@@ -920,3 +938,42 @@ class Test_Glathida:
         godf = glathida.compile_glathida_on_grid([gdir])
 
         assert godf is not None
+
+    def test_to_glacier_filtered_read(self, hef_gdir, tmp_path, monkeypatch):
+
+        gdir = hef_gdir
+        n = 6
+        # match format in regional files
+        src = pd.DataFrame(
+            {
+                "survey_id": np.arange(n, dtype="int64"),
+                "date": ["2000-01-01"] * n,
+                "elevation_date": ["2000-01-01"] * n,
+                "latitude": gdir.cenlat + np.linspace(-0.005, 0.005, n),
+                "longitude": gdir.cenlon + np.linspace(-0.005, 0.005, n),
+                "elevation": np.linspace(2800.0, 3000.0, n),
+                "thickness": np.arange(10, 10 + n, dtype="int64"),
+                "thickness_uncertainty": np.full(n, 5.0),
+                "flag": [""] * n,
+                "rgi_id": [gdir.rgi_id, "RGI50-11.99999"] * (n // 2),
+            }
+        )
+        gtd_file = tmp_path / "gtd.parquet"
+        src.to_parquet(gtd_file, index=False)
+        monkeypatch.setattr(
+            glathida.utils, "file_downloader", lambda url: str(gtd_file)
+        )
+
+        df = glathida.glathida_to_gdir(gdir)
+
+        # Same rows, dtypes and order as the source, with a fresh index
+        ref = src.iloc[[0, 2, 4]].reset_index(drop=True)
+        pd.testing.assert_frame_equal(df[ref.columns], ref)
+        dfc = pd.read_csv(gdir.get_filepath("glathida_data"))
+        np.testing.assert_array_equal(dfc["survey_id"], ref["survey_id"])
+        np.testing.assert_array_equal(dfc["ij_grid"], df["ij_grid"])
+
+        # No data for this glacier
+        src.loc[src.rgi_id == gdir.rgi_id, "rgi_id"] = "RGI50-11.99998"
+        src.to_parquet(gtd_file, index=False)
+        assert glathida.glathida_to_gdir(gdir) is None

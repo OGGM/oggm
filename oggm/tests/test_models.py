@@ -151,7 +151,7 @@ class TestInitPresentDayFlowline:
             assert np.all(~np.isfinite(fl.bed_shape[~ice_mask]))
             # check that bottom width of downstream line is larger than minimum
             assert np.all(fl._w0_m[~ice_mask] >
-                          gdir.settings['trapezoid_min_bottom_width'])
+                          gdir.settings['downstream_min_bottom_width'])
 
         if do_plot:
             plt.plot(fls[-1].bed_h, color='k')
@@ -1989,6 +1989,66 @@ class TestMassBalanceModels:
 
         for fl in fls:
             assert fl.volume_m3 > 0
+
+    def test_sfc_type_inversion_firn_volume(self, hef_gdir):
+        """The volume calibration of the inversion matches ice + firn to the
+        reference volume for models with a snow/firn bucket system.
+        """
+        gdir = hef_gdir
+        ref_vol = tasks.get_inversion_volume(gdir)
+        sfx = '_inv_firn'
+        ModelSettings(gdir, filesuffix=sfx, parent_filesuffix='')
+        kwargs = dict(settings_filesuffix=sfx, observations_filesuffix=sfx,
+                      input_filesuffix=sfx, output_filesuffix=sfx)
+
+        # without buckets there is no firn
+        massbalance.apparent_mb_from_any_mb(
+            gdir, settings_filesuffix=sfx, input_filesuffix='',
+            output_filesuffix=sfx, mb_years=(2000, 2003))
+        gdir.settings_filesuffix = sfx
+        assert gdir.settings['inversion_firn_volume_m3'] == 0
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, **kwargs)
+        assert out['vol_firn_m3'] == 0
+        assert_allclose(out['vol_oggm_m3'], ref_vol, rtol=1e-2)
+
+        massbalance.apparent_mb_from_any_mb(
+            gdir, settings_filesuffix=sfx, input_filesuffix='',
+            output_filesuffix=sfx, mb_years=(2000, 2003),
+            mb_model_class=massbalance.SfcTypeTIModel)
+        gdir.settings_filesuffix = sfx
+        firn_vol = gdir.settings['inversion_firn_volume_m3']
+        # several meters of firn on average (~10% of the volume here)
+        assert 0.05 < firn_vol / ref_vol < 0.2
+
+        # entity task version
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, **kwargs)
+        assert out['vol_firn_m3'] == firn_vol
+        assert_allclose(out['vol_oggm_m3'] + firn_vol, ref_vol, rtol=1e-2)
+        assert out['vol_oggm_m3'] < ref_vol - firn_vol / 2
+        # the observation is ice + firn, in the requested observations file
+        gdir.observations_filesuffix = sfx
+        assert_allclose(gdir.observations['ref_volume_m3']['value'],
+                        out['vol_oggm_m3'] + firn_vol)
+
+        # global task version
+        df = workflow.calibrate_inversion_from_ref_table(
+            [gdir], ref_volume_m3=ref_vol, **kwargs)
+        vol_ice = df['vol_oggm_m3'].iloc[0]
+        assert df['vol_firn_m3'].iloc[0] == firn_vol
+        assert_allclose(vol_ice + firn_vol, ref_vol, rtol=1e-2)
+        # the observation is ice + firn
+        gdir.observations_filesuffix = sfx
+        assert_allclose(gdir.observations['ref_volume_m3']['value'],
+                        vol_ice + firn_vol)
+
+        # calibrating again to the stored observation (as done in the dynamic
+        # melt_f calibration) does not remove the firn a second time
+        df = workflow.calibrate_inversion_from_ref_table(
+            [gdir], ref_volume_m3=gdir.observations['ref_volume_m3']['value'],
+            **kwargs)
+        assert_allclose(df['vol_oggm_m3'].iloc[0], vol_ice, rtol=1e-2)
 
     @pytest.mark.slow
     def test_sfc_type_save_load(self, hef_gdir):
@@ -8633,6 +8693,53 @@ class TestMergedHEF:
 
 @pytest.mark.test_env("models_dynamics")
 class TestSemiImplicitModel:
+
+    @pytest.mark.slow
+    def test_narrow_trapezoids(self, hef_elev_gdir_base, tmp_path):
+        # Narrow trapezoids survive serialization, retreat and regrowth.
+        gdir = tasks.copy_to_basedir(hef_elev_gdir_base,
+                                     base_dir=str(tmp_path), setup='all')
+        gdir.settings['trapezoid_lambdas'] = 12
+        gdir.settings['downstream_line_shape'] = 'trapezoidal'
+        inversion.prepare_for_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
+        inversion.filter_inversion_output(gdir)
+        init_present_time_glacier(gdir)
+
+        for inv in gdir.read_store('inversion_output'):
+            is_trap = inv['is_trapezoid']
+            w0 = inv['width'] - inv['lambdas'] * inv['thick']
+            w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+            assert np.all(w0[is_trap] >=
+                          np.minimum(w0_min, inv['width'][is_trap]) - 1e-6)
+
+        # this is a write / read round trip
+        fls = gdir.read_store('model_flowlines')
+        fl = fls[-1]
+        is_tri = (fl.is_trapezoid & (fl.thick > 0) &
+                  (fl._w0_m < inversion.TRAPEZOID_MIN_BOTTOM_WIDTH + 0.01))
+        assert is_tri.sum() > 10
+        assert np.all(fl._w0_m[is_tri] > 0)
+
+        glen_a = gdir.settings['inversion_glen_a']
+        fs = gdir.settings['inversion_fs']
+        mb = massbalance.ConstantMassBalance(gdir, y0=1930)
+        vols = []
+        for model_class in [SemiImplicitModel, FluxBasedModel]:
+            mb.temp_bias = 2
+            model = model_class(fls, mb_model=mb, y0=0, glen_a=glen_a,
+                                fs=fs)
+            model.run_until(100)
+            # the narrow trapezoids are ice free
+            assert np.all(model.fls[-1].thick[is_tri] == 0)
+            mb.temp_bias = 0
+            model.run_until(400)
+            # and covered again
+            assert np.all(np.isfinite(model.fls[-1].thick))
+            assert np.all(model.fls[-1].thick[is_tri] > 0)
+            vols.append(model.volume_km3)
+
+        assert_allclose(vols[0], vols[1], rtol=5e-3)
 
     @pytest.mark.slow
     def test_equilibrium(self, hef_elev_gdir, inversion_params):

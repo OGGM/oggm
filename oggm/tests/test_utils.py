@@ -326,6 +326,59 @@ class TestFuncs(object):
         ok = (years == y2) & (months == m2) & (days == d2)
         assert sum(~ok) == 0
 
+    def test_floatyear_to_date_scalar(self):
+        # the scalar fast path must give the same results as the vectorized one
+        rng = np.random.default_rng(0)
+        yrs = np.arange(1000, 2101)
+        mm, yy = np.meshgrid(np.arange(1, 13), np.arange(1800, 2101))
+        dates = [rng.uniform(1000, 2100, 20000),
+                 # month starts
+                 utils.date_to_floatyear(yy.ravel(), mm.ravel()),
+                 # integer years and just below
+                 yrs.astype(np.float64),
+                 np.nextafter(yrs.astype(np.float64), 0)]
+        # day starts in 365- and 366-day years
+        for y in [1900, 1999, 2000, 2001, 2004]:
+            n = utils.get_days_of_year(y, use_leap_years=True)
+            dates.append(y + np.arange(n) / n)
+        dates = np.concatenate(dates)
+
+        for return_day in [False, True]:
+            ref = utils.floatyear_to_date(dates, return_day=return_day)
+            out = np.array([utils.floatyear_to_date(d, return_day=return_day)
+                            for d in dates]).T
+            for r, o in zip(ref, out):
+                np.testing.assert_array_equal(r, o)
+
+        # scalar types
+        for yr in [2000.5, np.float64(2000.5), np.array(2000.5)]:
+            y, m = utils.floatyear_to_date(yr)
+            assert isinstance(y, np.int64) and isinstance(m, np.int64)
+            assert (y, m) == (2000, 7)
+        assert utils.floatyear_to_date(2000) == (2000, 1)
+
+    def test_date_to_floatyear_scalar(self):
+        # the scalar fast path must give the same results as the vectorized one
+        yy, mm, dd = np.meshgrid(np.arange(1800, 2101), np.arange(1, 13),
+                                 np.arange(1, 33))  # incl. day overflows
+        yy, mm, dd = yy.ravel(), mm.ravel(), dd.ravel()
+
+        ref = utils.date_to_floatyear(yy, mm, dd)
+        out = np.array([utils.date_to_floatyear(y, m, d)
+                        for y, m, d in zip(yy, mm, dd)])
+        np.testing.assert_array_equal(ref, out)
+
+        ref = utils.date_to_floatyear(yy, mm)
+        out = np.array([utils.date_to_floatyear(y, m) for y, m in zip(yy, mm)])
+        np.testing.assert_array_equal(ref, out)
+
+        # scalar types
+        for y in [2000, np.int64(2000), np.array(2000), 2000.]:
+            r = utils.date_to_floatyear(y, 7)
+            assert isinstance(r, np.float64)
+            assert r == utils.date_to_floatyear([2000], [7])[0]
+        assert utils.date_to_floatyear(2000, 12, 32) == 2001
+
     def test_get_time_functions(self):
         """Test scalar and array behavior of get_{days,seconds}_of_{year,month}."""
         from oggm.utils._funcs import (get_days_of_year, get_seconds_of_year,
@@ -2520,8 +2573,9 @@ class TestPreproCLI:
             ref = ods.volume
             new = ods.volume_fixed_geom
             # SfcTypeTIModel's snow tracking makes the fixed-geometry
-            # approximation less accurate than for MonthlyTIModel
-            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.15
+            # approximation less accurate than for MonthlyTIModel (and the
+            # glaciers are thinner, since the firn is part of the volume)
+            rtol = 0.05 if mb_model_class == 'MonthlyTIModel' else 0.2
             np.testing.assert_allclose(new.isel(time=-1),
                                        ref.isel(time=-1),
                                        rtol=rtol)

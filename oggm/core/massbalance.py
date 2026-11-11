@@ -1,6 +1,7 @@
 """Mass balance models - next generation"""
 
 # Built ins
+import bisect
 import logging
 import os
 import inspect
@@ -1511,6 +1512,9 @@ class SfcTypeTIModel(MassBalanceModel):
         self._ys_is_dynamic = ys is None
         self.ys = ys
 
+        # cache for the timeseries of float years, see _float_years
+        self._float_years_cache = {}
+
         # check compatibility of aging_frequency and climate_resolution: aging
         # can not happen at higher temporal resolution than the climate steps
         if aging_frequency not in ["annual", "monthly"]:
@@ -1795,6 +1799,12 @@ class SfcTypeTIModel(MassBalanceModel):
     @property
     def mb_heights(self):
         return self._stored_array_as_dataframe(self._mb_heights)
+
+    def _stored_heights(self, year):
+        # heights used at the stored timestep `year`. Same as
+        # self.mb_heights[year], without building the full DataFrame (which
+        # becomes slow for long runs)
+        return self._mb_heights[self._year_to_index[year]]
 
     @property
     def snow_melt(self):
@@ -2242,14 +2252,11 @@ class SfcTypeTIModel(MassBalanceModel):
         if np.any(mb_buckets_np[:, -1]):
             raise ValueError("Ice bucket not empty, need to check!")
 
-        mb_buckets_val_old = mb_buckets_np[:, :-1]
-        len_h = len(self.buckets_grid_point_label)
-        # add a new fresh snow bucket and move everything to the next older
-        # bucket, the last firn bucket is transferred to ice here
-        updated_bucket_np = np.concatenate(
-            [np.zeros(len_h).reshape(len_h, 1), mb_buckets_val_old], axis=1)
-
-        self.mb_buckets_np = updated_bucket_np
+        # move everything to the next older bucket (in place) and add a new
+        # empty fresh snow bucket, the last firn bucket is transferred to ice
+        # here
+        mb_buckets_np[:, 1:] = mb_buckets_np[:, :-1]
+        mb_buckets_np[:, 0] = 0.
 
     def _run_until(self, heights, year, mb_resolution):
 
@@ -2270,52 +2277,42 @@ class SfcTypeTIModel(MassBalanceModel):
             else:
                 # mb_resolution can not be shorter than climate_resolution
                 raise NotImplementedError(f"mb_resolution: {mb_resolution}")
-        elif self.climate_resolution == 'monthly':
+        else:
+            # the timesteps are sorted: we select the ones we need with
+            # bisect, from the current bucket date up to the requested date
+            daily = self.climate_resolution == 'daily'
+            if self.climate_resolution not in ['monthly', 'daily']:
+                raise NotImplementedError(
+                    f"'climate_resolution': {self.climate_resolution}")
             if mb_resolution == 'annual':
-                missing_float_years = float_years_timeseries(
-                    y0=np.floor(self.mb_buckets_year), y1=year,
-                    include_last_year=True, )
+                steps = self._float_years(np.floor(self.mb_buckets_year), year,
+                                          include_last_year=True, daily=daily)
+                end = len(steps)
             elif mb_resolution == 'monthly':
-                missing_float_years = float_years_timeseries(
-                    y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1)
-                # only keep those actually needed
-                missing_float_years = [yr for yr in missing_float_years
-                                       if yr <= year]
+                steps = self._float_years(np.floor(self.mb_buckets_year),
+                                          np.ceil(year) + 1, daily=daily)
+                if daily:
+                    # all days before the start of the next month
+                    y, m = floatyear_to_date(year)
+                    y_end = y if m != 12 else y + 1
+                    m_end = m + 1 if m != 12 else 1
+                    end = bisect.bisect_left(steps,
+                                             date_to_floatyear(y_end, m_end))
+                else:
+                    # all months up to the requested one
+                    end = bisect.bisect_right(steps, year)
+            elif mb_resolution == 'daily' and daily:
+                steps = self._float_years(np.floor(self.mb_buckets_year),
+                                          np.ceil(year) + 1, daily=True)
+                # all days up to the requested one, date_to_floatyear can
+                # handle overflows e.g. 32.12.2000 == 01.01.2001
+                y, m, d = floatyear_to_date(year, return_day=True)
+                end = bisect.bisect_left(steps, date_to_floatyear(y, m, d + 1))
             else:
                 # mb_resolution can not be shorter than climate_resolution
                 raise NotImplementedError(f"mb_resolution: {mb_resolution}")
-        elif self.climate_resolution == 'daily':
-            if mb_resolution == 'annual':
-                missing_float_years = float_years_timeseries(
-                    y0=np.floor(self.mb_buckets_year), y1=year,
-                    include_last_year=True, daily=True)
-            elif mb_resolution == 'monthly':
-                missing_float_years = float_years_timeseries(
-                    y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1,
-                    daily=True
-                )
-                # only keep those actually needed
-                y, m = floatyear_to_date(year)
-                y_end = y if m != 12 else y + 1
-                m_end = m + 1 if m != 12 else 1
-                missing_float_years = [yr for yr in missing_float_years
-                                       if yr < date_to_floatyear(y_end, m_end)]
-            elif mb_resolution == 'daily':
-                missing_float_years = float_years_timeseries(
-                    y0=np.floor(self.mb_buckets_year), y1=np.ceil(year) + 1,
-                    daily=True
-                )
-                # only keep those actually needed
-                y, m, d = floatyear_to_date(year, return_day=True)
-                missing_float_years = [yr for yr in missing_float_years
-                                       # date_to_floatyear can handle overflows
-                                       # e.g. 32.12.2000 == 01.01.2001
-                                       if yr < date_to_floatyear(y, m, d + 1)]
-            else:
-                raise NotImplementedError(f"mb_resolution: {mb_resolution}")
-        else:
-            raise NotImplementedError(
-                f"'climate_resolution': {self.climate_resolution}")
+            start = bisect.bisect_left(steps, self.mb_buckets_year)
+            missing_float_years = steps[start:end]
 
         # if use_previous_mbs=True it could be there are no missing_float_years
         for yr in missing_float_years:
@@ -2325,6 +2322,21 @@ class SfcTypeTIModel(MassBalanceModel):
             self._apply_climate_step_and_aging_to_buckets(heights=heights,
                                                           year=yr)
 
+    def _float_years(self, y0, y1, include_last_year=False, daily=False):
+        """float_years_timeseries as a tuple, cached per instance.
+
+        The model asks for the same short timeseries at every mass balance
+        request, building them each time is slow.
+        """
+        key = (int(np.floor(y0)), int(np.floor(y1)), include_last_year, daily)
+        out = self._float_years_cache.get(key)
+        if out is None:
+            out = tuple(float_years_timeseries(
+                y0=key[0], y1=key[1], include_last_year=include_last_year,
+                daily=daily))
+            self._float_years_cache[key] = out
+        return out
+
     def _stored_timestep_indices(self, year, mb_resolution):
         """Indices into the stored timestep arrays contributing to the given
         year (mb_resolution='annual') or month (mb_resolution='monthly')."""
@@ -2332,11 +2344,9 @@ class SfcTypeTIModel(MassBalanceModel):
             if self.climate_resolution == 'annual':
                 keys = [year]
             elif self.climate_resolution == 'monthly':
-                keys = float_years_timeseries(y0=year, y1=year + 1,
-                                              daily=False)[:-1]
+                keys = self._float_years(year, year + 1, daily=False)[:-1]
             elif self.climate_resolution == 'daily':
-                keys = float_years_timeseries(y0=year, y1=year + 1,
-                                              daily=True)[:-1]
+                keys = self._float_years(year, year + 1, daily=True)[:-1]
             else:
                 raise NotImplementedError(
                     f"'climate_resolution': {self.climate_resolution}")
@@ -2349,16 +2359,17 @@ class SfcTypeTIModel(MassBalanceModel):
             elif self.climate_resolution == 'daily':
                 y_start, m_start, d_start = floatyear_to_date(year,
                                                               return_day=True)
-                float_days = float_years_timeseries(
-                    y0=year, y1=year + 1, daily=True)[:-1]
-                # only keep days larger equal than the start of the month
-                float_days = [day for day in float_days
-                              if day >= date_to_floatyear(y_start, m_start, 1)]
-                # only keep days smaller the start of the next month
+                float_days = self._float_years(year, year + 1,
+                                               daily=True)[:-1]
+                # only keep the days from the start of the month to the
+                # start of the next month (the days are sorted)
                 m_end = m_start + 1 if m_start != 12 else 1
                 y_end = y_start if m_start != 12 else y_start + 1
-                keys = [day for day in float_days
-                        if day < date_to_floatyear(y_end, m_end, 1)]
+                keys = float_days[
+                    bisect.bisect_left(float_days,
+                                       date_to_floatyear(y_start, m_start, 1)):
+                    bisect.bisect_left(float_days,
+                                       date_to_floatyear(y_end, m_end, 1))]
             else:
                 raise NotImplementedError(
                     f"'climate_resolution': {self.climate_resolution}")
@@ -2453,7 +2464,7 @@ class SfcTypeTIModel(MassBalanceModel):
             # to make a distinct call here, even it is potentially already
             # called in _apply_climate_step_and_aging_to_buckets
             t, tmelt, prcp, prcpsol = self.mbmod.get_annual_climate(
-                heights=self.mb_heights[year], year=year)
+                heights=self._stored_heights(year), year=year)
             return annual_mb, t, tmelt, prcp, prcpsol
         else:
             return annual_mb
@@ -2538,7 +2549,7 @@ class SfcTypeTIModel(MassBalanceModel):
             # to make a distinct call here, even it is potentially already
             # called in _apply_climate_step_and_aging_to_buckets
             t, tmelt, prcp, prcpsol = self.mbmod.get_monthly_climate(
-                heights=self.mb_heights[year], year=year)
+                heights=self._stored_heights(year), year=year)
             return monthly_mb, t, tmelt, prcp, prcpsol
         else:
             return monthly_mb
@@ -2629,7 +2640,7 @@ class SfcTypeTIModel(MassBalanceModel):
             # to make a distinct call here, even it is potentially already
             # called in _apply_climate_step_and_aging_to_buckets
             t, tmelt, prcp, prcpsol = self.mbmod.get_daily_climate(
-                heights=self.mb_heights[year], year=year)
+                heights=self._stored_heights(year), year=year)
             return daily_mb, t, tmelt, prcp, prcpsol
         else:
             return daily_mb
@@ -5363,6 +5374,8 @@ def apparent_mb_from_linear_mb(gdir, settings_filesuffix:str='',
     gdir.write_store(fls, 'inversion_flowlines')
     gdir.write_store({'ela_h': ela_h, 'grad': mb_gradient},
                      'linear_mb_params')
+    # no snow/firn layer with this mb (see apparent_mb_from_any_mb)
+    gdir.settings['inversion_firn_volume_m3'] = 0.
 
 
 @entity_task(log, writes=['inversion_flowlines'])
@@ -5415,6 +5428,15 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         If True we add the snow/firn height of the current mb_model (if
         available) to include this in the elevation feedback of the mb
         calculation.
+
+    Notes
+    -----
+    For mass balance models with a snow/firn bucket system (e.g.
+    ``SfcTypeTIModel``), the volume of the snow and firn layer at the RGI
+    date (computed on the inversion flowlines) is stored in the settings as
+    ``inversion_firn_volume_m3`` (zero for all other models). The volume
+    calibration of the inversion uses it to match ice + firn to the
+    reference volume.
     """
 
     if input_filesuffix is None:
@@ -5450,6 +5472,15 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
         # Range
         mb_years = np.arange(*mb_years, 1)
 
+    # Models with a snow/firn bucket system (e.g. SfcTypeTIModel) carry a
+    # firn volume on top of the ice. We store an estimate of it at the
+    # default reference year of the inversion volume (rgi_date + 1, i.e.
+    # the state after computing the year rgi_date), so that the inversion
+    # can calibrate ice + firn to the reference volume. If the RGI date is
+    # outside the mb period, we use the closest year.
+    firn_yr = mb_years[np.argmin(np.abs(np.asarray(mb_years) - gdir.rgi_date))]
+    firn_volume_m3 = 0.
+
     # Unchanged SMB
     rho = gdir.settings['ice_density']
     mb_on_fl = []
@@ -5462,6 +5493,10 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
             widths = np.where(fl.thick > 0, widths, 0)
         except AttributeError:
             pass
+        if isinstance(mb_model, MultipleFlowlineMassBalance):
+            fl_mb_model = mb_model.flowline_mb_models[fl_id]
+        else:
+            fl_mb_model = mb_model
         mbz = 0
         smb = 0
         for yr in mb_years:
@@ -5473,6 +5508,9 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
                                          climatic_mb_or_ice_mb='climatic_mb',
                                          include_mb_model_heights=include_mb_model_heights
                                          )
+            if yr == firn_yr and hasattr(fl_mb_model, 'columns_thickness_m'):
+                firn_volume_m3 += np.sum(fl_mb_model.columns_thickness_m *
+                                         np.where(widths > 0, fl.bin_area_m2, 0))
             amb *= mb_model.sec_in_year(year=yr) * rho
             mbz += amb
             smb += weighted_average_1d(amb, widths)
@@ -5505,10 +5543,13 @@ def apparent_mb_from_any_mb(gdir, settings_filesuffix='',
     # Check and write
     _check_terminus_mass_flux(gdir, fls)
     gdir.settings['apparent_mb_from_any_mb_residual'] = residual
+    gdir.settings['inversion_firn_volume_m3'] = float(firn_volume_m3)
 
     # this is only for backwards compatibility
     if settings_filesuffix == '':
         gdir.add_to_diagnostics('apparent_mb_from_any_mb_residual', residual)
+        gdir.add_to_diagnostics('inversion_firn_volume_m3',
+                                float(firn_volume_m3))
 
     gdir.write_store(fls, 'inversion_flowlines', filesuffix=output_filesuffix)
 

@@ -64,9 +64,19 @@ case $TO in
     *)  CHUNK_ARGS="" ;;
 esac
 
-# Everything in the EOF block runs inside the container
-srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" singularity exec "$CONTAINER" bash -s <<EOF
+# Everything in the EOF block runs inside the container. The container sees
+# only the job directory (writable) and the shared folder of the previous
+# stages (read-only): the output is copied there after the container is done.
+# See "Isolate the container from your files" in the documentation.
+srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" apptainer exec \
+    --containall --no-mount bind-paths \
+    --bind "$JOB_DIR" \
+    --bind "$SHARED:$SHARED:ro" \
+    "$CONTAINER" bash -s <<EOF
   set -e
+  # The container does not inherit our environment: OGGM needs this one to
+  # use the allocated cpus only (otherwise it uses all cpus of the node)
+  export SLURM_JOB_CPUS_PER_NODE="$SLURM_JOB_CPUS_PER_NODE"
   export HOME="$OGGM_WORKDIR/fake_home"
   mkdir -p "\$HOME"
   # A venv on top of the container, to install the pinned OGGM version
