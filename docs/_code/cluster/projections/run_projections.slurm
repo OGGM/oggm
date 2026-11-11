@@ -26,8 +26,20 @@ FINAL_DIR="$SLURM_SUBMIT_DIR/output"
 CONTAINER=/path/to/oggm_container.sif
 OGGM_COMMIT=master       # better: a commit hash or a tag
 
-srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" singularity exec "$CONTAINER" bash -s <<EOF
+# The container sees only the job directory (writable) and the submit
+# directory with run_projections.py (read-only). It does not inherit our
+# environment: the variables run_projections.py reads are exported below.
+# See "Isolate the container from your files" in the documentation.
+srun -n 1 -c "${SLURM_JOB_CPUS_PER_NODE}" apptainer exec \
+    --containall --no-mount bind-paths \
+    --bind "$JOB_DIR" \
+    --bind "$SLURM_SUBMIT_DIR:$SLURM_SUBMIT_DIR:ro" \
+    "$CONTAINER" bash -s <<EOF
   set -e
+  export OGGM_WORKDIR="$OGGM_WORKDIR" OGGM_OUTDIR="$OGGM_OUTDIR"
+  export SLURM_ARRAY_TASK_ID="$SLURM_ARRAY_TASK_ID"
+  # OGGM needs this one to use the allocated cpus only (not all of the node's)
+  export SLURM_JOB_CPUS_PER_NODE="$SLURM_JOB_CPUS_PER_NODE"
   export HOME="$OGGM_WORKDIR/fake_home"
   mkdir -p "\$HOME"
   python3 -m venv --system-site-packages "$OGGM_WORKDIR/oggm_env"
