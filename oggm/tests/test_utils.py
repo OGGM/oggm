@@ -1788,7 +1788,7 @@ def test_get_prepro_gdir_bundle_cache(monkeypatch):
     monkeypatch.setattr(_downloads, "_prepro_bundle_format", {})
 
     base_url = "https://example.com/gdirs/"
-    kw = dict(rgi_version="62", border=80, prepro_level=2, base_url=base_url)
+    kw = {"rgi_version": "62", "border": 80, "prepro_level": 2, "base_url": base_url}
     prefix = f"{base_url}RGI62/b_080/L2/RGI60-11/"
 
     p1 = _downloads._get_prepro_gdir_unlocked(rgi_id="RGI60-11.00001", **kw)
@@ -2195,10 +2195,15 @@ class TestPreproCLI:
         # are allowed. These checks happen before anything is read.
         from oggm.cli.prepro_levels import run_prepro_levels
 
-        common = dict(rgi_version='61', rgi_reg='11', border=20,
-                      output_folder=self.testdir, working_dir=self.testdir,
-                      start_base_url='http://foo',
-                      temp_bias_file_path='foo.csv')
+        common = {
+            "rgi_version": "61",
+            "rgi_reg": "11",
+            "border": 20,
+            "output_folder": self.testdir,
+            "working_dir": self.testdir,
+            "start_base_url": "http://foo",
+            "temp_bias_file_path": "foo.csv",
+        }
 
         for start, end in [('2', '3'), ('2', '4a'), ('2', '5'),
                            (None, '3a'), ('3a', '3'), ('3', '4'), ('4a', '5')]:
@@ -2508,14 +2513,20 @@ class TestPreproCLI:
         # two chunks is the minimum that actually splits and rejoins
         assert chunks == [8, 9]
 
-        common = dict(rgi_version='61', rgi_reg='11', border=20,
-                      rgi_file=rgidf, intersects_file=inter,
-                      test_topofile=topof, disable_mp=True,
-                      elev_bands=True,
-                      inversion_volume_dataset='consensus',
-                      temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
-                      continue_on_error=False,
-                      override_params={})
+        common = {
+            "rgi_version": "61",
+            "rgi_reg": "11",
+            "border": 20,
+            "rgi_file": rgidf,
+            "intersects_file": inter,
+            "test_topofile": topof,
+            "disable_mp": True,
+            "elev_bands": True,
+            "inversion_volume_dataset": "consensus",
+            "temp_bias_file_path": TEMP_BIAS_FILE_W5E5_RGI6,
+            "continue_on_error": False,
+            "override_params": {},
+        }
 
         def wd(name):
             out = os.path.join(self.testdir, name)
@@ -4131,8 +4142,10 @@ class TestFakeDownloads:
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
-                        'RGI_V50_Intersects.zip')
+            expected = (
+                "https://cluster.klima.uni-bremen.de/data/rgi/"
+                 "RGI_V50_Intersects.zip"
+            )
             assert url == expected
             return rgi_f
 
@@ -4153,7 +4166,7 @@ class TestFakeDownloads:
         rgi_f = make_fake_zipdir(rgi_dir)
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/data/rgi/' +
+            expected = ('https://cluster.klima.uni-bremen.de/data/rgi/'
                         'RGI_V60_Intersects.zip')
             assert url == expected
             return rgi_f
@@ -4165,43 +4178,123 @@ class TestFakeDownloads:
         assert os.path.exists(os.path.join(rgi,
                                            'Intersects_OGGM_Manifest.txt'))
 
-    def test_srtm(self):
-
-        # Make a fake topo file
-        tf = make_fake_zipdir(os.path.join(self.dldir, 'srtm_39_03'),
-                              fakefile='srtm_39_03.tif')
+    @pytest.mark.parametrize(
+        "source, patched, zip_name, fakefile, lon, lat, expected_url",
+        [
+            (
+                "SRTM",
+                "_progress_urlretrieve",
+                "srtm_39_03",
+                "srtm_39_03.tif",
+                [11.3, 11.3],
+                [47.1, 47.1],
+                "http://srtm.csi.cgiar.org/wp-content/uploads/files/"
+                "srtm_5x5/TIFF/srtm_39_03.zip",
+            ),
+            (
+                "NASADEM",
+                "_progress_urlretrieve",
+                "NASADEM_HGT_n47e011",
+                "n47e011.hgt",
+                [11.3, 11.3],
+                [47.1, 47.1],
+                "https://e4ftl01.cr.usgs.gov/MEASURES/NASADEM_HGT.001/"
+                "2000.02.11/NASADEM_HGT_n47e011.zip",
+            ),
+            (
+                "ASTER",
+                "download_with_authentication",
+                "ASTGTMV003_S88W121",
+                "ASTGTMV003_S89W121_dem.tif",
+                [-120.2, -120.2],
+                [-88.1, -88.9],
+                "https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/"
+                "2000.03.01/ASTGTMV003_S89W121.zip",
+            ),
+            (
+                "TANDEM",
+                "download_with_authentication",
+                "TDM1_DEM__30_N60W146",
+                "TDM1_DEM__30_N60W146.tif",
+                [-145.2, -145.3],
+                [60.1, 60.9],
+                "https://download.geoservice.dlr.de/TDM90/files/DEM/"
+                "N60/W140/TDM1_DEM__30_N60W146.zip",
+            ),
+        ],
+        ids=["srtm", "nasadem", "aster", "tandem"],
+    )
+    def test_fake_zip_topo(
+        self, monkeypatch, source, patched, zip_name, fakefile, lon, lat, expected_url
+    ):
+        tf = make_fake_zipdir(os.path.join(self.dldir, zip_name), fakefile=fakefile)
 
         def down_check(url, *args, **kwargs):
-            expected = ('http://srtm.csi.cgiar.org/wp-content/uploads/files/'
-                        'srtm_5x5/TIFF/srtm_39_03.zip')
-            assert url == expected
+            assert url == expected_url
             return tf
 
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1],
-                                             source='SRTM')
+        monkeypatch.setattr(_downloads, patched, down_check)
+        of, out_source = utils.get_topo_file(lon, lat, source=source)
 
         assert os.path.exists(of[0])
-        assert source == 'SRTM'
+        assert out_source == source
 
-    def test_nasadem(self):
-
-        # Make a fake topo file
-        tf = make_fake_zipdir(os.path.join(self.dldir, 'NASADEM_HGT_n47e011'),
-                              fakefile='n47e011.hgt')
+    @pytest.mark.parametrize(
+        "source, lon, lat, kwargs, expected_url",
+        [
+            (
+                "MAPZEN",
+                [-120.2, -120.2],
+                [76.8, 76.8],
+                {"dx_meter": 100},
+                "http://s3.amazonaws.com/elevation-tiles-prod/geotiff/10/170/160.tif",
+            ),
+            (
+                "ALASKA",
+                [-140.428, -140.428],
+                [60.177, 60.177],
+                {},
+                "https://cluster.klima.uni-bremen.de/~oggm/dem/"
+                "Alaska_albers_V3/008_004_Alaska_albers_V3/"
+                "008_004_Alaska_albers_V3.tif",
+            ),
+        ],
+        ids=["mapzen", "alaska"],
+    )
+    def test_fake_tif_topo(self, monkeypatch, source, lon, lat, kwargs, expected_url):
+        tf = touch(os.path.join(self.dldir, "file.tif"))
 
         def down_check(url, *args, **kwargs):
-            expected = ('https://e4ftl01.cr.usgs.gov/MEASURES/NASADEM_HGT.001/'
-                        '2000.02.11/NASADEM_HGT_n47e011.zip')
-            assert url == expected
+            assert url == expected_url
             return tf
 
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([11.3, 11.3], [47.1, 47.1],
-                                             source='NASADEM')
+        monkeypatch.setattr(_downloads, "_progress_urlretrieve", down_check)
+        of, out_source = utils.get_topo_file(lon, lat, source=source, **kwargs)
 
         assert os.path.exists(of[0])
-        assert source == 'NASADEM'
+        assert out_source == source
+
+    @pytest.mark.parametrize(
+        "source, expected_name",
+        [
+            ("RAMP", "AntarcticDEM_wgs84.tif"),
+            ("GIMP", "gimpdem_90m_v01.1.tif"),
+        ],
+        ids=["ramp", "gimp"],
+    )
+    def test_fake_cluster_topo(self, monkeypatch, source, expected_name):
+
+        def down_check(url, *args, **kwargs):
+            assert url == expected_name
+            return "yo"
+
+        monkeypatch.setattr(_downloads, "_download_topo_file_from_cluster", down_check)
+        of, out_source = utils.get_topo_file(
+            [-120.2, -120.2], [-88, -88], source=source
+        )
+
+        assert of[0] == "yo"
+        assert out_source == source
 
     def test_dem3(self):
 
@@ -4229,24 +4322,6 @@ class TestFakeDownloads:
         assert os.path.exists(of[0])
         assert source == 'DEM3'
 
-    def test_mapzen(self):
-
-        # Make a fake topo file
-        tf = touch(os.path.join(self.dldir, 'file.tif'))
-
-        def down_check(url, *args, **kwargs):
-            expected = ('http://s3.amazonaws.com/elevation-tiles-prod/'
-                        'geotiff/10/170/160.tif')
-            assert url == expected
-            return tf
-
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([-120.2, -120.2], [76.8, 76.8],
-                                             source='MAPZEN', dx_meter=100)
-
-        assert os.path.exists(of[0])
-        assert source == 'MAPZEN'
-
     def test_aw3d30(self):
 
         # Make a fake topo file
@@ -4258,7 +4333,7 @@ class TestFakeDownloads:
                               archive='gztar', extension='.tar.gz')
 
         def down_check(url, *args, **kwargs):
-            expected = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/' +
+            expected = ('ftp://ftp.eorc.jaxa.jp/pub/ALOS/ext1/AW3D30/'
                         'release_v1804/N045W010/N049W006.tar.gz')
             assert expected == url
             return tf
@@ -4269,21 +4344,6 @@ class TestFakeDownloads:
 
         assert os.path.exists(of[0])
         assert source == 'AW3D30'
-
-    def test_ramp(self):
-
-        def down_check(url, *args, **kwargs):
-            expected = 'AntarcticDEM_wgs84.tif'
-            assert url == expected
-            return 'yo'
-
-        with FakeDownloadManager('_download_topo_file_from_cluster',
-                                 down_check):
-            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                             source='RAMP')
-
-        assert of[0] == 'yo'
-        assert source == 'RAMP'
 
     def test_rema(self):
 
@@ -4311,26 +4371,6 @@ class TestFakeDownloads:
         assert os.path.exists(of[0])
         assert source == 'REMA'
 
-    def test_alaska(self):
-
-        # Make a fake topo file
-        tf = touch(os.path.join(self.dldir, 'file.tif'))
-
-        def down_check(url, *args, **kwargs):
-            expected = ('https://cluster.klima.uni-bremen.de/~oggm/dem/'
-                        'Alaska_albers_V3/008_004_Alaska_albers_V3/'
-                        '008_004_Alaska_albers_V3.tif')
-            assert expected == url
-            return tf
-
-        with FakeDownloadManager('_progress_urlretrieve', down_check):
-            of, source = utils.get_topo_file([-140.428, -140.428],
-                                             [60.177, 60.177],
-                                             source='ALASKA')
-
-        assert os.path.exists(of[0])
-        assert source == 'ALASKA'
-
     def test_arcticdem(self):
 
         # Make a fake topo file
@@ -4356,58 +4396,6 @@ class TestFakeDownloads:
 
         assert os.path.exists(of[0])
         assert source == 'ARCTICDEM'
-
-    def test_gimp(self):
-
-        def down_check(url, *args, **kwargs):
-            expected = 'gimpdem_90m_v01.1.tif'
-            assert url == expected
-            return 'yo'
-
-        with FakeDownloadManager('_download_topo_file_from_cluster',
-                                 down_check):
-            of, source = utils.get_topo_file([-120.2, -120.2], [-88, -88],
-                                             source='GIMP')
-
-        assert of[0] == 'yo'
-        assert source == 'GIMP'
-
-    def test_aster(self):
-
-        # Make a fake topo file
-        tf = make_fake_zipdir(os.path.join(self.dldir, 'ASTGTMV003_S88W121'),
-                              fakefile='ASTGTMV003_S89W121_dem.tif')
-
-        def down_check(url, *args, **kwargs):
-            expect = ('https://e4ftl01.cr.usgs.gov/ASTT/ASTGTM.003/' +
-                      '2000.03.01/ASTGTMV003_S89W121.zip')
-            assert url == expect
-            return tf
-
-        with FakeDownloadManager('download_with_authentication', down_check):
-            of, source = utils.get_topo_file([-120.2, -120.2], [-88.1, -88.9],
-                                             source='ASTER')
-
-        assert os.path.exists(of[0])
-        assert source == 'ASTER'
-
-    def test_tandem(self):
-        # Make a fake topo file
-        tf = make_fake_zipdir(os.path.join(self.dldir, 'TDM1_DEM__30_N60W146'),
-                              fakefile='TDM1_DEM__30_N60W146.tif')
-
-        def down_check(url, *args, **kwargs):
-            expect = ('https://download.geoservice.dlr.de/TDM90/files/DEM/'
-                      'N60/W140/TDM1_DEM__30_N60W146.zip')
-            assert url == expect
-            return tf
-
-        with FakeDownloadManager('download_with_authentication', down_check):
-            of, source = utils.get_topo_file([-145.2, -145.3], [60.1, 60.9],
-                                             source='TANDEM')
-
-        assert os.path.exists(of[0])
-        assert source == 'TANDEM'
 
     def test_tandem_invalid(self):
         # If the TanDEM-X tile does not exist, a invalid file is created.
@@ -4568,126 +4556,118 @@ class TestDataFiles:
         with pytest.raises(NotImplementedError):
             utils.get_geodetic_mb_dataframe(rgi_version='70C')
 
-    def test_srtmzone(self):
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, expected",
+        [
+            ([-112, -112], [57, 57], ["14_01"]),
+            ([-72, -73], [-52, -53], ["22_23"]),
+            ([6, 14], [41, 48], sorted(["39_04", "38_03", "38_04", "39_03"])),
+        ],
+        ids=["canada", "patagonia", "alps"],
+    )
+    def test_srtm_zone(self, lon_ex, lat_ex, expected):
+        assert utils.srtm_zone(lon_ex=lon_ex, lat_ex=lat_ex) == expected
 
-        z = utils.srtm_zone(lon_ex=[-112, -112], lat_ex=[57, 57])
-        assert len(z) == 1
-        assert '14_01' == z[0]
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, expected",
+        [
+            (
+                [-112.1, -112.1],
+                [-57.1, -57.1],
+                ["S58/W110/TDM1_DEM__30_S58W113"],
+            ),
+            ([71, 71], [52, 52], ["N52/E070/TDM1_DEM__30_N52E071"]),
+            ([71, 71], [62, 62], ["N62/E070/TDM1_DEM__30_N62E070"]),
+            ([71, 71], [-82.1, -82.1], ["S83/E060/TDM1_DEM__30_S83E068"]),
+            (
+                [-1.3, 1.4],
+                [-1.3, 1.4],
+                sorted(
+                    [
+                        "N00/E000/TDM1_DEM__30_N00E000",
+                        "N00/E000/TDM1_DEM__30_N00E001",
+                        "N00/W000/TDM1_DEM__30_N00W001",
+                        "N00/W000/TDM1_DEM__30_N00W002",
+                        "N01/E000/TDM1_DEM__30_N01E000",
+                        "N01/E000/TDM1_DEM__30_N01E001",
+                        "N01/W000/TDM1_DEM__30_N01W001",
+                        "N01/W000/TDM1_DEM__30_N01W002",
+                        "S01/E000/TDM1_DEM__30_S01E000",
+                        "S01/E000/TDM1_DEM__30_S01E001",
+                        "S01/W000/TDM1_DEM__30_S01W001",
+                        "S01/W000/TDM1_DEM__30_S01W002",
+                        "S02/E000/TDM1_DEM__30_S02E000",
+                        "S02/E000/TDM1_DEM__30_S02E001",
+                        "S02/W000/TDM1_DEM__30_S02W001",
+                        "S02/W000/TDM1_DEM__30_S02W002",
+                    ]
+                ),
+            ),
+            # Tile widths change with latitude: three tiles, W145 in the middle
+            (
+                [-144.1, -143.9],
+                [60.5, 60.6],
+                [
+                    "N60/W140/TDM1_DEM__30_N60W144",
+                    "N60/W140/TDM1_DEM__30_N60W145",
+                    "N60/W140/TDM1_DEM__30_N60W146",
+                ],
+            ),
+        ],
+        ids=["s58", "n52", "n62-wide", "s83-wide", "equator-16", "alaska-3"],
+    )
+    def test_tandem_zone(self, lon_ex, lat_ex, expected):
+        assert utils.tandem_zone(lon_ex=lon_ex, lat_ex=lat_ex) == expected
 
-        z = utils.srtm_zone(lon_ex=[-72, -73], lat_ex=[-52, -53])
-        assert len(z) == 1
-        assert '22_23' == z[0]
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, expected",
+        [
+            ([137.5, 137.5], [-72.5, -72.5], ["ASTGTMV003_S73E137"]),
+            ([-95.5, -95.5], [30.5, 30.5], ["ASTGTMV003_N30W096"]),
+            (
+                [-96.5, -94.5],
+                [30.5, 30.5],
+                [
+                    "ASTGTMV003_N30W095",
+                    "ASTGTMV003_N30W096",
+                    "ASTGTMV003_N30W097",
+                ],
+            ),
+        ],
+        ids=["antarctica", "texas", "texas-3"],
+    )
+    def test_aster_zone(self, lon_ex, lat_ex, expected):
+        assert utils.aster_zone(lon_ex=lon_ex, lat_ex=lat_ex) == expected
 
-        # Alps
-        ref = sorted(['39_04', '38_03', '38_04', '39_03'])
-        z = utils.srtm_zone(lon_ex=[6, 14], lat_ex=[41, 48])
-        assert len(z) == 4
-        assert ref == z
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, expected",
+        [
+            ([137.5, 137.5], [-72.5, -72.5], ["s73e137"]),
+            ([-95.5, -95.5], [30.5, 30.5], ["n30w096"]),
+            ([-96.5, -94.5], [30.5, 30.5], ["n30w095", "n30w096", "n30w097"]),
+        ],
+        ids=["antarctica", "texas", "texas-3"],
+    )
+    def test_nasadem_zone(self, lon_ex, lat_ex, expected):
+        assert utils.nasadem_zone(lon_ex=lon_ex, lat_ex=lat_ex) == expected
 
-    def test_tandemzone(self):
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, kwargs, expected",
+        [
+            ([137.5, 137.5], [45, 45], {"zoom": 10}, ["10/903/368.tif"]),
+            ([137.5, 137.5], [45, 45], {"dx_meter": 110}, ["10/903/368.tif"]),
+            ([137.5, 137.5], [-45, -45], {"zoom": 10}, ["10/903/655.tif"]),
+            ([137.5, 137.5], [-45, -45], {"dx_meter": 110}, ["10/903/655.tif"]),
+        ],
+        ids=["north-zoom", "north-dx", "south-zoom", "south-dx"],
+    )
+    def test_mapzen_zone(self, lon_ex, lat_ex, kwargs, expected):
+        assert (
+            utils.mapzen_zone(lon_ex=lon_ex, lat_ex=lat_ex, **kwargs)
+            == expected
+        )
 
-        z = utils.tandem_zone(lon_ex=[-112.1, -112.1], lat_ex=[-57.1, -57.1])
-        assert len(z) == 1
-        assert 'S58/W110/TDM1_DEM__30_S58W113' == z[0]
-
-        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[52, 52])
-        assert len(z) == 1
-        assert 'N52/E070/TDM1_DEM__30_N52E071' == z[0]
-
-        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[62, 62])
-        assert len(z) == 1
-        assert 'N62/E070/TDM1_DEM__30_N62E070' == z[0]
-
-        z = utils.tandem_zone(lon_ex=[71, 71], lat_ex=[-82.1, -82.1])
-        assert len(z) == 1
-        assert 'S83/E060/TDM1_DEM__30_S83E068' == z[0]
-
-        ref = sorted(['N00/E000/TDM1_DEM__30_N00E000',
-                      'N00/E000/TDM1_DEM__30_N00E001',
-                      'N00/W000/TDM1_DEM__30_N00W001',
-                      'N00/W000/TDM1_DEM__30_N00W002',
-                      'N01/E000/TDM1_DEM__30_N01E000',
-                      'N01/E000/TDM1_DEM__30_N01E001',
-                      'N01/W000/TDM1_DEM__30_N01W001',
-                      'N01/W000/TDM1_DEM__30_N01W002',
-                      'S01/E000/TDM1_DEM__30_S01E000',
-                      'S01/E000/TDM1_DEM__30_S01E001',
-                      'S01/W000/TDM1_DEM__30_S01W001',
-                      'S01/W000/TDM1_DEM__30_S01W002',
-                      'S02/E000/TDM1_DEM__30_S02E000',
-                      'S02/E000/TDM1_DEM__30_S02E001',
-                      'S02/W000/TDM1_DEM__30_S02W001',
-                      'S02/W000/TDM1_DEM__30_S02W002'
-                      ])
-        z = utils.tandem_zone(lon_ex=[-1.3, 1.4], lat_ex=[-1.3, 1.4])
-        assert len(z) == len(ref)
-        assert ref == z
-
-        z = utils.tandem_zone(lon_ex=[-144.1, -143.9], lat_ex=[60.5, 60.6])
-        assert len(z) == 3
-        assert 'N60/W140/TDM1_DEM__30_N60W145' == z[1]
-
-    def test_asterzone(self):
-
-        z = utils.aster_zone(lon_ex=[137.5, 137.5],
-                             lat_ex=[-72.5, -72.5])
-        assert len(z) == 1
-        assert 'ASTGTMV003_S73E137' == z[0]
-
-        z = utils.aster_zone(lon_ex=[-95.5, -95.5],
-                             lat_ex=[30.5, 30.5])
-        assert len(z) == 1
-        assert 'ASTGTMV003_N30W096' == z[0]
-
-        z = utils.aster_zone(lon_ex=[-96.5, -94.5],
-                             lat_ex=[30.5, 30.5])
-        assert len(z) == 3
-        assert 'ASTGTMV003_N30W095' == z[0]
-        assert 'ASTGTMV003_N30W096' == z[1]
-        assert 'ASTGTMV003_N30W097' == z[2]
-
-    def test_nasazone(self):
-
-        z = utils.nasadem_zone(lon_ex=[137.5, 137.5],
-                               lat_ex=[-72.5, -72.5])
-        assert len(z) == 1
-        assert 's73e137' == z[0]
-
-        z = utils.nasadem_zone(lon_ex=[-95.5, -95.5],
-                               lat_ex=[30.5, 30.5])
-        assert len(z) == 1
-        assert 'n30w096' == z[0]
-
-        z = utils.nasadem_zone(lon_ex=[-96.5, -94.5],
-                               lat_ex=[30.5, 30.5])
-        assert len(z) == 3
-        assert 'n30w095' == z[0]
-        assert 'n30w096' == z[1]
-        assert 'n30w097' == z[2]
-
-    def test_mapzen_zone(self):
-
-        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
-                              zoom=10)
-        assert len(z) == 1
-        assert '10/903/368.tif' == z[0]
-
-        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[45, 45],
-                              dx_meter=110)
-        assert len(z) == 1
-        assert '10/903/368.tif' == z[0]
-
-        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[-45, -45],
-                              zoom=10)
-        assert len(z) == 1
-        assert '10/903/655.tif' == z[0]
-
-        z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[-45, -45],
-                              dx_meter=110)
-        assert len(z) == 1
-        assert '10/903/655.tif' == z[0]
-
-        # Check the minimum zoom level
+    def test_mapzen_zone_min_zoom(self):
         dx = 200
         for lat in np.arange(10) * 10:
             z = utils.mapzen_zone(lon_ex=[137.5, 137.5], lat_ex=[lat, lat],
@@ -4697,117 +4677,134 @@ class TestDataFiles:
                                   dx_meter=dx)
             assert int(z[0].split('/')[0]) > 9
 
-    def test_dem3_viewpano_zone(self):
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, expected",
+        [
+            (-22.26, 66.16, ["ISL"]),
+            (17, 80, ["SVALBARD"]),
+            (-8, 71, ["JANMAYEN"]),
+            (60, 80, ["FJ"]),
+            (-7, 62, ["FAR"]),
+            (19, 74.5, ["BEAR"]),
+            (-1, 60.5, ["SHL"]),
+            (-30.733021, 82.930238, ["GL-North"]),
+            (-52, 70, ["GL-West"]),
+            (-43, 60, ["GL-South"]),
+            (-24.7, 69.8, ["GL-East"]),
+            (-127.592802, -74.479523, ["01-15"]),
+            (-60.648126, -72.383226, ["16-30"]),
+            (65.482151, -67.993527, ["31-45"]),
+            (166.878916, -71.670896, ["46-60"]),
+            ([-179.0, -178.0], [65.0, 65.0], ["Q01"]),
+            ([107, 107], [69, 69], ["R48"]),
+            (
+                [6, 14],
+                [41, 48],
+                sorted(
+                    [
+                        "K31",
+                        "K32",
+                        "K33",
+                        "L31",
+                        "L32",
+                        "L33",
+                        "M31",
+                        "M32",
+                        "M33",
+                    ]
+                ),
+            ),
+        ],
+        ids=[
+            "isl",
+            "svalbard",
+            "janmayen",
+            "fj",
+            "far",
+            "bear",
+            "shl",
+            "gl-north",
+            "gl-west",
+            "gl-south",
+            "gl-east",
+            "ant-01-15",
+            "ant-16-30",
+            "ant-31-45",
+            "ant-46-60",
+            "tile-q01",
+            "tile-r48",
+            "alps",
+        ],
+    )
+    def test_dem3_viewpano_zone(self, lon_ex, lat_ex, expected):
+        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == expected
 
-        lon_ex = -22.26
-        lat_ex = 66.16
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['ISL']
-
-        lon_ex = 17
-        lat_ex = 80
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['SVALBARD']
-
-        lon_ex = -8
-        lat_ex = 71
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['JANMAYEN']
-
-        lon_ex = 60
-        lat_ex = 80
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['FJ']
-
-        lon_ex = -7
-        lat_ex = 62
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['FAR']
-
-        lon_ex = 19
-        lat_ex = 74.5
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['BEAR']
-
-        lon_ex = -1
-        lat_ex = 60.5
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['SHL']
-
-        lon_ex = -30.733021
-        lat_ex = 82.930238
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-North']
-
-        lon_ex = -52
-        lat_ex = 70
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-West']
-
-        lon_ex = -43
-        lat_ex = 60
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-South']
-
-        lon_ex = -24.7
-        lat_ex = 69.8
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['GL-East']
-
-        lon_ex = -22.26
-        lat_ex = 66.16
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['ISL']
-
-        lon_ex = -127.592802
-        lat_ex = -74.479523
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['01-15']
-
-        lat_ex = -72.383226
-        lon_ex = -60.648126
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['16-30']
-
-        lat_ex = -67.993527
-        lon_ex = 65.482151
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['31-45']
-
-        lat_ex = -71.670896
-        lon_ex = 166.878916
-        assert utils.dem3_viewpano_zone(lon_ex, lat_ex) == ['46-60']
-
-        # normal tile
-        z = utils.dem3_viewpano_zone([-179., -178.], [65., 65.])
-        assert len(z) == 1
-        assert 'Q01' == z[0]
-
-        # normal tile
-        z = utils.dem3_viewpano_zone([107, 107], [69, 69])
-        assert len(z) == 1
-        assert 'R48' == z[0]
-
-        # Alps
-        ref = sorted(['K31', 'K32', 'K33', 'L31', 'L32',
-                      'L33', 'M31', 'M32', 'M33'])
-        z = utils.dem3_viewpano_zone([6, 14], [41, 48])
-        assert len(z) == 9
-        assert ref == z
-
-    def test_copdemzone(self):
-        z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM90')
-        assert len(z) == 1
-        eurl = ('https://opentopography.s3.sdsc.edu/raster/COP90/COP90_hh/'
-                'Copernicus_DSM_30_S10_00_W078_00_DEM.tif')
-        assert eurl == z[0][0]
-        assert 'Copernicus_DSM_30_S10_00_W078_00_DEM' == z[0][1]
-
-        z = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM30')
-        assert len(z) == 1
-        eurl = ('https://opentopography.s3.sdsc.edu/raster/COP30/COP30_hh/'
-                'Copernicus_DSM_10_S10_00_W078_00_DEM.tif')
-        assert eurl == z[0][0]
-        assert 'Copernicus_DSM_10_S10_00_W078_00_DEM' == z[0][1]
-
-        z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM90')
-        assert len(z) == 2
-        assert ('Copernicus_DSM_30_N46_00_E008_00_DEM' in
-                        [z[0][1], z[1][1]])
-        assert ('Copernicus_DSM_30_N46_00_E007_00_DEM' in
-                        [z[0][1], z[1][1]])
-
-        z = utils.copdem_zone([7.89, 8.12], [46.37, 46.59], 'COPDEM30')
-        assert len(z) == 2
-        assert ('Copernicus_DSM_10_N46_00_E008_00_DEM' in
-                        [z[0][1], z[1][1]])
-        assert ('Copernicus_DSM_10_N46_00_E007_00_DEM' in
-                        [z[0][1], z[1][1]])
+    @pytest.mark.parametrize(
+        "lon_ex, lat_ex, source, expected",
+        [
+            (
+                [-77.6, -77.3],
+                [-9.8, -9.5],
+                "COPDEM90",
+                [
+                    (
+                        "https://opentopography.s3.sdsc.edu/raster/COP90/COP90_hh/"
+                        "Copernicus_DSM_30_S10_00_W078_00_DEM.tif",
+                        "Copernicus_DSM_30_S10_00_W078_00_DEM",
+                    )
+                ],
+            ),
+            (
+                [-77.6, -77.3],
+                [-9.8, -9.5],
+                "COPDEM30",
+                [
+                    (
+                        "https://opentopography.s3.sdsc.edu/raster/COP30/COP30_hh/"
+                        "Copernicus_DSM_10_S10_00_W078_00_DEM.tif",
+                        "Copernicus_DSM_10_S10_00_W078_00_DEM",
+                    )
+                ],
+            ),
+            (
+                [7.89, 8.12],
+                [46.37, 46.59],
+                "COPDEM90",
+                [
+                    (
+                        "https://opentopography.s3.sdsc.edu/raster/COP90/COP90_hh/"
+                        "Copernicus_DSM_30_N46_00_E007_00_DEM.tif",
+                        "Copernicus_DSM_30_N46_00_E007_00_DEM",
+                    ),
+                    (
+                        "https://opentopography.s3.sdsc.edu/raster/COP90/COP90_hh/"
+                        "Copernicus_DSM_30_N46_00_E008_00_DEM.tif",
+                        "Copernicus_DSM_30_N46_00_E008_00_DEM",
+                    ),
+                ],
+            ),
+            (
+                [7.89, 8.12],
+                [46.37, 46.59],
+                "COPDEM30",
+                [
+                    (
+                        "https://opentopography.s3.sdsc.edu/raster/COP30/COP30_hh/"
+                        "Copernicus_DSM_10_N46_00_E007_00_DEM.tif",
+                        "Copernicus_DSM_10_N46_00_E007_00_DEM",
+                    ),
+                    (
+                        "https://opentopography.s3.sdsc.edu/raster/COP30/COP30_hh/"
+                        "Copernicus_DSM_10_N46_00_E008_00_DEM.tif",
+                        "Copernicus_DSM_10_N46_00_E008_00_DEM",
+                    ),
+                ],
+            ),
+        ],
+        ids=["cop90-1tile", "cop30-1tile", "cop90-2tiles", "cop30-2tiles"],
+    )
+    def test_copdem_zone(self, lon_ex, lat_ex, source, expected):
+        assert utils.copdem_zone(lon_ex, lat_ex, source) == expected
 
     def test_is_dem_source_available(self):
         assert utils.is_dem_source_available('SRTM', [11, 11], [47, 47])
@@ -4896,93 +4893,116 @@ class TestDataFiles:
         # And bar files should not be affected by decreased cache size of foo
         assert all([os.path.exists(b) for b in bar])
 
-    @pytest.mark.download
-    def test_srtmdownload(self):
-        from oggm.utils._downloads import _download_srtm_file
+    # Zones that exist and are small enough to download
+    @pytest.mark.parametrize(
+        "dl_func, zone",
+        [
+            pytest.param(
+                "_download_srtm_file",
+                "68_11",
+                marks=pytest.mark.download,
+                id="srtm",
+            ),
+            pytest.param(
+                "_download_nasadem_file",
+                "n01e119",
+                marks=pytest.mark.download,
+                id="nasadem",
+            ),
+            pytest.param(
+                "_download_tandem_file",
+                "N47/E010/TDM1_DEM__30_N47E011",
+                marks=[pytest.mark.download, pytest.mark.creds],
+                id="tandem",
+            ),
+            pytest.param(
+                "_download_copdem_file",
+                "https://opentopography.s3.sdsc.edu/raster/COP90/"
+                "COP90_hh/Copernicus_DSM_30_S10_00_W078_00_DEM.tif",
+                marks=pytest.mark.download,
+                id="copdem",
+            ),
+            pytest.param(
+                "_download_aster_file",
+                "ASTGTMV003_S73E137",
+                marks=pytest.mark.creds,
+                id="aster",
+            ),
+            pytest.param(
+                "_download_mapzen_file",
+                "10/903/368.tif",
+                marks=pytest.mark.download,
+                id="mapzen",
+            ),
+            pytest.param(
+                "_download_dem3_viewpano",
+                "L32",
+                marks=pytest.mark.download,
+                id="dem3-L32",
+            ),
+            pytest.param(
+                "_download_dem3_viewpano",
+                "U44",
+                marks=pytest.mark.download,
+                id="dem3-U44",
+            ),
+            pytest.param(
+                "_download_aw3d30_file",
+                "N000E105/N002E107",
+                marks=pytest.mark.download,
+                id="aw3d30-N000E105",
+            ),
+            pytest.param(
+                "_download_aw3d30_file",
+                "S085W050/S081W048",
+                marks=pytest.mark.download,
+                id="aw3d30-S085W050",
+            ),
+        ],
+    )
+    def test_dem_download(self, dl_func, zone):
+        dl_func = getattr(_downloads, dl_func)
+        assert os.path.exists(dl_func(zone))
+        assert os.path.exists(dl_func(zone))
 
-        # this zone does exist and file should be small enough for download
-        zone = '68_11'
-        fp = _download_srtm_file(zone)
-        assert os.path.exists(fp)
-        fp = _download_srtm_file(zone)
-        assert os.path.exists(fp)
-
-    @pytest.mark.download
-    def test_srtmdownloadfails(self):
-        from oggm.utils._downloads import _download_srtm_file
-
-        # this zone does not exist
-        zone = '41_20'
-        assert _download_srtm_file(zone) is None
-
-    @pytest.mark.download
-    def test_nasadownload(self):
-        from oggm.utils._downloads import _download_nasadem_file
-
-        # this zone does exist and file should be small enough for download
-        zone = 'n01e119'
-        fp = _download_nasadem_file(zone)
-        assert os.path.exists(fp)
-        fp = _download_nasadem_file(zone)
-        assert os.path.exists(fp)
-
-    @pytest.mark.download
-    def test_nasademdownloadfails(self):
-        from oggm.utils._downloads import _download_nasadem_file
-
-        # this zone does not exist
-        zone = 'n80w100'
-        assert _download_nasadem_file(zone) is None
-
-    @pytest.mark.download
-    @pytest.mark.creds
-    def test_tandemdownload(self):
-        from oggm.utils._downloads import _download_tandem_file
-
-        # this zone does exist and file should be small enough for download
-        zone = 'N47/E010/TDM1_DEM__30_N47E011'
-        fp = _download_tandem_file(zone)
-        assert os.path.exists(fp)
-        fp = _download_tandem_file(zone)
-        assert os.path.exists(fp)
-
-    @pytest.mark.download
-    @pytest.mark.creds
-    def test_tandemdownloadfails(self):
-        from oggm.utils._downloads import _download_tandem_file
-
-        # this zone does not exist, so it should return None
-        zone = 'N47/E010/TDM1_DEM__30_NxxExxx'
-        fp = _download_tandem_file(zone)
-        assert fp is None
-
-    @pytest.mark.download
-    def test_copdemdownload(self):
-        from oggm.utils._downloads import _download_copdem_file
-
-        # this zone does exist
-        cppfile, tilename = utils.copdem_zone([-77.6, -77.3], [-9.8, -9.5], 'COPDEM90')[0]
-        print(cppfile, tilename)
-        fp = _download_copdem_file(cppfile)
-        assert os.path.exists(fp)
-
-    @pytest.mark.creds
-    def test_asterdownload(self):
-        from oggm.utils._downloads import _download_aster_file
-
-        # this zone does exist and file should be small enough for download
-        zone = 'ASTGTMV003_S73E137'
-        fp = _download_aster_file(zone)
-        assert os.path.exists(fp)
-
-    @pytest.mark.download
-    def test_mapzen_download(self):
-        from oggm.utils._downloads import _download_mapzen_file
-
-        # this zone does exist and file should be small enough for download
-        zone = '10/903/368.tif'
-        fp = _download_mapzen_file(zone)
-        assert os.path.exists(fp)
+    # Zones that don't exist
+    @pytest.mark.parametrize(
+        "dl_func, zone",
+        [
+            pytest.param(
+                "_download_srtm_file",
+                "41_20",
+                marks=pytest.mark.download,
+                id="srtm",
+            ),
+            pytest.param(
+                "_download_nasadem_file",
+                "n80w100",
+                marks=pytest.mark.download,
+                id="nasadem",
+            ),
+            pytest.param(
+                "_download_tandem_file",
+                "N47/E010/TDM1_DEM__30_NxxExxx",
+                marks=[pytest.mark.download, pytest.mark.creds],
+                id="tandem",
+            ),
+            pytest.param(
+                "_download_aster_file",
+                "ASTGTMV003_S99E010",
+                marks=pytest.mark.creds,
+                id="aster",
+            ),
+            pytest.param(
+                "_download_dem3_viewpano",
+                "dummy",
+                marks=pytest.mark.download,
+                id="dem3",
+            ),
+        ],
+    )
+    def test_dem_download_fails(self, dl_func, zone):
+        assert getattr(_downloads, dl_func)(zone) is None
 
     @pytest.mark.download
     def test_gimp(self):
@@ -4995,14 +5015,6 @@ class TestDataFiles:
         fp, z = utils.get_topo_file([-20, -20], [65, 65], source='DEM3')
         assert os.path.exists(fp[0])
 
-    @pytest.mark.creds
-    def test_asterdownloadfails(self):
-        from oggm.utils._downloads import _download_aster_file
-
-        # this zone does not exist
-        zone = 'ASTGTMV003_S99E010'
-        assert _download_aster_file(zone) is None
-
     @pytest.mark.download
     def test_download_histalp(self):
 
@@ -5013,99 +5025,37 @@ class TestDataFiles:
         assert os.path.exists(of)
 
     @pytest.mark.download
-    def test_download_rgi5(self):
-
-        tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
-
-        of = utils.get_rgi_dir(version='5')
-        of = os.path.join(of, '01_rgi50_Alaska', '01_rgi50_Alaska.shp')
-        assert os.path.exists(of)
-
-        cfg.PATHS['rgi_dir'] = tmp
-
-    @pytest.mark.download
-    def test_download_rgi6(self):
-
-        tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
-
-        of = utils.get_rgi_dir(version='6')
-        of = os.path.join(of, '01_rgi60_Alaska', '01_rgi60_Alaska.shp')
-        assert os.path.exists(of)
-
-        cfg.PATHS['rgi_dir'] = tmp
+    @pytest.mark.parametrize(
+        "version, rel_shp",
+        [
+            ("5", "01_rgi50_Alaska/01_rgi50_Alaska.shp"),
+            ("6", "01_rgi60_Alaska/01_rgi60_Alaska.shp"),
+            ("61", "01_rgi61_Alaska/01_rgi61_Alaska.shp"),
+        ],
+        ids=["rgi5", "rgi6", "rgi61"],
+    )
+    def test_download_rgi(self, version, rel_shp, monkeypatch):
+        monkeypatch.setitem(
+            cfg.PATHS, "rgi_dir", os.path.join(self.dldir, "rgi_extract")
+        )
+        of = utils.get_rgi_dir(version=version)
+        assert os.path.exists(os.path.join(of, rel_shp))
 
     @pytest.mark.download
-    def test_download_rgi61(self):
-
-        tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
-
-        of = utils.get_rgi_dir(version='61')
-        of = os.path.join(of, '01_rgi61_Alaska', '01_rgi61_Alaska.shp')
-        assert os.path.exists(of)
-
-        cfg.PATHS['rgi_dir'] = tmp
-
-    @pytest.mark.download
-    def test_download_rgi60_intersects(self):
-
-        tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
-
-        of = utils.get_rgi_intersects_dir(version='6')
-        of = os.path.join(of, '01_rgi60_Alaska',
-                          'intersects_01_rgi60_Alaska.shp')
-        assert os.path.exists(of)
-
-        cfg.PATHS['rgi_dir'] = tmp
-
-    @pytest.mark.download
-    def test_download_rgi61_intersects(self):
-
-        tmp = cfg.PATHS['rgi_dir']
-        cfg.PATHS['rgi_dir'] = os.path.join(self.dldir, 'rgi_extract')
-
-        of = utils.get_rgi_intersects_dir(version='61')
-        of = os.path.join(of, '01_rgi61_Alaska',
-                          'intersects_01_rgi61_Alaska.shp')
-        assert os.path.exists(of)
-
-        cfg.PATHS['rgi_dir'] = tmp
-
-    @pytest.mark.download
-    def test_download_dem3_viewpano(self):
-        from oggm.utils._downloads import _download_dem3_viewpano
-
-        # this zone does exist and file should be small enough for download
-        zone = 'L32'
-        fp = _download_dem3_viewpano(zone)
-        assert os.path.exists(fp)
-        zone = 'U44'
-        fp = _download_dem3_viewpano(zone)
-        assert os.path.exists(fp)
-
-    @pytest.mark.download
-    def test_download_dem3_viewpano_fails(self):
-        from oggm.utils._downloads import _download_dem3_viewpano
-
-        # this zone does not exist
-        zone = 'dummy'
-        fp = _download_dem3_viewpano(zone)
-        assert fp is None
-
-    @pytest.mark.download
-    def test_download_aw3d30(self):
-        from oggm.utils._downloads import _download_aw3d30_file
-
-        # this zone does exist and file should be small enough for download
-        zone = 'N000E105/N002E107'
-        fp = _download_aw3d30_file(zone)
-        assert os.path.exists(fp)
-        zone = 'S085W050/S081W048'
-        fp = _download_aw3d30_file(zone)
-        assert os.path.exists(fp)
+    @pytest.mark.parametrize(
+        "version, rel_shp",
+        [
+            ("6", "01_rgi60_Alaska/intersects_01_rgi60_Alaska.shp"),
+            ("61", "01_rgi61_Alaska/intersects_01_rgi61_Alaska.shp"),
+        ],
+        ids=["rgi60", "rgi61"],
+    )
+    def test_download_rgi_intersects(self, version, rel_shp, monkeypatch):
+        monkeypatch.setitem(
+            cfg.PATHS, "rgi_dir", os.path.join(self.dldir, "rgi_extract")
+        )
+        of = utils.get_rgi_intersects_dir(version=version)
+        assert os.path.exists(os.path.join(of, rel_shp))
 
     @pytest.mark.download
     def test_download_aw3d30_fails(self):
