@@ -177,6 +177,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.terminus_width_correction
     tasks.elevation_band_flowline
     tasks.fixed_dx_elevation_band_flowline
+    tasks.bin_gridded_variables
     tasks.process_climate_data
     tasks.process_custom_climate_data
     tasks.historical_delta_method
