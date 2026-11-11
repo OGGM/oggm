@@ -428,6 +428,33 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- ``mass_conservation_inversion`` now reduces the trapezoid lambda where
+  necessary to retain a minimum bottom width of 1 m, instead of falling
+  back to a rectangle.
+  The per-point lambdas are stored in the inversion output and used by
+  ``filter_inversion_output`` and ``init_present_time_glacier``.
+  Filtering also reduces lambda where necessary to preserve this minimum
+  bottom width after smoothing and conversion to trapezoidal beds (:pull:`2034`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The trapezoidal downstream line (``compute_downstream_bedshape``) now uses
+  lambdas fitted to the valley shape instead of the default
+  ``PARAMS['trapezoid_lambdas']``: the trapezoid has the same surface width
+  and cross section area as the fitted parabola at the thickness of a
+  glacier advancing in its valley (bottom width = 1/3 of the surface
+  width). This thickness is the new
+  ``PARAMS['downstream_lambda_depth_factor']`` (2) times the volume-area
+  scaling mean thickness of the glacier, i.e. about 20-35 m for glaciers
+  smaller than 0.5 km2 and about 100 m for glaciers larger than 2 km2.
+  The lambdas are clipped to the new ``PARAMS['downstream_min_lambda']`` (2)
+  and ``PARAMS['downstream_max_lambda']`` (10), and stored in the
+  ``downstream_line`` file. Before, with a large default lambda, the bottom
+  width was often clipped to ``PARAMS['downstream_min_bottom_width']``
+  (renamed from ``PARAMS['trapezoid_min_bottom_width']``),
+  which made the valley too wide. On a sample of 100 Alpine glaciers, 
+  the median fitted lambda is about 10 for glaciers smaller than 0.1 km2 
+  and about 4 for glaciers larger than 2 km2. Directories processed with older 
+  versions still use the default lambda downstream (:pull:`2034`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The boolean flags of the ``oggm_prepro``, ``oggm_benchmark`` and
   ``oggm_temp_bias`` commands (``--elev-bands``, ``--test``, ``--disable-mp``,
   and all the others) no longer accept a value. They used to store whatever

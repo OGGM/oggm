@@ -151,7 +151,7 @@ class TestInitPresentDayFlowline:
             assert np.all(~np.isfinite(fl.bed_shape[~ice_mask]))
             # check that bottom width of downstream line is larger than minimum
             assert np.all(fl._w0_m[~ice_mask] >
-                          gdir.settings['trapezoid_min_bottom_width'])
+                          gdir.settings['downstream_min_bottom_width'])
 
         if do_plot:
             plt.plot(fls[-1].bed_h, color='k')
@@ -8614,6 +8614,53 @@ class TestMergedHEF:
 
 @pytest.mark.test_env("models_dynamics")
 class TestSemiImplicitModel:
+
+    @pytest.mark.slow
+    def test_narrow_trapezoids(self, hef_elev_gdir_base, tmp_path):
+        # Narrow trapezoids survive serialization, retreat and regrowth.
+        gdir = tasks.copy_to_basedir(hef_elev_gdir_base,
+                                     base_dir=str(tmp_path), setup='all')
+        gdir.settings['trapezoid_lambdas'] = 12
+        gdir.settings['downstream_line_shape'] = 'trapezoidal'
+        inversion.prepare_for_inversion(gdir)
+        inversion.mass_conservation_inversion(gdir)
+        inversion.filter_inversion_output(gdir)
+        init_present_time_glacier(gdir)
+
+        for inv in gdir.read_store('inversion_output'):
+            is_trap = inv['is_trapezoid']
+            w0 = inv['width'] - inv['lambdas'] * inv['thick']
+            w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+            assert np.all(w0[is_trap] >=
+                          np.minimum(w0_min, inv['width'][is_trap]) - 1e-6)
+
+        # this is a write / read round trip
+        fls = gdir.read_store('model_flowlines')
+        fl = fls[-1]
+        is_tri = (fl.is_trapezoid & (fl.thick > 0) &
+                  (fl._w0_m < inversion.TRAPEZOID_MIN_BOTTOM_WIDTH + 0.01))
+        assert is_tri.sum() > 10
+        assert np.all(fl._w0_m[is_tri] > 0)
+
+        glen_a = gdir.settings['inversion_glen_a']
+        fs = gdir.settings['inversion_fs']
+        mb = massbalance.ConstantMassBalance(gdir, y0=1930)
+        vols = []
+        for model_class in [SemiImplicitModel, FluxBasedModel]:
+            mb.temp_bias = 2
+            model = model_class(fls, mb_model=mb, y0=0, glen_a=glen_a,
+                                fs=fs)
+            model.run_until(100)
+            # the narrow trapezoids are ice free
+            assert np.all(model.fls[-1].thick[is_tri] == 0)
+            mb.temp_bias = 0
+            model.run_until(400)
+            # and covered again
+            assert np.all(np.isfinite(model.fls[-1].thick))
+            assert np.all(model.fls[-1].thick[is_tri] > 0)
+            vols.append(model.volume_km3)
+
+        assert_allclose(vols[0], vols[1], rtol=5e-3)
 
     @pytest.mark.slow
     def test_equilibrium(self, hef_elev_gdir, inversion_params):
