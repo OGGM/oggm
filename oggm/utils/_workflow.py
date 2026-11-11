@@ -4232,113 +4232,6 @@ class GlacierDirectory(object):
 
         return transcoder.decode_npz(arrays, meta, filename)
 
-    def open_group(
-        self, filename: str, filesuffix: str = "", **xr_kwargs
-    ) -> xr.Dataset:
-        """Open a plain dataset group of the glacier directory.
-
-        Preferred way to read gridded, climate and GCM data. Distinct
-        from ``read_store``, which reconstructs arbitrary objects: this
-        returns the group as an ``xarray.Dataset``. Groups are
-        compressed netCDF files at the v1 path, so v1 directories read
-        unchanged.
-
-        TODO: This can be refactored, and maybe the method name should
-        be something clearer for users.
-
-        Parameters
-        ----------
-        filename : str
-            File name (must be listed in cfg.BASENAMES).
-        filesuffix : str, optional
-            Append a suffix to the filename (useful for experiments).
-        **xr_kwargs
-            Passed to ``xr.open_dataset`` (e.g. decoding options).
-
-        Returns
-        -------
-        xr.Dataset
-            The group contents.
-        """
-        # dask fancy indexing/item assignment causes breaks
-        xr_kwargs.setdefault("chunks", None)
-        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
-        if not os.path.exists(fp):
-            raise FileNotFoundError(
-                f"No group `{filename}{filesuffix or ''}` in {self.dir}"
-            )
-        return xr.open_dataset(fp, engine="h5netcdf", **xr_kwargs)
-
-    def write_group(
-        self,
-        ds: xr.Dataset,
-        filename: str,
-        filesuffix: str = "",
-        mode: str = "a",
-        encoding: dict = None,
-    ) -> None:
-        """Write a plain ``xarray.Dataset`` as a group of the directory.
-
-        Preferred way to write gridded, climate and GCM data. Every data
-        variable is compressed (zlib level 4 with shuffle), and the file
-        is written beside the target then moved into place.
-
-        Parameters
-        ----------
-        ds : xr.Dataset
-            The dataset to write.
-        filename : str
-            File name (must be listed in cfg.BASENAMES).
-        filesuffix : str, optional
-            Append a suffix to the filename (useful for experiments).
-        mode : {'a', 'w'}, default 'a'
-            'w' replaces any existing group, 'a' adds to or overwrites
-            variables in an existing group with matching dimensions.
-        encoding : dict, optional
-            Per-variable encoding, layered over the compression
-            defaults.
-        """
-        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
-        if mode == "a" and os.path.exists(fp):
-            # ponytail: rewrites the whole group, fine at gdir sizes
-            with xr.open_dataset(fp, engine="h5netcdf", decode_cf=False) as old:
-                ds = xr.merge(
-                    [
-                        old.load().drop_vars(
-                            [v for v in ds.variables if v in old.variables]
-                        ),
-                        ds,
-                    ],
-                    combine_attrs="override",
-                )
-        enc = {
-            v: {"zlib": True, "complevel": 4, "shuffle": True}
-            for v in ds.data_vars
-        }
-        for v, e in (encoding or {}).items():
-            enc[v] = {**enc.get(v, {}), **e}
-        tmp = f"{fp}.tmp{os.getpid()}"
-        try:
-            ds.to_netcdf(tmp, engine="h5netcdf", encoding=enc)
-            os.replace(tmp, fp)
-        finally:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-
-    def delete_group(self, filename: str, filesuffix: str = "") -> None:
-        """Remove a plain dataset group from the directory.
-
-        Parameters
-        ----------
-        filename : str
-            File name (must be listed in cfg.BASENAMES).
-        filesuffix : str, optional
-            Append a suffix to the filename.
-        """
-        fp = self.get_filepath(filename, filesuffix=filesuffix or "")
-        if os.path.exists(fp):
-            os.remove(fp)
-
     def read_store(
         self, filename: str, filesuffix: str = "", **kwargs
     ) -> dict | list:
@@ -5803,6 +5696,178 @@ def grid_id(grid) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+# netCDF "patches": a subset of the variables of a gridded file, which is
+# applied by adding (or replacing) these variables in the target file. They
+# carry the gridded data of the level deltas and of the add-ons, so that
+# neither has to ship the whole of gridded_data.nc again.
+
+
+def _nc_attrs(obj) -> dict:
+    """The netCDF attributes of a dataset or a variable, as a dict."""
+    return {k: obj.getncattr(k) for k in obj.ncattrs()}
+
+
+def _jsonable(value):
+    """A netCDF attribute value, as something json can write."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def _nc_meta_digest(meta: dict) -> str:
+    blob = json.dumps(meta, sort_keys=True, default=str).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _nc_var_digests(fp: str) -> dict:
+    """Content digests of each variable of a netCDF file.
+
+    A variable's digest covers its dimensions, dtype, attributes and raw
+    data, so it does not depend on how the file was written (engine,
+    compression, order of the variables). This tells which variables a
+    processing level changed, while the bytes of the file change as soon
+    as one variable is added.
+
+    Parameters
+    ----------
+    fp : str
+        Path to the netCDF file.
+
+    Returns
+    -------
+    dict
+        Mapping of variable name to sha256 hex digest, plus ``"@global"``
+        for the global attributes and the dimension sizes.
+    """
+    out = {}
+    with ncDataset(fp) as nc:
+        nc.set_auto_maskandscale(False)
+        out["@global"] = _nc_meta_digest({
+            "attrs": {k: _jsonable(v) for k, v in _nc_attrs(nc).items()},
+            "dims": {k: len(d) for k, d in nc.dimensions.items()},
+        })
+        for name, var in nc.variables.items():
+            h = hashlib.sha256()
+            h.update(_nc_meta_digest({
+                "dims": var.dimensions,
+                "dtype": str(var.dtype),
+                "attrs": {k: _jsonable(v) for k, v in _nc_attrs(var).items()},
+            }).encode())
+            h.update(np.ascontiguousarray(var[:]).tobytes())
+            out[name] = h.hexdigest()
+    return out
+
+
+def _nc_copy_vars(src, dst, names: list):
+    """Copies variables (and the dimensions they need) between datasets.
+
+    Both datasets must have ``set_auto_maskandscale(False)``, so that the
+    raw data is copied.
+    """
+    for name in names:
+        for d in src.variables[name].dimensions:
+            if d not in dst.dimensions:
+                dim = src.dimensions[d]
+                dst.createDimension(d, None if dim.isunlimited() else len(dim))
+    for name in names:
+        v = src.variables[name]
+        attrs = _nc_attrs(v)
+        fill_value = attrs.pop("_FillValue", None)
+        nv = dst.createVariable(name, v.dtype, v.dimensions, zlib=True,
+                                fill_value=fill_value)
+        nv.set_auto_maskandscale(False)
+        nv.setncatts(attrs)
+        nv[:] = v[:]
+
+
+def _write_nc_patch(src_fp: str, dst_fp: str, variables: list):
+    """Writes some variables of a gridded netCDF file to a patch file.
+
+    The patch also holds the coordinate variables and the global
+    attributes of the source file.
+
+    Parameters
+    ----------
+    src_fp : str
+        Path to the source file, e.g. a glacier's gridded_data.nc.
+    dst_fp : str
+        Path to the patch file to write.
+    variables : list of str
+        The variables to write.
+    """
+    with ncDataset(src_fp) as src:
+        missing = [v for v in variables if v not in src.variables]
+        if missing:
+            raise ValueError(f"{missing} not found in {src_fp}.")
+        src.set_auto_maskandscale(False)
+        coords = [d for d in src.dimensions if d in src.variables]
+        names = coords + [v for v in variables if v not in coords]
+        with ncDataset(dst_fp, "w", format=src.data_model) as dst:
+            dst.setncatts(_nc_attrs(src))
+            _nc_copy_vars(src, dst, names)
+
+
+def _apply_nc_patch(target_fp: str, patch_fp: str, removed=()):
+    """Adds (or replaces) the variables of a patch file to a netCDF file.
+
+    The patch's coordinates must be the ones of the target: a patch made
+    on another grid is refused. The global attributes of the patch are
+    added to the ones of the target. The target is rewritten beside and
+    then moved into place, so it is never left half written.
+
+    Parameters
+    ----------
+    target_fp : str
+        Path to the file to patch, e.g. a glacier's gridded_data.nc. If it
+        does not exist yet, the patch becomes the file.
+    patch_fp : str
+        Path to the patch file.
+    removed : list of str, optional
+        Variables to remove from the target.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If the dimensions or coordinates of the patch and the target
+        differ.
+    """
+    if not os.path.exists(target_fp):
+        shutil.copyfile(patch_fp, target_fp)
+        return
+
+    tmp = f"{target_fp}.tmp{os.getpid()}"
+    try:
+        with ncDataset(target_fp) as old, ncDataset(patch_fp) as patch:
+            old.set_auto_maskandscale(False)
+            patch.set_auto_maskandscale(False)
+            for d, dim in patch.dimensions.items():
+                if d not in old.dimensions:
+                    continue
+                same = len(old.dimensions[d]) == len(dim)
+                if same and d in patch.variables and d in old.variables:
+                    same = np.array_equal(old.variables[d][:],
+                                          patch.variables[d][:])
+                if not same:
+                    raise InvalidWorkflowError(
+                        f"{os.path.basename(patch_fp)} was made on another "
+                        f"grid than {target_fp} (dimension `{d}` differs)."
+                    )
+            new_vars = [v for v in patch.variables
+                        if v not in patch.dimensions or v not in old.variables]
+            old_vars = [v for v in old.variables
+                        if v not in new_vars and v not in removed]
+            with ncDataset(tmp, "w", format=old.data_model) as new:
+                new.setncatts({**_nc_attrs(old), **_nc_attrs(patch)})
+                _nc_copy_vars(old, new, old_vars)
+                _nc_copy_vars(patch, new, new_vars)
+        os.replace(tmp, target_fp)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
 def _finalize_merged_dir(dirpath: str):
     """Reconstruct a directory after layering level tars into it.
 
@@ -6096,10 +6161,8 @@ def write_addon(
     rid = gdir.rgi_id
     root = os.path.join(output_dir, rid[:-6], rid[:-3], rid)
     mkdir(root, reset=True)
-    with gdir.open_group("gridded_data") as ds:
-        ds[variables].load().to_netcdf(
-            os.path.join(root, f"{label}.nc"), engine="h5netcdf"
-        )
+    _write_nc_patch(gdir.get_filepath("gridded_data"),
+                    os.path.join(root, f"{label}.nc"), variables)
     write_level_manifest(
         root, label, {}, kind="addon", grid_id=grid_id(gdir.grid)
     )
@@ -6159,9 +6222,8 @@ def apply_addon(gdir: GlacierDirectory, base_url: str) -> None:
                 f"{m['rgi_id']} on grid {str(m.get('grid_id'))[:8]}, but "
                 f"this glacier directory has grid {want[:8]}."
             )
-        fp = os.path.join(tmp, f"{m['label']}.nc")
-        with xr.open_dataset(fp, engine="h5netcdf") as ds:
-            gdir.write_group(ds.load(), "gridded_data", mode="a")
+        _apply_nc_patch(gdir.get_filepath("gridded_data"),
+                        os.path.join(tmp, f"{m['label']}.nc"))
         shutil.copy(mf, gdir.dir)
 
 

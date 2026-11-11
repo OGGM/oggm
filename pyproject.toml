@@ -32,8 +32,6 @@ dependencies = [
     "shapely",
     "xarray",
     "pyarrow",
-    "h5py",
-    "h5netcdf",
 ]
 
 [project.optional-dependencies]

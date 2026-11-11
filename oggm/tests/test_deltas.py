@@ -11,6 +11,7 @@ import shutil
 
 import numpy as np
 import pytest
+import xarray as xr
 
 import oggm
 from oggm import cfg, utils, workflow
@@ -215,6 +216,16 @@ _DS = dict(border=80, rgi_version="62")
 def _manifest(path):
     with open(path) as f:
         return json.load(f)
+
+
+def _add_nc_var(fp, name, value, like="topo"):
+    """Appends a constant (y, x) variable to a gridded netCDF file, the way
+    the shop tasks do."""
+    with utils.ncDataset(fp, "a") as nc:
+        v = nc.createVariable(name, "f4", nc.variables[like].dimensions,
+                              zlib=True, fill_value=np.nan)
+        v.units = "m yr-1"
+        v[:] = np.full(nc.variables[like].shape, value, dtype=np.float32)
 
 
 def test_write_level_manifest_parent(tmp_path):
@@ -1121,6 +1132,91 @@ def test_finalize_rejects_newer_major(tmp_path, version):
         utils._workflow._finalize_merged_dir(str(gdir_dir))
 
 
+class TestNcPatch:
+    """netCDF patches: some variables of a gridded file, applied to another."""
+
+    @pytest.fixture
+    def grids(self, tmp_path, hef_gdir):
+        """Two copies of the HEF gridded_data.nc."""
+        src = tmp_path / "src.nc"
+        dst = tmp_path / "dst.nc"
+        shutil.copyfile(hef_gdir.get_filepath("gridded_data"), src)
+        shutil.copyfile(hef_gdir.get_filepath("gridded_data"), dst)
+        return SimpleNamespace(src=str(src), dst=str(dst), tmp=tmp_path)
+
+    def test_digests_ignore_how_the_file_was_written(self, grids):
+        ref = utils._workflow._nc_var_digests(grids.src)
+        assert {"@global", "x", "y", "topo", "glacier_mask"} <= set(ref)
+
+        # Same content, rewritten with xarray and another compression
+        with xr.open_dataset(grids.src, decode_cf=False) as ds:
+            ds = ds.load()
+        enc = {v: {"zlib": False} for v in ds.variables}
+        for v in ds.variables:
+            if "_FillValue" not in ds[v].attrs:
+                enc[v]["_FillValue"] = None  # don't let xarray add one
+        fp = str(grids.tmp / "rewritten.nc")
+        ds.to_netcdf(fp, encoding=enc)
+        assert utils._workflow._nc_var_digests(fp) == ref
+
+        # One more variable: only its digest is new
+        _add_nc_var(grids.src, "itslive_v", 3.5)
+        new = utils._workflow._nc_var_digests(grids.src)
+        assert set(new) - set(ref) == {"itslive_v"}
+        assert all(new[k] == ref[k] for k in ref)
+
+    def test_patch_roundtrip(self, grids):
+        _add_nc_var(grids.src, "itslive_v", 3.5)
+        _add_nc_var(grids.src, "millan_v", 2.0)
+        patch = str(grids.tmp / "patch.nc")
+        utils._workflow._write_nc_patch(grids.src, patch, ["itslive_v"])
+        with xr.open_dataset(patch) as ds:
+            assert set(ds.data_vars) == {"itslive_v"}
+            assert ds.attrs["pyproj_srs"]
+
+        ref = utils._workflow._nc_var_digests(grids.dst)
+        utils._workflow._apply_nc_patch(grids.dst, patch)
+        out = utils._workflow._nc_var_digests(grids.dst)
+        src = utils._workflow._nc_var_digests(grids.src)
+        assert out["itslive_v"] == src["itslive_v"]
+        assert "millan_v" not in out
+        assert all(out[k] == ref[k] for k in ref)
+
+        # Applying again replaces the variable
+        utils._workflow._apply_nc_patch(grids.dst, patch, removed=["topo"])
+        out = utils._workflow._nc_var_digests(grids.dst)
+        assert "topo" not in out
+        assert out["itslive_v"] == src["itslive_v"]
+
+        # A missing target becomes the patch
+        new = str(grids.tmp / "new.nc")
+        utils._workflow._apply_nc_patch(new, patch)
+        assert utils._workflow._nc_var_digests(new)["itslive_v"] == \
+            src["itslive_v"]
+
+        with pytest.raises(ValueError, match="foo"):
+            utils._workflow._write_nc_patch(grids.src, patch, ["foo"])
+
+    def test_patch_refuses_other_coords(self, grids):
+        _add_nc_var(grids.src, "itslive_v", 3.5)
+        with utils.ncDataset(grids.src, "a") as nc:
+            nc.variables["x"][:] = nc.variables["x"][:] + 0.5
+        patch = str(grids.tmp / "patch.nc")
+        utils._workflow._write_nc_patch(grids.src, patch, ["itslive_v"])
+        before = Path(grids.dst).read_bytes()
+        with pytest.raises(InvalidWorkflowError, match="`x`"):
+            utils._workflow._apply_nc_patch(grids.dst, patch)
+        assert Path(grids.dst).read_bytes() == before
+        assert not list(grids.tmp.glob("*.tmp*"))
+
+    def test_store_filesuffix_none(self, hef_gdir):
+        hef_gdir.write_store({"a": np.arange(3.0)}, "inversion_input",
+                             filesuffix=None)
+        assert not list(Path(hef_gdir.dir).glob("*None*"))
+        out = hef_gdir.read_store("inversion_input", filesuffix=None)
+        np.testing.assert_allclose(out["a"], np.arange(3.0))
+
+
 class TestAddons:
     """Add-ons: optional data matched to a gdir by its grid, not its chain."""
 
@@ -1226,8 +1322,6 @@ class TestAddons:
     def addon(self, tmp_path, hef_gdir):
         """An `itslive` add-on built from one copy of HEF, and a second copy
         to apply it to."""
-        import xarray as xr
-
         rid = hef_gdir.rgi_id
 
         def copy(name):
@@ -1236,9 +1330,7 @@ class TestAddons:
             return oggm.GlacierDirectory(rid, base_dir=tmp_path / name)
 
         src, dst = copy("src"), copy("dst")
-        with src.open_group("gridded_data") as ds:
-            v = xr.full_like(ds["topo"], 3.5).rename("itslive_v")
-        src.write_group(v.to_dataset(), "gridded_data", mode="a")
+        _add_nc_var(src.get_filepath("gridded_data"), "itslive_v", 3.5)
 
         out = tmp_path / "addons" / "itslive"
         utils.write_addon(
@@ -1248,13 +1340,13 @@ class TestAddons:
         return SimpleNamespace(src=src, dst=dst, out=out)
 
     def test_apply_addon_from_local_dir(self, addon):
-        with addon.dst.open_group("gridded_data") as ds:
+        with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
             before = ds.load()
         assert "itslive_v" not in before
 
         utils.apply_addon(addon.dst, base_url=str(addon.out))
 
-        with addon.dst.open_group("gridded_data") as ds:
+        with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
             after = ds.load()
         np.testing.assert_array_equal(after["itslive_v"], 3.5)
         for var in before.data_vars:
@@ -1274,7 +1366,7 @@ class TestAddons:
         monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
         utils.apply_addon(addon.dst, base_url=host + "itslive")
         assert calls == [host + "itslive/RGI50-11/RGI50-11.008.tar"]
-        with addon.dst.open_group("gridded_data") as ds:
+        with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
             assert "itslive_v" in ds
 
     def test_apply_addon_refuses_other_grid(self, addon):
