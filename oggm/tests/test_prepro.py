@@ -2056,9 +2056,36 @@ class TestClimate:
         return gdir
 
     def _get_specific_mb(self, gdir, years):
+        # MB of hydrological years (October to September), as in
+        # mb_calibration_to_rmsd
         h, w = gdir.get_inversion_flowline_hw()
         mb = massbalance.MonthlyTIModel(gdir)
-        return pd.Series(mb.get_specific_mb(h, w, year=years), index=years)
+        fy = massbalance._hydro_year_monthly_floatyears(years, 10)
+        mbs = mb.get_specific_mb(h, w, year=fy.ravel(),
+                                 time_resolution='monthly')
+        return pd.Series(np.reshape(mbs, fy.shape).sum(axis=1), index=years)
+
+    def test_hydro_year_monthly_floatyears(self):
+        from oggm.core.massbalance import _hydro_year_monthly_floatyears
+
+        # Northern hemisphere: October 1999 to September 2000
+        fy = _hydro_year_monthly_floatyears([2000, 2001], 10)
+        assert fy.shape == (2, 12)
+        y, m = utils.floatyear_to_date(fy[0])
+        np.testing.assert_equal(y, [1999] * 3 + [2000] * 9)
+        np.testing.assert_equal(m, [10, 11, 12] + list(range(1, 10)))
+        np.testing.assert_allclose(fy[1], utils.date_to_floatyear(
+            [2000] * 3 + [2001] * 9, [10, 11, 12] + list(range(1, 10))))
+
+        # Southern hemisphere: April 1999 to March 2000
+        y, m = utils.floatyear_to_date(_hydro_year_monthly_floatyears(2000, 4)[0])
+        np.testing.assert_equal(y, [1999] * 9 + [2000] * 3)
+        np.testing.assert_equal(m, list(range(4, 13)) + [1, 2, 3])
+
+        # Calendar years
+        y, m = utils.floatyear_to_date(_hydro_year_monthly_floatyears(2000, 1)[0])
+        np.testing.assert_equal(y, 2000)
+        np.testing.assert_equal(m, np.arange(1, 13))
 
     @pytest.fixture(autouse=True, scope="class")
     def _rmsd_calib(self):
@@ -2098,10 +2125,14 @@ class TestClimate:
         years = mbdf.index
         ref_mb_period = f"{years[0]}-01-01_{years[-1] + 1}-01-01"
 
-        mb_calibration_to_rmsd(
+        df = mb_calibration_to_rmsd(
             gdir, ref_df=ref_mb, calibrate_params=arg_calib_params
         )
         rmsd_mb = self._get_specific_mb(gdir, years)
+
+        # The RMSD is computed on hydrological years
+        np.testing.assert_allclose(df['rmsd'], utils.rmsd(rmsd_mb, ref_mb),
+                                   rtol=1e-5)
 
         # All calibrated parameters stay within configured bounds
         for param in ["melt_f", "prcp_fac", "temp_bias"]:
@@ -2152,9 +2183,11 @@ class TestClimate:
         years = mbdf.index
 
         # Check all permutations of parameters gather the same results for
-        # differential evolution, as it's stochastic and so may differ slightly
-        # (hence rtol here)
-        mb_calibration_to_rmsd(
+        # differential evolution. It is stochastic, and the optimum is flat
+        # (melt_f and temp_bias trade off): it may stop at slightly different
+        # parameters with the same RMSD. Hence a tight tolerance on the RMSD
+        # and a looser one on the MB.
+        df = mb_calibration_to_rmsd(
             gdir,
             ref_df=ref_mb,
             calibrate_params=("melt_f", "prcp_fac", "temp_bias"),
@@ -2164,9 +2197,11 @@ class TestClimate:
         permutations = [('prcp_fac', 'temp_bias', 'melt_f'),
                         ('temp_bias', 'melt_f', 'prcp_fac')]
         for params in permutations:
-            mb_calibration_to_rmsd(gdir, ref_df=ref_mb, calibrate_params=params)
+            dfp = mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                         calibrate_params=params)
             perm = self._get_specific_mb(gdir, years)
-            np.testing.assert_allclose(base.values, perm.values, rtol=0.01)
+            np.testing.assert_allclose(df['rmsd'], dfp['rmsd'], rtol=1e-3)
+            np.testing.assert_allclose(base.values, perm.values, atol=25)
 
     def test_mb_calibration_to_rmsd_invalid_bounds(self, _rmsd_calib):
 
@@ -2194,6 +2229,16 @@ class TestClimate:
                                    calibrate_params=('temp_bias',),
                                    temp_bias_min=-np.inf,
                                    temp_bias_max=np.inf)
+
+        # The first hydrological year of the climate data is incomplete
+        # (it starts in October of the year before)
+        y0 = massbalance.MonthlyTIModel(gdir, melt_f=5, prcp_fac=2.5,
+                                        temp_bias=0,
+                                        check_calib_params=False).ys
+        ref_mb = pd.Series([-500., -600.], index=[y0, y0 + 1])
+        with pytest.raises(ValueError, match='hydrological year'):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                   calibrate_params=('melt_f',))
 
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):

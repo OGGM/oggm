@@ -379,6 +379,37 @@ class TestFuncs(object):
             assert r == utils.date_to_floatyear([2000], [7])[0]
         assert utils.date_to_floatyear(2000, 12, 32) == 2001
 
+    def test_get_time_functions_scalar_path(self):
+        """The scalar fast paths give the same result as the array paths."""
+        from calendar import monthrange, isleap
+        from oggm.utils._funcs import (get_days_of_year, get_seconds_of_year,
+                                       get_days_of_month, get_seconds_of_month)
+
+        # Every day of 1896-2104 (around the 1900 and 2100 non-leap years)
+        dates = [(y, m, d) for y in range(1896, 2105) for m in range(1, 13)
+                 for d in range(1, monthrange(y, m)[1] + 1)]
+        y, m, d = np.array(dates).T
+        fy = utils.date_to_floatyear(y, m, d)
+        for leap in [False, True]:
+            dm = np.array([monthrange(a, b)[1] for a, b in zip(y, m)])
+            if not leap:
+                dm = np.where(m == 2, 28, dm)
+            dy = np.array([366 if (leap and isleap(a)) else 365 for a in y])
+            for fn, ref in [(get_days_of_month, dm),
+                            (get_seconds_of_month, dm * 86400),
+                            (get_days_of_year, dy),
+                            (get_seconds_of_year, dy * 86400)]:
+                np.testing.assert_array_equal(fn(fy, use_leap_years=leap), ref)
+                for cast in [float, np.float64]:
+                    out = [fn(cast(f), use_leap_years=leap) for f in fy]
+                    np.testing.assert_array_equal(out, ref)
+                assert type(fn(fy[0], use_leap_years=leap)) is int
+                assert type(fn(np.array(fy[0]), use_leap_years=leap)) is int
+            # Integer years: January, or the whole year
+            assert get_days_of_month(2000, use_leap_years=leap) == 31
+            assert get_days_of_year(np.int64(2000), use_leap_years=leap) == (
+                366 if leap else 365)
+
     def test_get_time_functions(self):
         """Test scalar and array behavior of get_{days,seconds}_of_{year,month}."""
         from oggm.utils._funcs import (get_days_of_year, get_seconds_of_year,

@@ -22,6 +22,7 @@ from oggm.cfg import SEC_IN_YEAR, SEC_IN_DAY
 from oggm.utils import (SuperclassMeta, get_geodetic_mb_dataframe,
                         floatyear_to_date, date_to_floatyear, get_demo_file,
                         float_years_timeseries, ncDataset, get_temp_bias_dataframe,
+                        hydrodate_to_calendardate,
                         clip_min, clip_max, clip_array, clip_scalar,
                         weighted_average_1d, lazy_property, set_array_type, rmsd,
                         get_days_of_year, get_seconds_of_year, get_days_of_month,
@@ -32,6 +33,10 @@ from oggm import entity_task, __version__
 
 # Module logger
 log = logging.getLogger(__name__)
+
+# Maximum number of values (heights x time steps) of the temporary arrays in
+# the vectorised get_*_mb_series methods
+_MB_SERIES_CHUNK_SIZE = 2_000_000
 
 # Climate relevant global params - not optimised
 MB_GLOBAL_PARAMS = ['temp_default_gradient',
@@ -241,6 +246,127 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         raise NotImplementedError()
 
+    def _mb_series(self, mb_function, heights, years, fl_id=None, fls=None):
+        # Generic implementation of the get_*_mb_series methods: one call
+        # per time step
+        kwargs = {}
+        if fl_id is not None:
+            kwargs['fl_id'] = fl_id
+        if fls is not None:
+            kwargs['fls'] = fls
+        years = np.atleast_1d(years)
+        out = [mb_function(heights, year=yr, **kwargs) for yr in years]
+        return np.stack([np.asarray(o, dtype=float) for o in out], axis=-1)
+
+    def get_monthly_mb_series(self, heights, years, fl_id=None, fls=None):
+        """Monthly mass balance at given altitude(s), for several months.
+
+        Same as calling ``get_monthly_mb`` for each month, but some models
+        (e.g. :py:class:`MonthlyTIModel`) compute all the months at once,
+        which is much faster. Useful for a fixed geometry (for example for
+        calibration, or to average the MB over a period).
+
+        Units: [m s-1], or meters of ice per second
+
+        Parameters
+        ----------
+        heights: ndarray
+            the altitudes at which the mass balance will be computed
+        years: array_like
+            the months (in the "floating year" convention)
+        fl_id: float, optional
+            the index of the flowline in the fls array (might be ignored
+            by some MB models)
+        fls: list of flowline instances, optional
+            the flowlines array (might be ignored by some MB models)
+
+        Returns
+        -------
+        the mass balance, of shape (len(heights), len(years)) (units: [m s-1])
+        """
+        return self._mb_series(self.get_monthly_mb, heights, years,
+                               fl_id=fl_id, fls=fls)
+
+    def get_annual_mb_series(self, heights, years, fl_id=None, fls=None):
+        """Annual mass balance at given altitude(s), for several years.
+
+        Same as calling ``get_annual_mb`` for each year, but some models
+        (e.g. :py:class:`MonthlyTIModel`) compute all the years at once,
+        which is much faster. Useful for a fixed geometry (for example for
+        calibration, or to average the MB over a period).
+
+        Units: [m s-1], or meters of ice per second
+
+        Parameters
+        ----------
+        heights: ndarray
+            the altitudes at which the mass balance will be computed
+        years: array_like
+            the years (in the "floating year" convention)
+        fl_id: float, optional
+            the index of the flowline in the fls array (might be ignored
+            by some MB models)
+        fls: list of flowline instances, optional
+            the flowlines array (might be ignored by some MB models)
+
+        Returns
+        -------
+        the mass balance, of shape (len(heights), len(years)) (units: [m s-1])
+        """
+        return self._mb_series(self.get_annual_mb, heights, years,
+                               fl_id=fl_id, fls=fls)
+
+    def has_fast_mb_series(self, time_resolution='annual'):
+        """Whether ``get_*_mb_series`` is faster than the loop over time.
+
+        If True, ``get_specific_mb`` uses it. Models with a state (which
+        depends on the order of the calls) must return False.
+
+        Parameters
+        ----------
+        time_resolution : str
+            'annual' or 'monthly'
+        """
+        return False
+
+    def _get_specific_mb_from_series(self, heights, widths, fls, year,
+                                     time_resolution):
+        # get_specific_mb with get_*_mb_series: all time steps at once
+        if time_resolution == 'annual':
+            series = self.get_annual_mb_series
+            unit_conversion = self.sec_in_year
+        else:
+            series = self.get_monthly_mb_series
+            unit_conversion = self.sec_in_month
+
+        if fls is not None:
+            mbs = []
+            widths = []
+            for i, fl in enumerate(fls):
+                _widths = fl.widths
+                try:
+                    # For rect and parabola don't compute spec mb
+                    _widths = np.where(fl.thick > 0, _widths, 0)
+                except AttributeError:
+                    pass
+                widths.append(_widths)
+                mbs.append(series(fl.surface_h, year, fls=fls, fl_id=i))
+            widths = np.concatenate(widths, axis=0)
+            mbs = np.concatenate(mbs, axis=0)
+        else:
+            mbs = series(heights, year)
+            widths = np.asarray(widths, dtype=float)
+
+        scl = np.sum(widths)
+        if scl == 0:
+            raise ZeroDivisionError("Weights sum to zero, can't be normalized")
+        # Weighted average over the heights, one contiguous row per time
+        # step: the same summation as weighted_average_1d in the loop, so
+        # that the result does not depend on the number of time steps
+        out = np.multiply(np.ascontiguousarray(mbs.T), widths).sum(axis=1)
+        out = out / scl * unit_conversion(year)
+        return set_array_type(out) * self.ice_density
+
     def get_specific_mb(self, heights=None, widths=None, fls=None, year=None,
                         time_resolution='annual'):
         """Specific mass balance for a given glacier geometry.
@@ -274,6 +400,11 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         """
         stack = []
         year = np.atleast_1d(year)
+
+        if (time_resolution in ['annual', 'monthly'] and
+                self.has_fast_mb_series(time_resolution)):
+            return self._get_specific_mb_from_series(heights, widths, fls,
+                                                     year, time_resolution)
 
         if time_resolution == 'annual':
             mb_function = self.get_annual_mb
@@ -1005,6 +1136,103 @@ class MonthlyTIModel(MassBalanceModel):
             return (mb_annual, t.mean(axis=1), tmelt.sum(axis=1),
                     prcp.sum(axis=1), prcpsol.sum(axis=1))
         return mb_annual
+
+    # Vectorised versions of get_monthly_mb and get_annual_mb: all the time
+    # steps at once
+
+    def has_fast_mb_series(self, time_resolution='annual'):
+        # The fast series reproduce the methods of this class. A subclass
+        # overriding them (e.g. DailyTIModel) gets the generic loop instead,
+        # so that its own methods are used.
+        if time_resolution == 'annual':
+            names = ['get_annual_mb', '_get_2d_annual_climate']
+        elif time_resolution == 'monthly':
+            names = ['get_monthly_mb', 'get_monthly_climate']
+        else:
+            return False
+        cls = type(self)
+        return all(getattr(cls, n) is getattr(MonthlyTIModel, n) for n in names)
+
+    def _validated_years(self, years):
+        # validate_year for each year (checks the bounds, handles repeat)
+        years = np.asarray(years, dtype=np.int64)
+        uy, inv = np.unique(years, return_inverse=True)
+        vy = np.array([self.validate_year(y) for y in uy], dtype=np.int64)
+        return vy[inv].reshape(years.shape)
+
+    def _climate_index(self, years, months):
+        # Index of (year, month) pairs in the climate time series
+        key = self.years.astype(np.int64) * 12 + self.months - 1
+        target = (np.asarray(years, dtype=np.int64) * 12 +
+                  np.asarray(months, dtype=np.int64) - 1)
+        pok = np.clip(np.searchsorted(key, target), 0, len(key) - 1)
+        if np.any(key[pok] != target):
+            raise ValueError('Some months are not in the climate record.')
+        return pok
+
+    def _get_2d_climate_for_index(self, heights, pok):
+        # _get_climate_for_index, always 2D (heights x time)
+        out = self._get_climate_for_index(heights, pok)
+        if np.size(pok) == 1:
+            out = tuple(np.reshape(o, (-1, 1)) for o in out)
+        return out
+
+    def get_monthly_mb_series(self, heights, years, fl_id=None, fls=None):
+        if not self.has_fast_mb_series('monthly'):
+            return super().get_monthly_mb_series(heights, years,
+                                                 fl_id=fl_id, fls=fls)
+        years = np.atleast_1d(np.asarray(years, dtype=np.float64))
+        heights = np.atleast_1d(np.asarray(heights, dtype=np.float64))
+        y, m = floatyear_to_date(years)
+        pok = self._climate_index(self._validated_years(y), m)
+        days = np.asarray(self.days_in_month(years))
+        sec_in_month = np.asarray(self.sec_in_month(years))
+        sec_in_year = np.asarray(self.sec_in_year(years))
+
+        # Same computations as get_monthly_climate and get_monthly_mb, in
+        # chunks of time to limit the memory used by the temporaries
+        out = np.empty((len(heights), len(years)))
+        step = max(1, _MB_SERIES_CHUNK_SIZE // len(heights))
+        for i0 in range(0, len(years), step):
+            sl = slice(i0, i0 + step)
+            _, tmelt, _, prcpsol = self._get_2d_climate_for_index(heights,
+                                                                  pok[sl])
+            tmelt = tmelt * days[sl]
+            mb = prcpsol - self.melt_f * tmelt
+            mb -= self.bias * sec_in_month[sl] / sec_in_year[sl]
+            out[:, sl] = mb / sec_in_month[sl] / self.ice_density
+        return out
+
+    def get_annual_mb_series(self, heights, years, fl_id=None, fls=None):
+        if not self.has_fast_mb_series('annual'):
+            return super().get_annual_mb_series(heights, years,
+                                                fl_id=fl_id, fls=fls)
+        years = np.atleast_1d(np.asarray(years, dtype=np.float64))
+        heights = np.atleast_1d(np.asarray(heights, dtype=np.float64))
+        ny = len(years)
+        iyears = np.floor(years).astype(np.int64)
+        months = np.tile(np.arange(1, 13), ny)
+        pok = self._climate_index(np.repeat(self._validated_years(iyears), 12),
+                                  months).reshape(ny, 12)
+        # As in get_annual_mb: the length of the months and years of the
+        # requested years (not the repeated ones)
+        myr = date_to_floatyear(np.repeat(iyears, 12), months)
+        days = np.asarray(self.days_in_month(myr)).reshape(ny, 12)
+        sec_in_year = np.asarray(self.sec_in_year(years))
+
+        # Same computations as get_annual_mb, in chunks of years
+        out = np.empty((len(heights), ny))
+        step = max(1, _MB_SERIES_CHUNK_SIZE // (12 * len(heights)))
+        for i0 in range(0, ny, step):
+            sl = slice(i0, i0 + step)
+            n = len(years[sl])
+            _, tmelt, _, prcpsol = self._get_2d_climate_for_index(
+                heights, pok[sl].ravel())
+            tmelt = tmelt * days[sl].ravel()
+            mb = prcpsol - self.melt_f * tmelt
+            mb = mb.reshape(len(heights), n, 12).sum(axis=2)
+            out[:, sl] = (mb - self.bias) / sec_in_year[sl] / self.ice_density
+        return out
 
 
 class DailyTIModel(MonthlyTIModel):
@@ -3227,10 +3455,11 @@ class ConstantMassBalance(MassBalanceModel):
 
     @lazy_property
     def interp_yr(self):
-        # annual MB
+        # annual MB, averaged over the years (summed year after year, as
+        # before the series existed, for identical results)
         mb_on_h = self.hbins * 0.
-        for yr in self.years:
-            mb_on_h += self.mbmod.get_annual_mb(self.hbins, year=yr)
+        for mb in self.mbmod.get_annual_mb_series(self.hbins, self.years).T:
+            mb_on_h += mb
         return interp1d(self.hbins, mb_on_h / len(self.years))
 
     @lazy_property
@@ -3239,10 +3468,10 @@ class ConstantMassBalance(MassBalanceModel):
         months = np.arange(12)+1
         interp_m = []
         for m in months:
-            mb_on_h = self.hbins*0.
-            for yr in self.years:
-                yr = date_to_floatyear(yr, m)
-                mb_on_h += self.mbmod.get_monthly_mb(self.hbins, year=yr)
+            yrs = date_to_floatyear(self.years, m)
+            mb_on_h = self.hbins * 0.
+            for mb in self.mbmod.get_monthly_mb_series(self.hbins, yrs).T:
+                mb_on_h += mb
             interp_m.append(interp1d(self.hbins, mb_on_h / len(self.years)))
         return interp_m
 
@@ -3795,6 +4024,24 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                                                             year=year,
                                                             **kwargs)
 
+    def has_fast_mb_series(self, time_resolution='annual'):
+        return all(mbmod.has_fast_mb_series(time_resolution)
+                   for mbmod in self.flowline_mb_models)
+
+    def get_monthly_mb_series(self, heights, years, fl_id=None, fls=None):
+        if fl_id is None:
+            raise ValueError('`fl_id` is required for '
+                             'MultipleFlowlineMassBalance!')
+        return self.flowline_mb_models[fl_id].get_monthly_mb_series(
+            heights, years, fls=fls)
+
+    def get_annual_mb_series(self, heights, years, fl_id=None, fls=None):
+        if fl_id is None:
+            raise ValueError('`fl_id` is required for '
+                             'MultipleFlowlineMassBalance!')
+        return self.flowline_mb_models[fl_id].get_annual_mb_series(
+            heights, years, fls=fls)
+
     def _get_mb_on_flowlines(self, fls=None, year=None, mb_call=None):
         if fls is None:
             fls = self.fls
@@ -4154,6 +4401,32 @@ def mb_calibration_from_wgms_mb(gdir, settings_filesuffix='',
                                          **kwargs)
 
 
+def _hydro_year_monthly_floatyears(years, start_month):
+    """The float years of the 12 months of hydrological years.
+
+    The hydrological year Y starts in ``start_month`` of the calendar year
+    Y - 1 (if start_month > 1) and ends with the month before
+    ``start_month`` of the year Y. With start_month = 1, it is the calendar
+    year.
+
+    Parameters
+    ----------
+    years : array_like of int
+        the hydrological years
+    start_month : int
+        the first month of the hydrological year
+
+    Returns
+    -------
+    an array of shape (len(years), 12), the months of each year in order
+    """
+    years = np.atleast_1d(np.asarray(years, dtype=int))
+    hy = np.repeat(years, 12)
+    hm = np.tile(np.arange(1, 13), len(years))
+    cy, cm = hydrodate_to_calendardate(hy, hm, start_month=start_month)
+    return date_to_floatyear(cy, cm).reshape(len(years), 12)
+
+
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_to_rmsd(gdir, *,
                            settings_filesuffix='',
@@ -4192,6 +4465,13 @@ def mb_calibration_to_rmsd(gdir, *,
     and the MB timeseries can be complex and non-linear, and we are able
     to calibrate all three parameters at once.
 
+    The reference MB is compared to the modelled MB of hydrological years,
+    as in the WGMS data: the year Y starts in the month
+    ``hydro_month_nh`` (October) of the year Y - 1 in the northern
+    hemisphere, and ``hydro_month_sh`` (April) in the southern hemisphere
+    (see ``gdir.hemisphere``). The modelled MB of a hydrological year is the
+    sum of its monthly MB.
+
     Note that this does not compute the apparent mass balance at
     the same time - users need to run `apparent_mb_from_any_mb after`
     calibration.
@@ -4206,7 +4486,7 @@ def mb_calibration_to_rmsd(gdir, *,
         is set in the @entity-task decorater.
     ref_df : pandas dataframe, required
         the dataframe of annual mass balance values from the wgms data
-        (units: kg m-2 yr-1).
+        (units: kg m-2 yr-1), indexed by hydrological year.
         It is required here - if you want to use available observations,
     write_to_gdir : bool
         whether to write the results of the calibration to the glacier
@@ -4292,9 +4572,11 @@ def mb_calibration_to_rmsd(gdir, *,
             heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
             widths = np.ones(len(heights))
 
-    # Climate period
+    # Climate period: hydrological years, as in the WGMS data
     ref_mb_years = ref_df.index.values
     years = ref_mb_years
+    start_month = gdir.settings['hydro_month_' + gdir.hemisphere]
+    monthly_years = _hydro_year_monthly_floatyears(years, start_month)
 
     # Do we have a calving glacier?
     cmb = calving_mb(gdir)
@@ -4324,11 +4606,15 @@ def mb_calibration_to_rmsd(gdir, *,
                             prcp_fac=prcp_fac,
                             check_calib_params=False)
 
-    # Check that the years are available
-    for y in years:
-        if not mb_mod.is_year_valid(y):
-            raise ValueError(f'year {y} out of the valid time bounds: '
-                             f'[{mb_mod.ys}, {mb_mod.ye}]')
+    # Check that all the months of the hydrological years are available
+    for y, months in zip(years, monthly_years):
+        if not (mb_mod.is_year_valid(months[0]) and
+                mb_mod.is_year_valid(months[-1])):
+            raise ValueError(f'hydrological year {y} (months {start_month} '
+                             f'of {y - 1 if start_month > 1 else y} to '
+                             f'{(start_month - 2) % 12 + 1} of {y}) out of '
+                             f'the valid time bounds of the climate data: '
+                             f'[{mb_mod.ys_float}, {mb_mod.ye_float}]')
 
     # Check that the calibrate params are valid
     _param_bounds = {
@@ -4352,11 +4638,15 @@ def mb_calibration_to_rmsd(gdir, *,
             setattr(mb_mod, model_attr, val)
 
         if use_2d_mb:
-            sim_out = mb_mod.get_specific_mb(
-                heights=heights, widths=widths, year=years
-            )
+            sim_out = mb_mod.get_specific_mb(heights=heights, widths=widths,
+                                             year=monthly_years.ravel(),
+                                             time_resolution='monthly')
         else:
-            sim_out = mb_mod.get_specific_mb(fls=fls, year=years)
+            sim_out = mb_mod.get_specific_mb(fls=fls,
+                                             year=monthly_years.ravel(),
+                                             time_resolution='monthly')
+        # Monthly to hydrological years
+        sim_out = np.reshape(sim_out, monthly_years.shape).sum(axis=1)
 
         return rmsd(ref_values, sim_out)
 

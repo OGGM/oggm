@@ -12,6 +12,22 @@ Enhancements
 - Various performance improvements to the flowline model runs
   (:pull:`2024`, :pull:`2025`, :pull:`2026`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- New ``get_monthly_mb_series`` and ``get_annual_mb_series`` methods of the
+  MB models: the MB at given heights for many months or years at once, e.g.
+  to average the MB over a period on a fixed geometry. ``MonthlyTIModel``
+  computes all the time steps at once (vectorised); the other models loop
+  over ``get_monthly_mb`` / ``get_annual_mb``, and so does a subclass of
+  ``MonthlyTIModel`` which overrides these methods (see
+  ``has_fast_mb_series``). ``get_specific_mb`` uses them when they are
+  fast, with identical results: 6 times faster for 50 years of annual MB,
+  25 times for 600 months (Hintereisferner). This speeds up all the
+  calibrations on a fixed geometry. ``ConstantMassBalance`` uses them too.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``get_days_of_year``, ``get_seconds_of_year``, ``get_days_of_month`` and
+  ``get_seconds_of_month`` (and the ``sec_in_month`` and ``sec_in_year``
+  methods of the MB models which use them) are 6 to 30 times faster for
+  scalar input, as used by the MB models at every time step.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
   of each time step was growing with the length of the run), and
   ``utils.date_to_floatyear`` is about 4 times faster for single numbers.
@@ -428,6 +444,15 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- ``mb_calibration_to_rmsd`` now compares the reference MB to the modelled
+  MB of hydrological years (October to September in the northern
+  hemisphere, April to March in the southern hemisphere, from
+  ``PARAMS['hydro_month_nh']`` and ``PARAMS['hydro_month_sh']``), as in the
+  WGMS data, instead of calendar years. On Hintereisferner this reduces the
+  RMSD from 369 to 289 kg m-2 yr-1 (1953-2002, test climate data). With
+  the vectorised MB (see Enhancements), it is also faster than before (0.6 s
+  instead of 3.6 s for the three parameters on Hintereisferner).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``mass_conservation_inversion`` now reduces the trapezoid lambda where
   necessary to retain a minimum bottom width of 1 m, instead of falling
   back to a rectangle.
