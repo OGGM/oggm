@@ -30,6 +30,7 @@ from oggm.core.climate import process_custom_climate_data
 from oggm.core.climate import historical_delta_method
 from oggm.core.massbalance import mb_calibration_from_scalar_mb
 from oggm.core.massbalance import mb_calibration_from_geodetic_mb
+from oggm.core.massbalance import mb_calibration_from_geodetic_mb_adapbs
 from oggm.core.massbalance import mb_calibration_from_wgms_mb
 from oggm.core.massbalance import apparent_mb_from_linear_mb
 from oggm.core.massbalance import apparent_mb_from_any_mb
