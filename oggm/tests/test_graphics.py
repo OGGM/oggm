@@ -1,9 +1,7 @@
 import warnings
 
 import pytest
-import shutil
 
-import os
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -14,7 +12,7 @@ pytest.importorskip('pytest_mpl')
 # Local imports
 import oggm.utils
 from oggm.tests import mpl_image_compare
-from oggm.tests.funcs import init_columbia_eb, init_hef, get_test_dir
+from oggm.tests.funcs import init_columbia_eb
 from oggm import graphics
 from oggm.core import (gis, inversion, climate, centerlines, flowline,
                        massbalance)
@@ -68,9 +66,9 @@ def test_surf_to_nan():
 @pytest.mark.internet
 @pytest.mark.graphic
 @mpl_image_compare(tolerance=10, multi=True)
-def test_googlemap():
+def test_googlemap(hef_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = hef_gdir
     graphics.plot_googlemap(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -79,9 +77,9 @@ def test_googlemap():
 @pytest.mark.internet
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_domain():
+def test_domain(hef_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = hef_gdir
     graphics.plot_domain(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -89,9 +87,9 @@ def test_domain():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_centerlines():
+def test_centerlines(hef_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = hef_gdir
     graphics.plot_centerlines(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -99,9 +97,9 @@ def test_centerlines():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_raster():
+def test_raster(hef_unrounded_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     gis.gridded_attributes(gdir)
     graphics.plot_raster(gdir, var_name='aspect', cmap='twilight', ax=ax)
     fig.tight_layout()
@@ -110,9 +108,9 @@ def test_raster():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_flowlines():
+def test_flowlines(hef_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = hef_gdir
     graphics.plot_centerlines(gdir, ax=ax, use_flowlines=True)
     fig.tight_layout()
     return fig
@@ -120,9 +118,9 @@ def test_flowlines():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_downstream():
+def test_downstream(hef_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = hef_gdir
     graphics.plot_centerlines(gdir, ax=ax, add_downstream=True,
                               use_flowlines=True)
     fig.tight_layout()
@@ -131,9 +129,9 @@ def test_downstream():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_width():
+def test_width(hef_unrounded_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     graphics.plot_catchment_width(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -141,9 +139,9 @@ def test_width():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_width_corrected():
+def test_width_corrected(hef_unrounded_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     graphics.plot_catchment_width(gdir, ax=ax, corrected=True,
                                   add_intersects=True,
                                   add_touches=True)
@@ -153,9 +151,9 @@ def test_width_corrected():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_inversion():
+def test_inversion(hef_unrounded_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     graphics.plot_inversion(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -164,12 +162,10 @@ def test_inversion():
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_multiple_inversion():
+def test_multiple_inversion(tmp_path):
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_mdir')
-    if not os.path.exists(testdir):
-        os.makedirs(testdir)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -199,15 +195,14 @@ def test_multiple_inversion():
     fig, ax = plt.subplots()
     graphics.plot_inversion(gdirs, ax=ax)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig
 
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_modelsection():
+def test_modelsection(hef_unrounded_gdir):
 
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
@@ -220,9 +215,9 @@ def test_modelsection():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_modelsection_withtrib():
+def test_modelsection_withtrib(hef_unrounded_gdir):
 
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
@@ -234,9 +229,9 @@ def test_modelsection_withtrib():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_modeloutput_map():
+def test_modeloutput_map(hef_unrounded_gdir):
 
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     flowline.init_present_time_glacier(gdir)
     fls = gdir.read_store('model_flowlines')
     model = flowline.FlowlineModel(fls)
@@ -250,11 +245,10 @@ def test_modeloutput_map():
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_multiple_models():
+def test_multiple_models(tmp_path):
 
     # test directory
-    testdir = os.path.join(get_test_dir(), 'tmp_mdir')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -291,15 +285,14 @@ def test_multiple_models():
     graphics.plot_modeloutput_map(gdirs, ax=ax, model=models)
     fig.tight_layout()
 
-    shutil.rmtree(testdir)
     return fig
 
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_thick_alt():
+def test_thick_alt(hef_unrounded_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     graphics.plot_distributed_thickness(gdir, ax=ax,
                                         varname_suffix='_alt')
     fig.tight_layout()
@@ -308,9 +301,9 @@ def test_thick_alt():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_thick_interp():
+def test_thick_interp(hef_unrounded_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef(round_smoothed_dem=False)
+    gdir = hef_unrounded_gdir
     graphics.plot_distributed_thickness(gdir, ax=ax,
                                         varname_suffix='_interp')
     fig.tight_layout()
@@ -319,9 +312,11 @@ def test_thick_interp():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_thick_elev_bands():
+def test_thick_elev_bands(tmp_path):
     fig, ax = plt.subplots()
-    gdir = init_columbia_eb(dir_name='test_thick_eb', round_dem=False)
+    gdir = init_columbia_eb(
+        dir_name='test_thick_eb', round_dem=False, base_dir=str(tmp_path)
+    )
     workflow.inversion_tasks(utils.tolist(gdir))
     inversion.distribute_thickness_per_altitude(gdir, smooth_radius=None)
     graphics.plot_distributed_thickness(gdir, ax=ax)
@@ -330,10 +325,10 @@ def test_thick_elev_bands():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-@pytest.mark.xfail
-def test_model_section_calving():
-    # I have no clue why this test fails on gh sometimes
-    gdir = init_columbia_eb(dir_name='test_thick_eb', round_dem=False)
+def test_model_section_calving(tmp_path):
+    gdir = init_columbia_eb(
+        dir_name='test_thick_eb', round_dem=False, base_dir=str(tmp_path)
+    )
     workflow.inversion_tasks(utils.tolist(gdir))
     flowline.init_present_time_glacier(gdir)
 
@@ -354,9 +349,9 @@ def test_model_section_calving():
 
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_catch_areas():
+def test_catch_areas(hef_gdir):
     fig, ax = plt.subplots()
-    gdir = init_hef()
+    gdir = hef_gdir
     graphics.plot_catchment_areas(gdir, ax=ax)
     fig.tight_layout()
     return fig
@@ -365,10 +360,9 @@ def test_catch_areas():
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_chhota_shigri():
+def test_chhota_shigri(tmp_path):
 
-    testdir = os.path.join(get_test_dir(), 'tmp_chhota')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -403,17 +397,15 @@ def test_chhota_shigri():
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdirs, ax=ax, model=models)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig
 
 
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_ice_cap():
+def test_ice_cap(tmp_path):
 
-    testdir = os.path.join(get_test_dir(), 'tmp_icecap')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     cfg.initialize()
     cfg.PARAMS['round_smoothed_dem'] = False
@@ -441,17 +433,15 @@ def test_ice_cap():
     graphics.plot_catchment_width(gdirs, ax=ax, add_intersects=True,
                                   add_touches=True, smap=smap)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig
 
 
 @pytest.mark.slow
 @pytest.mark.graphic
 @mpl_image_compare(multi=True)
-def test_coxe():
+def test_coxe(tmp_path):
 
-    testdir = os.path.join(get_test_dir(), 'tmp_coxe')
-    utils.mkdir(testdir, reset=True)
+    testdir = str(tmp_path)
 
     # Init
     cfg.initialize()
@@ -504,5 +494,4 @@ def test_coxe():
     fig, ax = plt.subplots()
     graphics.plot_modeloutput_map(gdir, ax=ax, model=model)
     fig.tight_layout()
-    shutil.rmtree(testdir)
     return fig

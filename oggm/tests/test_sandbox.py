@@ -1,4 +1,3 @@
-import unittest
 import pytest
 import numpy as np
 from numpy.testing import assert_allclose
@@ -28,15 +27,13 @@ pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
 
-class TestIdealisedCases(unittest.TestCase):
+class TestIdealisedCases:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         cfg.initialize()
         self.glen_a = 2.4e-24  # Modern style Glen parameter A
         self.fs = 5.7e-20 / 2  # set sliding
-
-    def tearDown(self):
-        pass
 
     @pytest.mark.slow
     def test_constant_bed(self):
@@ -107,9 +104,10 @@ class TestIdealisedCases(unittest.TestCase):
         np.testing.assert_allclose(volume[1], volume[2])
 
 
-class TestFluxGate(unittest.TestCase):
+class TestFluxGate:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         cfg.initialize()
 
     @pytest.mark.slow

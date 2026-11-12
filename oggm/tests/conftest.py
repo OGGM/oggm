@@ -13,9 +13,8 @@ import matplotlib.pyplot as plt
 
 from oggm import cfg, tasks
 from oggm.core import flowline
-from oggm.tests.funcs import init_hef, get_test_dir
+from oggm.tests.funcs import init_hef
 from oggm import utils
-from oggm.utils import mkdir
 from oggm.tests import HAS_MPL_FOR_TESTS, HAS_INTERNET
 from oggm.workflow import reset_multiprocessing
 
@@ -200,21 +199,9 @@ def dummy_constant_bed():
                                             bed_h, widths)]
 
 
-@pytest.fixture(scope='session')
-def test_dir():
-    """ Provides a reference to the test directory for the entire test session.
-
-        Named after the current git revision.
-        As a session-scoped fixture, this will only be created once and
-        then injected to each test that depends on it.
-    """
-    return get_test_dir()
-
-
-def _setup_case_dir(call, test_dir):
-    casedir = os.path.join(test_dir, call.__name__)
-    mkdir(casedir, reset=True)
-    return casedir
+def _setup_case_dir(call, tmp_path_factory):
+    # mktemp because it numbers directories to avoid collisions
+    return str(tmp_path_factory.mktemp(call.__name__))
 
 
 def _teardown_case_dir(casedir):
@@ -223,35 +210,47 @@ def _teardown_case_dir(casedir):
 
 
 @pytest.fixture(scope='function')
-def case_dir(request, test_dir):
-    """ Provides a unique directory for the current test function, a child of
-        the session test directory (test_dir > case_dir). Named after the
-        current test function.
-        As a function-scoped fixture, a new directory is created for
-        each function that uses this and then cleaned up when the case
-        completes.
+def case_dir(request, tmp_path_factory):
+    """Provides a unique temporary directory named after the
+    current test function.
+
+    As a function-scoped fixture, a new directory is created for each
+    function that uses this and then cleaned up when the case completes.
     """
-    cd = _setup_case_dir(request.function, test_dir)
+    cd = _setup_case_dir(request.function, tmp_path_factory)
     yield cd
     _teardown_case_dir(cd)
 
 
 @pytest.fixture(scope='class')
-def class_case_dir(request, test_dir):
-    """ Provides a unique directory for the current test class, a child of
-        the session test directory (test_dir > class_case_dir). Named after
-        the current test class.
-        As a class-scoped fixture, a class directory is created once for
-        the current class and used by each test inside it. It is cleaned
-        up when the all the cases in the class complete.
+def class_case_dir(request, tmp_path_factory):
+    """Provides a unique temporary directory named after the current
+    test class.
+
+    As a class-scoped fixture, a class directory is
+    created once for the current class and used by each test inside it.
+    It is cleaned up when the all the cases in the class complete.
     """
-    cd = _setup_case_dir(request.cls, test_dir)
+    # pytest scopes module-level tests per function as they're not
+    # inside a class, so each test resets the directory
+    cd = _setup_case_dir(request.cls or request.module, tmp_path_factory)
     yield cd
     _teardown_case_dir(cd)
 
 
+@pytest.fixture(scope="session")
+def hef_base_dir(tmp_path_factory):
+    """Provides the directory the HEF base fixtures build into.
+
+    A fresh temporary directory per session, so every session starts from
+    a new build. Builds are keyed by the init_hef arguments, so each
+    variant is built once and reused by later modules.
+    """
+    return str(tmp_path_factory.mktemp("hef_base"))
+
+
 @pytest.fixture(scope='module')
-def hef_gdir_base(request, test_dir):
+def hef_gdir_base(request, hef_base_dir):
     """ Provides an initialized Hintereisferner glacier directory.
         As a module fixture, the initialization is run only once per test
         module that uses it.
@@ -263,25 +262,26 @@ def hef_gdir_base(request, test_dir):
     try:
         module = request.module
         border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
-        return init_hef(border=border)
+        return init_hef(border=border, base_dir=hef_base_dir)
     except AttributeError:
-        return init_hef()
+        return init_hef(base_dir=hef_base_dir)
 
 
-@pytest.fixture(scope='module')
-def hef_copy_gdir_base(request, test_dir):
-    """same as hef_gdir but with another RGI ID (for workflow testing)
-    """
+@pytest.fixture(scope="module")
+def hef_copy_gdir_base(request, hef_base_dir):
+    """same as hef_gdir but with another RGI ID (for workflow testing)"""
     try:
         module = request.module
         border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
-        return init_hef(border=border, rgi_id='RGI50-11.99999')
+        return init_hef(
+            border=border, rgi_id="RGI50-11.99999", base_dir=hef_base_dir
+        )
     except AttributeError:
-        return init_hef(rgi_id='RGI50-11.99999')
+        return init_hef(rgi_id="RGI50-11.99999", base_dir=hef_base_dir)
 
 
-@pytest.fixture(scope='module')
-def hef_elev_gdir_base(request, test_dir):
+@pytest.fixture(scope="module")
+def hef_elev_gdir_base(request, hef_base_dir):
     """ Same as hef_gdir, but with elevation bands instead of centerlines.
         Further, also a different RGI ID so that a unique directory is created
         (as the RGI ID defines the final folder name) and to have no
@@ -290,11 +290,26 @@ def hef_elev_gdir_base(request, test_dir):
     try:
         module = request.module
         border = module.DOM_BORDER if module.DOM_BORDER is not None else 40
-        return init_hef(border=border, flowline_type='elevation_bands',
-                        rgi_id='RGI50-11.99998')
+        return init_hef(
+            border=border,
+            flowline_type="elevation_bands",
+            rgi_id="RGI50-11.99998",
+            base_dir=hef_base_dir,
+        )
     except AttributeError:
-        return init_hef(flowline_type='elevation_bands',
-                        rgi_id='RGI50-11.99998')
+        return init_hef(
+            flowline_type="elevation_bands",
+            rgi_id="RGI50-11.99998",
+            base_dir=hef_base_dir,
+        )
+
+
+@pytest.fixture(scope="module")
+def hef_unrounded_gdir_base(hef_base_dir):
+    """Same as hef_gdir_base, but with an unrounded topo_smoothed, which
+    the image comparison tests were set up with.
+    """
+    return init_hef(round_smoothed_dem=False, base_dir=hef_base_dir)
 
 
 @pytest.fixture(scope='class')
@@ -321,6 +336,14 @@ def hef_elev_gdir(hef_elev_gdir_base, class_case_dir):
     """
     return tasks.copy_to_basedir(hef_elev_gdir_base, base_dir=class_case_dir,
                                  setup='all')
+
+
+@pytest.fixture(scope="class")
+def hef_unrounded_gdir(hef_unrounded_gdir_base, class_case_dir):
+    """Same as hef_gdir but with an unrounded topo_smoothed."""
+    return tasks.copy_to_basedir(
+        hef_unrounded_gdir_base, base_dir=class_case_dir, setup="all"
+    )
 
 
 @pytest.fixture(scope="session")
