@@ -11,9 +11,9 @@ on:
       - dev
 
 jobs:
-  # Check if only changelog has been modified
+  # Check if only files in docs/ have been modified
   changes:
-    name: Detect changelog modification
+    name: Detect docs modification
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -33,9 +33,10 @@ jobs:
             commit="repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA"
             # empty for merge commits
             parent=$(gh api "$commit" -q 'select((.parents | length) == 1) | .parents[0].sha') || parent=""
-            files=$(gh api "$commit" -q '.files[].filename') || files=""
+            # use paginate because GH API pages files after 300 commits
+            files=$(gh api --paginate "$commit" -q '.files[] | .filename, (.previous_filename // empty)') || files=""
             # workflow file path is hardcoded, change if workflow file is moved or renamed
-            if [ -n "$parent" ] && [ "$files" = "docs/whats-new.rst" ]; then
+            if [ -n "$parent" ] && [ -n "$files" ] && ! grep -qv '^docs/' <<< "$files"; then
               runs="repos/$GITHUB_REPOSITORY/actions/workflows/run-tests.yml/runs?head_sha=$parent&per_page=1"
               status=$(gh api "$runs" -q '.workflow_runs[0].conclusion') || status=""
               if [ "$status" = "success" ]; then
@@ -79,7 +80,7 @@ jobs:
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
-        # this job passes automatically if only the changelog was modified
+        # this job passes automatically if only files under docs/ were modified
         if: ${{ needs.changes.outputs.docs_only != 'true' }}
         timeout-minutes: 60
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
