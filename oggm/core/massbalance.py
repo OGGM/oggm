@@ -401,7 +401,8 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         stack = []
         year = np.atleast_1d(year)
 
-        if (time_resolution in ['annual', 'monthly'] and
+        # The series are slower than the loop for a single time step
+        if (len(year) > 1 and time_resolution in ['annual', 'monthly'] and
                 self.has_fast_mb_series(time_resolution)):
             return self._get_specific_mb_from_series(heights, widths, fls,
                                                      year, time_resolution)
@@ -4605,6 +4606,20 @@ def mb_calibration_to_rmsd(gdir, *,
                             temp_bias=temp_bias,
                             prcp_fac=prcp_fac,
                             check_calib_params=False)
+
+    # The first hydrological year starts before the first calendar year of
+    # the climate data (e.g. 1979 with W5E5, which gdir.get_ref_mb_data
+    # returns by default): drop it
+    if (len(years) > 1 and not mb_mod.is_year_valid(monthly_years[0, 0])
+            and mb_mod.is_year_valid(monthly_years[0, -1])):
+        log.warning(f'({gdir.rgi_id}) mb_calibration_to_rmsd: hydrological '
+                    f'year {years[0]} starts before the climate data '
+                    f'({mb_mod.ys_float}), it is not used for the '
+                    f'calibration.')
+        ref_df = ref_df.iloc[1:]
+        ref_mb_years = ref_df.index.values
+        years = ref_mb_years
+        monthly_years = monthly_years[1:]
 
     # Check that all the months of the hydrological years are available
     for y, months in zip(years, monthly_years):

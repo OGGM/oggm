@@ -2231,11 +2231,24 @@ class TestClimate:
                                    temp_bias_max=np.inf)
 
         # The first hydrological year of the climate data is incomplete
-        # (it starts in October of the year before)
+        # (it starts in October of the year before): it is dropped
         y0 = massbalance.MonthlyTIModel(gdir, melt_f=5, prcp_fac=2.5,
                                         temp_bias=0,
                                         check_calib_params=False).ys
-        ref_mb = pd.Series([-500., -600.], index=[y0, y0 + 1])
+        ref_mb = pd.Series([-500., -600., -700.],
+                           index=[y0, y0 + 1, y0 + 2])
+        df = mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                    calibrate_params=('melt_f',))
+        assert df['reference_mb'] == -650.
+        assert df['reference_period'] == str(np.array([y0 + 1, y0 + 2]))
+
+        # But not if it is the only one
+        with pytest.raises(ValueError, match='hydrological year'):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb.iloc[:1],
+                                   calibrate_params=('melt_f',))
+
+        # Years entirely outside the climate data still fail
+        ref_mb = pd.Series([-500., -600.], index=[y0 - 5, y0 + 1])
         with pytest.raises(ValueError, match='hydrological year'):
             mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
                                    calibrate_params=('melt_f',))
