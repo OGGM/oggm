@@ -11,8 +11,43 @@ on:
       - dev
 
 jobs:
+  # Check if only files in docs/ have been modified
+  changes:
+    name: Detect docs modification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - name: List changed files
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          docs_only=false
+          if [ -n "$PR" ]; then
+            commit="repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA"
+            # empty for merge commits
+            parent=$(gh api "$commit" -q 'select((.parents | length) == 1) | .parents[0].sha') || parent=""
+            # use paginate because GH API pages files after 300 commits
+            files=$(gh api --paginate "$commit" -q '.files[] | .filename, (.previous_filename // empty)') || files=""
+            # workflow file path is hardcoded, change if workflow file is moved or renamed
+            if [ -n "$parent" ] && [ -n "$files" ] && ! grep -qv '^docs/' <<< "$files"; then
+              runs="repos/$GITHUB_REPOSITORY/actions/workflows/run-tests.yml/runs?head_sha=$parent&per_page=1"
+              status=$(gh api "$runs" -q '.workflow_runs[0].conclusion') || status=""
+              if [ "$status" = "success" ]; then
+                docs_only=true
+              fi
+            fi
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
   test:
     name: ${{ matrix.test-env }} on ${{ matrix.container }}
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +80,8 @@ jobs:
       - name: Fix Git-Permissions
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Test
+        # this job passes automatically if only files under docs/ were modified
+        if: ${{ needs.changes.outputs.docs_only != 'true' }}
         timeout-minutes: 60
         run: ./ci/run_tests.sh "${{ matrix.test-env }}" "${{ matrix.container }}"
         env:
@@ -66,7 +103,7 @@ jobs:
           name: "${{ steps.sanitize-name.outputs.sanitized_name }}"
           path: /tmp/oggm-mpl-results/
       - name: Upload Coverage
-        if: ${{ !contains(matrix.container, 'py3') }}
+        if: ${{ needs.changes.outputs.docs_only != 'true' && !contains(matrix.container, 'py3') }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -75,7 +112,8 @@ jobs:
         run: coveralls
   finish-coveralls:
     name: Coveralls Finished
-    needs: test
+    needs: [changes, test]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     container: python:3.12-slim
     continue-on-error: true
