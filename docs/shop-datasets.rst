@@ -138,15 +138,18 @@ Refer to the original product pages on NSIDC for reference.
 Add-ons
 -------
 
-The gridded datasets above (ITS_LIVE, consensus and Millan thickness, Millan
-velocity, Hugonnet dh/dt, BedMachine) are also published as **add-ons**:
-preprocessed data which you can add to the preprocessed glacier directories,
-at any level from L1 to L4 (L5 directories have no gridded data). An add-on
-is matched to a glacier directory by its grid, so the same add-on works
-whatever the flowline type, climate or calibration of the directory. Its
-variables are added to ``gridded_data.nc`` and, by default, binned onto the
-elevation band flowlines (see :py:func:`tasks.bin_gridded_variables`),
-without touching the flowlines or their calibration:
+The datasets above (ITS_LIVE, consensus and Millan thickness, Millan
+velocity, Hugonnet dh/dt, BedMachine, GlaThiDa) are also published as
+**add-ons**: preprocessed data which you can add to the preprocessed glacier
+directories. An add-on is matched to a glacier directory by its grid, so the
+same add-on works whatever the flowline type, climate or calibration of the
+directory. The variables of the gridded add-ons are added to
+``gridded_data.nc``, so at any level from L1 to L4 (L5 directories have no
+gridded data), and by default binned onto the elevation band flowlines (see
+:py:func:`tasks.bin_gridded_variables`), without touching the flowlines or
+their calibration. The GlaThiDa add-on is a file (``glathida_data.csv``),
+which can be added at any level. Glaciers without data in an add-on are
+skipped:
 
 .. code-block:: python
 
@@ -157,6 +160,8 @@ without touching the flowlines or their calibration:
                           base_urls={'itslive': itslive_url,
                                      'millan_thickness': millan_url})
 
-The add-on variables are never part of a prepro level: they are optional
-data, which OGGM does not use operationally. The add-on trees are made from
-the L1 directories with the ``oggm_prepro_addons`` command.
+The add-on data is never part of a prepro level: it is optional, and OGGM
+does not use it operationally. The add-on trees are made from the L1
+directories with the ``oggm_prepro_addons`` command. Each tree is laid out as
+the level trees, with an index per RGI region of the glaciers the add-on has
+data for: ``{base_url}/RGI{version}/b_{border}/index/{region}.csv``.

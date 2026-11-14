@@ -1428,29 +1428,58 @@ class TestAddons:
 
     @pytest.fixture
     def addon(self, tmp_path, hef_gdir):
-        """`itslive` and `millan` add-ons built from one copy of HEF, and a
-        second copy to apply them to."""
+        """`itslive` and `millan` add-ons (variables) and a `points` add-on
+        (a file) built from one copy of HEF, and a second copy to apply them
+        to."""
         src = self.copy(tmp_path, hef_gdir, "src")
         dst = self.copy(tmp_path, hef_gdir, "dst")
         _add_nc_var(src.get_filepath("gridded_data"), "itslive_v", 3.5)
         _add_nc_var(src.get_filepath("gridded_data"), "millan_v", 2.0)
+        Path(src.dir, "points.csv").write_text("thick\n10\n20\n")
 
         root = tmp_path / "addons"
         for label, var in [("itslive", "itslive_v"), ("millan", "millan_v")]:
             utils.write_addon(src, label=label, variables=[var],
                               output_dir=str(root / label),
                               source="test", version="1")
-            utils.base_dir_to_tar(str(root / label))
+            utils.bundle_addon(str(root / label))
+        utils.write_addon(src, label="points", files=["points.csv"],
+                          output_dir=str(root / "points"))
+        utils.bundle_addon(str(root / "points"))
+        keys = f"RGI{cfg.PARAMS['rgi_version']}/b_{cfg.PARAMS['border']:03d}"
         return SimpleNamespace(src=src, dst=dst, out=root / "itslive",
-                               root=root)
+                               root=root, keys=keys)
 
     def test_write_addon(self, addon, tmp_path):
         rid = addon.src.rgi_id
-        keys = f"RGI{cfg.PARAMS['rgi_version']}/b_{cfg.PARAMS['border']:03d}"
-        tar_fp = addon.out / keys / rid[:-6] / f"{rid[:-6]}.{rid[-5:-2]}.tar"
+        tree = addon.out / addon.keys
+        tar_fp = tree / rid[:-6] / f"{rid[:-6]}.{rid[-5:-2]}.tar"
         assert tar_fp.is_file()
+        index = pd.read_csv(tree / "index" / f"{rid[:-6]}.csv",
+                            keep_default_na=False)
+        assert list(index.rgi_id) == [rid]
+        assert index.grid_id.iloc[0] == utils.grid_id(addon.src.grid)
+        assert index.variables.iloc[0] == "itslive_v"
+        assert index.files.iloc[0] == ""
+        assert not list(addon.root.rglob("*.index.json"))
+        index = pd.read_csv(addon.root / "points" / addon.keys / "index" /
+                            f"{rid[:-6]}.csv", keep_default_na=False)
+        assert index.files.iloc[0] == "points.csv"
+        assert index.variables.iloc[0] == ""
+
+        # An empty index for a region without data
+        utils.bundle_addon(str(addon.out), regions=["RGI50-01"])
+        assert pd.read_csv(tree / "index" / "RGI50-01.csv").empty
+
         with pytest.raises(InvalidParamsError, match="level"):
             utils.write_addon(addon.src, label="L2", variables=["itslive_v"],
+                              output_dir=str(tmp_path / "bad"))
+        with pytest.raises(InvalidParamsError, match="variables or files"):
+            utils.write_addon(addon.src, label="nothing",
+                              output_dir=str(tmp_path / "bad"))
+        with pytest.raises(InvalidParamsError, match="gridded_data"):
+            utils.write_addon(addon.src, label="bad",
+                              files=["gridded_data.nc"],
                               output_dir=str(tmp_path / "bad"))
 
     def test_apply_addon_from_local_dir(self, addon):
@@ -1484,8 +1513,9 @@ class TestAddons:
         monkeypatch.setattr(_downloads, "file_downloader", fake_file_downloader)
         utils.apply_addon(addon.dst, addon="itslive",
                           base_url=host + "itslive")
-        keys = f"RGI{cfg.PARAMS['rgi_version']}/b_{cfg.PARAMS['border']:03d}"
-        assert calls == [host + f"itslive/{keys}/RGI50-11/RGI50-11.008.tar"]
+        tree = host + f"itslive/{addon.keys}"
+        assert calls == [tree + "/index/RGI50-11.csv",
+                         tree + "/RGI50-11/RGI50-11.008.tar"]
         with xr.open_dataset(addon.dst.get_filepath("gridded_data")) as ds:
             assert "itslive_v" in ds
 
@@ -1511,6 +1541,33 @@ class TestAddons:
         with pytest.raises(InvalidWorkflowError, match="L5"):
             utils.apply_addon(addon.dst, addon="itslive",
                               base_url=str(addon.out))
+        # but a file add-on needs no gridded data (e.g. L5)
+        utils.apply_addon(addon.dst, addon="points",
+                          base_url=str(addon.root / "points"))
+        assert Path(addon.dst.dir, "points.csv").read_text() == \
+            "thick\n10\n20\n"
+        m = _manifest(Path(addon.dst.dir) / "points.manifest.json")
+        assert m["addon"] == {"files": ["points.csv"]}
+
+    def test_apply_addon_without_data(self, addon):
+        """A glacier missing from the index has no data: it is skipped. A
+        region without an index is an error."""
+        rid = addon.dst.rgi_id
+        index_dir = addon.out / addon.keys / "index"
+        fp = index_dir / f"{rid[:-6]}.csv"
+        df = pd.read_csv(fp)
+        df.iloc[:0].to_csv(fp, index=False)
+        before = utils._workflow._nc_var_digests(
+            addon.dst.get_filepath("gridded_data"))
+        utils.apply_addon(addon.dst, addon="itslive", base_url=str(addon.out))
+        assert utils._workflow._nc_var_digests(
+            addon.dst.get_filepath("gridded_data")) == before
+        assert not (Path(addon.dst.dir) / "itslive.manifest.json").exists()
+
+        os.remove(fp)
+        with pytest.raises(InvalidWorkflowError, match="index"):
+            utils.apply_addon(addon.dst, addon="itslive",
+                              base_url=str(addon.out))
 
     def test_two_addons_with_auto_skip(self, addon, monkeypatch):
         monkeypatch.setitem(cfg.PARAMS, "auto_skip_task", True)
@@ -1532,15 +1589,20 @@ class TestAddons:
         utils.write_level_manifest(d, "L1", {}, kind="standalone", **keys)
         prev = utils.snapshot_gdir_state(d)
         utils.apply_addon(addon.dst, addon="itslive", base_url=str(addon.out))
+        utils.apply_addon(addon.dst, addon="points",
+                          base_url=str(addon.root / "points"))
         _add_nc_var(addon.dst.get_filepath("gridded_data"), "level_v", 1.0)
         _, changed = utils.write_level_manifest(d, "L2", prev, parent="L1",
                                                 **keys)
-        sec = _manifest(Path(d) / "L2.manifest.json")["files"]["variables"]
+        files = _manifest(Path(d) / "L2.manifest.json")["files"]
+        sec = files["variables"]
         assert list(sec["gridded_data.nc"]["added"]) == ["level_v"]
         with xr.open_dataset(Path(d) / "gridded_data.L2.patch.nc") as ds:
             assert "itslive_v" not in ds
             assert "level_v" in ds
         assert "itslive.manifest.json" not in changed
+        assert "points.csv" not in changed
+        assert "points.csv" not in files["added"]
 
     def test_apply_addon_bins(self, tmp_path, hef_elev_gdir):
         src = self.copy(tmp_path, hef_elev_gdir, "src")
@@ -1552,7 +1614,7 @@ class TestAddons:
         utils.write_addon(src, label="itslive",
                           variables=["itslive_v", "thick"],
                           output_dir=str(out), preserve_totals=[False, True])
-        utils.base_dir_to_tar(str(out))
+        utils.bundle_addon(str(out))
 
         fls = Path(dst.get_store_filepath("inversion_flowlines")).read_bytes()
         utils.apply_addon(dst, addon="itslive", base_url=str(out))

@@ -67,6 +67,7 @@ Input/Output
     utils.gdir_to_tar
     utils.base_dir_to_tar
     utils.write_addon
+    utils.bundle_addon
     utils.apply_addon
     utils.cook_rgidf
     utils.compute_temp_bias_dataframe

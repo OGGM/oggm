@@ -514,13 +514,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if `select_source_from_dir` is used, wether to keep the original
         DEM folders in or not.
     add_consensus_thickness, add_itslive_velocity, add_millan_thickness,
-    add_millan_velocity, add_hugonnet_dhdt, add_bedmachine : bool
-        not supported anymore: the gridded shop products are add-ons now,
+    add_millan_velocity, add_hugonnet_dhdt, add_bedmachine, add_glathida : bool
+        not supported anymore: these shop products are add-ons now,
         made by :py:func:`oggm.cli.prepro_addons.run_prepro_addons` and
         added to any level with :py:func:`oggm.workflow.apply_addons`.
-    add_glathida : bool
-        adds (reprojects) the glathida thickness data to the glacier
-        directories. Data points are stored as csv files.
     add_distributed_thickness : bool
         adds a thickness field to gridded_data using
         distribute_thickness_per_altitude.
@@ -659,10 +656,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     if any([add_consensus_thickness, add_itslive_velocity,
             add_millan_thickness, add_millan_velocity, add_hugonnet_dhdt,
-            add_bedmachine]):
+            add_bedmachine, add_glathida]):
         raise InvalidParamsError(
-            'The gridded shop products (consensus, ITS_LIVE, Millan, '
-            'Hugonnet, BedMachine) are not part of the levels anymore: they '
+            'The shop products (consensus, ITS_LIVE, Millan, Hugonnet, '
+            'BedMachine, GlaThiDa) are not part of the levels anymore: they '
             'are add-ons, made with `oggm_prepro_addons` from the L1 '
             'directories and added to any level with '
             '`workflow.apply_addons`.')
@@ -1162,11 +1159,9 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         # Centerlines OGGM
         workflow.execute_entity_task(tasks.glacier_masks, gdirs_cent)
 
-        # The gridded shop products (velocities, thicknesses...) are not
-        # part of the levels: they are add-ons, made by `oggm_prepro_addons`
-        if add_glathida:
-            from oggm.shop.glathida import glathida_to_gdir
-            workflow.execute_entity_task(glathida_to_gdir, gdirs)
+        # The shop products (velocities, thicknesses, thickness
+        # observations...) are not part of the levels: they are add-ons,
+        # made by `oggm_prepro_addons`
         if rgi_version == '70C':
             # Some additional data for the 70C glaciers
             workflow.execute_entity_task(tasks.rgi7g_to_complex, gdirs)
@@ -1208,11 +1203,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
         opath = sum_dir / f'glacier_statistics_{rgi_reg}.csv'
         utils.compile_glacier_statistics(gdirs, path=opath)
-
-        if add_glathida:
-            from oggm.shop.glathida import compile_glathida_statistics
-            opath = sum_dir / f'glathida_statistics_{rgi_reg}.csv'
-            compile_glathida_statistics(gdirs, path=opath)
 
         # And for level 2: shapes
         if len(gdirs_cent) > 0:
@@ -1756,10 +1746,6 @@ def parse_args(args):
     parser.add_argument('--keep-dem-folders', action='store_true',
                         help='if `select_source_from_dir` is used, wether to keep '
                         'the original DEM folders in or not.')
-    parser.add_argument('--add-glathida', action='store_true',
-                        help='adds (reprojects) the glathida point thickness '
-                             'observations to the glacier directories. '
-                             'The data points are stored as csv.')
     parser.add_argument('--custom-climate-task', type=str, default=None,
                         help='Custom climate task import path in the form module:function. '
                             'If provided, it replaces the default process_climate_data.')
@@ -1939,7 +1925,6 @@ def parse_args(args):
                 centerlines=args.centerlines,
                 select_source_from_dir=args.select_source_from_dir,
                 keep_dem_folders=args.keep_dem_folders,
-                add_glathida=args.add_glathida,
                 add_distributed_thickness=args.add_distributed_thickness,
                 add_export_thickness_geotiff=args.add_export_thickness_geotiff,
                 compute_hypsometry=args.compute_hypsometry,

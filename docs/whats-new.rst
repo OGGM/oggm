@@ -308,13 +308,16 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-- Add-ons: optional gridded data (e.g. velocity or thickness products) can be
-  added to glacier directories at any level from L1 to L4 with
+- Add-ons: optional data (e.g. velocity or thickness products, GlaThiDa
+  thickness observations) can be added to the glacier directories with
   :py:func:`workflow.apply_addons`, whatever chain they were built from. An
-  add-on is matched to a glacier directory by its grid, and its variables
-  are added to ``gridded_data.nc`` and binned onto the elevation band
-  flowlines. The add-on trees are made from the L1 directories with the new
-  ``oggm_prepro_addons`` command (:pull:`2011`).
+  add-on is matched to a glacier directory by its grid. Its variables are
+  added to ``gridded_data.nc`` (at any level from L1 to L4) and binned onto
+  the elevation band flowlines, and its files (e.g. the GlaThiDa points)
+  are copied to the glacier directory. Each add-on tree has an index of the
+  glaciers it has data for, so the others are skipped. The add-on trees are
+  made from the L1 directories with the new ``oggm_prepro_addons`` command
+  (:pull:`2011`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_ and
   `Fabien Maussion <https://github.com/fmaussion>`_
 - New task :py:func:`tasks.bin_gridded_variables`, which bins gridded_data
@@ -445,14 +448,14 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
-- The gridded shop products are not part of the prepro levels anymore: they
-  are add-ons (see above). The ``--add-consensus-thickness``,
+- The shop products are not part of the prepro levels anymore: they are
+  add-ons (see above). The ``--add-consensus-thickness``,
   ``--add-itslive-velocity``, ``--add-millan-thickness``,
-  ``--add-millan-velocity``, ``--add-hugonnet-dhdt`` and ``--add-bedmachine``
-  flags of ``oggm_prepro`` (and the corresponding ``run_prepro_levels``
-  kwargs) are replaced by ``oggm_prepro_addons``, and the L2 directories
-  don't hold these products or their binned values anymore
-  (:pull:`2011`).
+  ``--add-millan-velocity``, ``--add-hugonnet-dhdt``, ``--add-bedmachine``
+  and ``--add-glathida`` flags of ``oggm_prepro`` (and the corresponding
+  ``run_prepro_levels`` kwargs) are replaced by ``oggm_prepro_addons``, and
+  the L2 directories don't hold these products or their binned values
+  anymore (:pull:`2011`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The geometry of the elevation band flowlines no longer depends on the
   ``bin_variables`` of :py:func:`tasks.elevation_band_flowline`: an elevation

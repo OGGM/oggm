@@ -69,6 +69,12 @@ ADDON_PRODUCTS = {
         variables=['bedmachine_ice_thickness'],
         statistics='oggm.shop.bedmachine:compile_bedmachine_statistics',
         source='BedMachine Greenland and Antarctica, Morlighem et al.'),
+    # Point data: a whole file, not gridded variables
+    'glathida': dict(
+        task='oggm.shop.glathida:glathida_to_gdir',
+        files=['glathida_data.csv'],
+        statistics='oggm.shop.glathida:compile_glathida_statistics',
+        source='GlaThiDa, https://gitlab.com/wgms/glathida (2023-11-16)'),
 }
 
 
@@ -79,21 +85,30 @@ def _import(path):
 
 
 @entity_task(log, name_kwarg='label')
-def _write_product_addon(gdir, label=None, variables=None, output_dir=None,
-                         source=None, version=None, preserve_totals=True):
-    """Write the variables of a product found in gridded_data as an add-on.
+def _write_product_addon(gdir, label=None, variables=None, files=None,
+                         output_dir=None, source=None, version=None,
+                         preserve_totals=True):
+    """Write the variables and files of a product found in the glacier
+    directory as an add-on.
 
-    A glacier without any of the variables (e.g. outside the product's
-    coverage) gets no add-on.
+    A glacier without any of them (e.g. outside the product's coverage)
+    gets no add-on.
     """
-    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-        found = [v for v in variables if v in nc.variables]
-    if not found:
+    found = []
+    if variables:
+        with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+            found = [v for v in variables if v in nc.variables]
+    found_files = [f for f in files or []
+                   if os.path.exists(os.path.join(gdir.dir, f))]
+    if not (found or found_files):
         log.info('(%s) no %s data: no add-on.', gdir.rgi_id, label)
         return
-    utils.write_addon(gdir, label=label, variables=found,
+    preserve = dict(zip(variables or [],
+                        utils.tolist(preserve_totals,
+                                     length=len(variables or []))))
+    utils.write_addon(gdir, label=label, variables=found, files=found_files,
                       output_dir=output_dir, source=source, version=version,
-                      preserve_totals=preserve_totals)
+                      preserve_totals=[preserve[v] for v in found])
 
 
 def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
@@ -218,15 +233,17 @@ def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
         out = Path(output_folder) / product
         workflow.execute_entity_task(_write_product_addon, gdirs,
                                      label=product,
-                                     variables=spec['variables'],
+                                     variables=spec.get('variables'),
+                                     files=spec.get('files'),
                                      output_dir=str(out),
                                      source=spec['source'], version=version,
                                      preserve_totals=spec.get(
                                          'preserve_totals', True))
-        utils.base_dir_to_tar(str(out))
-
+        # An index for each region, even without data in it
         sum_dir = out / f'RGI{rgi_version}' / f'b_{border:03d}' / 'summary'
         utils.mkdir(sum_dir)
+        utils.bundle_addon(str(out),
+                           regions=sorted({g.rgi_id[:-6] for g in gdirs}))
         _import(spec['statistics'])(
             gdirs, path=sum_dir / f'{product}_statistics_{rgi_reg}.csv')
 
