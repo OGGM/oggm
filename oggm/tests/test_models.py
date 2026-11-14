@@ -878,6 +878,105 @@ class TestMassBalanceModels:
         assert_allclose(mb.get_specific_mb(h, w, year=yrs[:30]),
                         mb_gw.get_specific_mb(fls=fls, year=yrs[:30]))
 
+    def test_mb_series(self, hef_gdir):
+        # The vectorised get_*_mb_series of MonthlyTIModel give the same
+        # results as the calls to get_monthly_mb and get_annual_mb, and so
+        # does get_specific_mb
+        gdir = hef_gdir
+        fls = gdir.read_store('inversion_flowlines')
+        assert len(fls) > 1
+        h = np.concatenate([fl.surface_h for fl in fls])
+        hw, ww = gdir.get_inversion_flowline_hw()
+        years = np.arange(1960, 2003)
+        months = utils.date_to_floatyear(np.repeat(np.arange(1995, 2003), 12),
+                                         np.tile(np.arange(1, 13), 8))
+
+        def loop(fn, yrs):
+            return np.stack([fn(h, year=y) for y in yrs], axis=-1)
+
+        def loop_specific_mb(mod, **kwargs):
+            # The generic implementation: one call per time step
+            mod.has_fast_mb_series = lambda time_resolution='annual': False
+            try:
+                return mod.get_specific_mb(**kwargs)
+            finally:
+                del mod.has_fast_mb_series
+
+        setups = [({}, {}),
+                  ({'use_leap_years': True}, {}),
+                  ({'bias': 100.}, {}),
+                  ({}, {'temp_bias': np.linspace(-1, 1, 12),
+                        'prcp_fac': np.linspace(2, 3, 12)}),
+                  ({'ys': 1990, 'ye': 1999, 'repeat': True}, {}),
+                  ]
+        for kwargs, attrs in setups:
+            mod = massbalance.MonthlyTIModel(gdir, **kwargs)
+            for k, v in attrs.items():
+                setattr(mod, k, v)
+            assert mod.has_fast_mb_series('annual')
+            assert mod.has_fast_mb_series('monthly')
+            assert not mod.has_fast_mb_series('daily')
+
+            out = mod.get_annual_mb_series(h, years)
+            assert out.shape == (len(h), len(years))
+            assert_allclose(out, loop(mod.get_annual_mb, years),
+                            rtol=1e-10, atol=1e-16)
+            out = mod.get_monthly_mb_series(h, months)
+            assert out.shape == (len(h), len(months))
+            assert_allclose(out, loop(mod.get_monthly_mb, months),
+                            rtol=1e-10, atol=1e-16)
+
+            for tr, yrs in [('annual', years), ('monthly', months)]:
+                ref = loop_specific_mb(mod, fls=fls, year=yrs,
+                                       time_resolution=tr)
+                out = mod.get_specific_mb(fls=fls, year=yrs, time_resolution=tr)
+                assert_allclose(out, ref, rtol=1e-10, atol=1e-8)
+                ref = loop_specific_mb(mod, heights=hw, widths=ww, year=yrs,
+                                       time_resolution=tr)
+                out = mod.get_specific_mb(heights=hw, widths=ww, year=yrs,
+                                          time_resolution=tr)
+                assert_allclose(out, ref, rtol=1e-10, atol=1e-8)
+
+        # One time step: same shapes and types as before
+        mod = massbalance.MonthlyTIModel(gdir)
+        assert mod.get_monthly_mb_series(h, 2000.5).shape == (len(h), 1)
+        assert mod.get_annual_mb_series(h, 2000).shape == (len(h), 1)
+        assert np.ndim(mod.get_specific_mb(fls=fls, year=2000)) == 0
+        assert_allclose(mod.get_specific_mb(fls=fls, year=2000),
+                        loop_specific_mb(mod, fls=fls, year=2000))
+
+        # Out of the climate data
+        with pytest.raises(ValueError):
+            mod.get_annual_mb_series(h, [1990, 1700])
+        with pytest.raises(ValueError):
+            mod.get_monthly_mb_series(h, [2000.5, 2100.5])
+
+        # Several flowlines, with one MB model each
+        mbmod = massbalance.MultipleFlowlineMassBalance(
+            gdir, use_inversion_flowlines=True)
+        assert mbmod.has_fast_mb_series('annual')
+        assert_allclose(mbmod.get_specific_mb(year=years),
+                        loop_specific_mb(mbmod, year=years), rtol=1e-10)
+        assert_allclose(mbmod.get_annual_mb_series(fls[0].surface_h, years,
+                                                   fl_id=0),
+                        mod.get_annual_mb_series(fls[0].surface_h, years),
+                        rtol=1e-10, atol=1e-16)
+
+        # A subclass overriding the methods is not bypassed
+        class MyModel(massbalance.MonthlyTIModel):
+            def get_monthly_mb(self, heights, year=None, **kwargs):
+                return 2 * super().get_monthly_mb(heights, year=year)
+
+        mymod = MyModel(gdir)
+        assert not mymod.has_fast_mb_series('monthly')
+        assert mymod.has_fast_mb_series('annual')
+        assert_allclose(mymod.get_monthly_mb_series(h, months),
+                        2 * mod.get_monthly_mb_series(h, months),
+                        rtol=1e-10, atol=1e-16)
+        daily = massbalance.DailyTIModel.__new__(massbalance.DailyTIModel)
+        assert not daily.has_fast_mb_series('annual')
+        assert not daily.has_fast_mb_series('monthly')
+
     @pytest.mark.parametrize("model", [massbalance.MonthlyTIModel,
                                        massbalance.DailyTIModel,
                                        massbalance.SfcTypeTIModel,

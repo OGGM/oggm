@@ -413,6 +413,9 @@ Interface
     MassBalanceModel.get_daily_mb
     MassBalanceModel.get_monthly_mb
     MassBalanceModel.get_annual_mb
+    MassBalanceModel.get_monthly_mb_series
+    MassBalanceModel.get_annual_mb_series
+    MassBalanceModel.has_fast_mb_series
     MassBalanceModel.get_specific_mb
     MassBalanceModel.get_ela
 
