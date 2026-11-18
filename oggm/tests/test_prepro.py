@@ -54,8 +54,13 @@ def read_svgcoords(svg_file):
     return np.rint(np.asarray((x, y)).T).astype(np.int64)
 
 
+def _oetztal_intersects():
+    """The demo intersects file of the Oetztal glaciers (HEF included)."""
+    return get_demo_file("rgi_intersect_oetztal.shp")
+
+
 def _init_hef_cfg():
-    """Shared cfg init for the HEF demo glacier (intersects + SRTM dem).
+    """Shared cfg init for the HEF demo glacier (SRTM dem).
 
     We can't use the `init_hef` fixture defined in conftest for some
     tests, as callers set ``border`` and any climate/extra PARAMS
@@ -63,7 +68,6 @@ def _init_hef_cfg():
 
     """
     cfg.initialize()
-    cfg.set_intersects_db(get_demo_file("rgi_intersect_oetztal.shp"))
     cfg.PATHS["dem_file"] = get_demo_file("hef_srtm.tif")
 
 
@@ -80,7 +84,8 @@ def hef_entity():
 
 def _hef_region_gdir(testdir, entity):
     """Region-defined gdir with intersects and DEM."""
-    gdir = oggm.GlacierDirectory(entity, base_dir=testdir)
+    gdir = oggm.GlacierDirectory(entity, base_dir=testdir,
+                                 intersects=_oetztal_intersects())
     gis.define_glacier_region(gdir)
     return gdir
 
@@ -210,7 +215,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         assert gdir.has_file('outlines')
         assert gdir.has_file('intersects')
         assert not gdir.has_file('glacier_grid')
@@ -219,7 +225,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         extent = gdir.extent_ll
 
@@ -260,7 +267,8 @@ class TestGIS:
         cfg.PARAMS['use_rgi_area'] = False
         entity = gpd.read_file(hef_file).iloc[0]
         gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
-                                     reset=True)
+                                     reset=True,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         # Close but not same
         assert gdir.rgi_area_km2 != prev_area
@@ -288,7 +296,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
 
         with rasterio.open(gdir.get_filepath('dem'), 'r',
@@ -325,7 +334,8 @@ class TestGIS:
                             ['_d01', '_d02', '_d03']]
 
         # Just check that things are working
-        gdirs = workflow.init_glacier_directories(hef_rgi)
+        gdirs = workflow.init_glacier_directories(
+            hef_rgi, intersects=_oetztal_intersects())
         workflow.gis_prepro_tasks(gdirs)
 
         assert gdirs[0].rgi_id == 'RGI50-11.00897_d01'
@@ -349,7 +359,8 @@ class TestGIS:
     def test_dx_methods(self):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
 
         # Test fixed method
         cfg.PARAMS['grid_dx_method'] = 'fixed'
@@ -412,7 +423,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         assert gdir.__repr__() == expected
 
@@ -420,7 +432,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
 
         # this should simply run
@@ -432,7 +445,8 @@ class TestGIS:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.process_dem(gdir)
         gis.glacier_masks(gdir)
@@ -455,7 +469,8 @@ class TestGIS:
                                    0, atol=0.1)
 
         entity['RGIFlag'] = '2909'
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir, reset=True,
+                                     intersects=_oetztal_intersects())
         with pytest.raises(RuntimeError):
             gis.glacier_masks(gdir)
 
@@ -463,7 +478,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
 
         cfg.PARAMS['round_smoothed_dem'] = False
@@ -489,7 +505,8 @@ class TestGIS:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
 
@@ -521,7 +538,8 @@ class TestGIS:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.rasterio_glacier_mask(gdir)
         gis.rasterio_glacier_mask(gdir, no_nunataks=True)
@@ -573,7 +591,8 @@ class TestGIS:
         cfg.PATHS['dem_file'] = get_demo_file('RGI60-14.03439.tif')
         cfg.PARAMS['border'] = 1
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         # The test below does NOT pass on OGGM
@@ -596,7 +615,8 @@ class TestGIS:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
 
         # specifying a source will look for a DEN in a respective folder
@@ -636,7 +656,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         assert gdir.has_file('intersects')
 
@@ -650,7 +671,8 @@ class TestGIS:
     def test_dem_daterange_dateinfo(self):
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
 
         # dem_info should return a string
@@ -673,7 +695,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
 
         cfg.add_to_basenames('mybn', 'testfb.pkl', docstr='Some docs')
@@ -687,7 +710,8 @@ class TestGIS:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         target_var = 'topo'
@@ -924,7 +948,8 @@ class TestCenterlines:
         del gdf['CENLON']
 
         entity = gdf.iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -1099,7 +1124,8 @@ class TestElevationBandFlowlines:
 
         # Repeat multiple flowlines workflow
         gdir = oggm.GlacierDirectory(
-            hef_entity, base_dir=self.testdir, reset=True
+            hef_entity, base_dir=self.testdir, reset=True,
+            intersects=_oetztal_intersects()
         )
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
@@ -1234,7 +1260,8 @@ class TestGeometry:
         hef_file = get_demo_file("Hintereisferner_RGI5.shp")
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -1344,7 +1371,6 @@ class TestClimate:
 
         # Init
         cfg.initialize()
-        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = self.testdir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -1372,7 +1398,8 @@ class TestClimate:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
@@ -1397,7 +1424,8 @@ class TestClimate:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
@@ -1424,10 +1452,12 @@ class TestClimate:
 
         gdirs = []
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
@@ -1463,10 +1493,12 @@ class TestClimate:
 
         gdirs = []
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
@@ -1509,10 +1541,12 @@ class TestClimate:
 
         gdirs = []
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir_cru,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gdirs.append(gdir)
 
@@ -1552,7 +1586,8 @@ class TestClimate:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
         centerlines.elevation_band_flowline(gdir)
@@ -2047,7 +2082,8 @@ class TestClimate:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.simple_glacier_masks(gdir)
         centerlines.elevation_band_flowline(gdir)
@@ -2264,7 +2300,8 @@ class TestClimate:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -2321,7 +2358,8 @@ class TestClimate:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
 
         rids = utils.get_ref_mb_glaciers_candidates()
         assert len(rids) > 200
@@ -2342,10 +2380,12 @@ class TestClimate:
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
-        gdir1 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir1 = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                      intersects=_oetztal_intersects())
         climate.process_custom_climate_data(gdir1)
         entity['RGIId'] = 'RGI50-11.99999'
-        gdir2 = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir2 = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                      intersects=_oetztal_intersects())
         climate.process_custom_climate_data(gdir2)
 
         ref_gd = utils.get_ref_mb_glaciers([gdir2])
@@ -3080,7 +3120,6 @@ class TestGrindelInvert:
 
         # Init
         cfg.initialize()
-        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PARAMS['use_multiple_flowlines'] = False
         cfg.PARAMS['use_tar_shapefiles'] = False
         cfg.PARAMS['prcp_fac'] = 2.5

@@ -497,14 +497,22 @@ Breaking changes
   error: use the bare flag to switch a behaviour on, and omit it to switch it
   off (:pull:`1986`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-- The glacier intersects are no longer stored in
-  ``cfg.PARAMS['intersects_gdf']``, but in ``cfg.INTERSECTS_GDF``. They are a
-  (potentially large, region wide) dataframe and not a parameter, and having
-  them in ``cfg.PARAMS`` meant they were silently copied and pickled along
-  wherever the parameters are, which is not what a parameter dict is for. The
-  way to set them, ``cfg.set_intersects_db``, is unchanged, and so is
-  ``cfg.PARAMS['use_intersects']`` (:pull:`1980`).
-  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The glacier intersects are no longer a global setting: they are now an
+  argument of :py:func:`workflow.init_glacier_directories` (and of
+  :py:class:`GlacierDirectory`), ``intersects``, like the RGI outlines.
+  They are only needed to create the glacier directories, never afterwards.
+  If not given, ``init_glacier_directories`` still downloads them for the
+  requested glaciers, as before. Each glacier directory task only receives
+  its own intersects, instead of the whole (potentially region wide) table.
+  ``cfg.set_intersects_db`` still works but is deprecated. They used to be
+  stored in ``cfg.PARAMS['intersects_gdf']``, which is gone.
+  A ``GlacierDirectory`` created without intersects no longer raises an
+  error, it logs a warning instead: the safeguard is now the automatic
+  download in ``init_glacier_directories``. Set
+  ``cfg.PARAMS['use_intersects'] = False`` to not use intersects at all
+  (e.g. for custom outlines) (:pull:`1980`, :issue:`1981`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ and
+  `Louis Schlegel <https://github.com/louisschlegel>`_
 - The temperature-bias prior file of the `informed_threestep` calibration
   now always has to given explicitly. There is no
   default file anymore: `utils.get_temp_bias_dataframe` takes a single

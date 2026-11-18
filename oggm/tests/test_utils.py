@@ -1212,7 +1212,9 @@ class TestInitialize(unittest.TestCase):
                                geometry=[line] * n)
 
         cfg.CONFIG_MODIFIED = False
-        cfg.set_intersects_db(gdf)
+        # deprecated (#1981), but still working
+        with pytest.warns(DeprecationWarning, match='intersects'):
+            cfg.set_intersects_db(gdf)
         assert len(cfg.INTERSECTS_GDF) == n
         assert 'intersects_gdf' not in cfg.PARAMS
         # the workers must be told about the new database
@@ -1232,7 +1234,8 @@ class TestInitialize(unittest.TestCase):
         cfg.set_intersects_db()
         assert len(cfg.INTERSECTS_GDF) == 0
         cfg.PARAMS['use_intersects'] = False
-        cfg.set_intersects_db(gdf)
+        with pytest.warns(DeprecationWarning, match='intersects'):
+            cfg.set_intersects_db(gdf)
         assert len(cfg.INTERSECTS_GDF) == 0
 
 
@@ -1522,7 +1525,7 @@ class TestStartFromTar:
         # Init
         cfg.initialize()
         cfg.PATHS["working_dir"] = working_dir
-        cfg.set_intersects_db(utils.get_demo_file("rgi_intersect_oetztal.shp"))
+        self.intersects = utils.get_demo_file("rgi_intersect_oetztal.shp")
 
         # Read in the RGI file
         rgi_file = utils.get_demo_file("rgi_oetztal.shp")
@@ -1542,7 +1545,8 @@ class TestStartFromTar:
     def test_to_and_from_tar(self):
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf)
+        gdirs = workflow.init_glacier_directories(
+            self.rgidf, intersects=self.intersects)
         workflow.execute_entity_task(
             [tasks.define_glacier_region, utils.gdir_to_tar], gdirs
         )
@@ -1570,7 +1574,8 @@ class TestStartFromTar:
         test_dir = cfg.PATHS["working_dir"]
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf)
+        gdirs = workflow.init_glacier_directories(
+            self.rgidf, intersects=self.intersects)
         workflow.execute_entity_task(
             [tasks.define_glacier_region, utils.gdir_to_tar], gdirs
         )
@@ -1645,7 +1650,8 @@ class TestStartFromTar:
         base_dir = os.path.join(test_dir, "new_base_dir")
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf)
+        gdirs = workflow.init_glacier_directories(
+            self.rgidf, intersects=self.intersects)
         paths = workflow.execute_entity_task([
             tasks.define_glacier_region,
             (utils.gdir_to_tar, {"base_dir": base_dir})], gdirs)
@@ -1666,7 +1672,7 @@ class TestStartFromTar:
 
     def _entity_gdir_tar(self):
         entity = self.rgidf.iloc[0]
-        gdir = oggm.GlacierDirectory(entity)
+        gdir = oggm.GlacierDirectory(entity, intersects=self.intersects)
         return entity, utils.gdir_to_tar(gdir)
 
     def test_from_entity_from_tar_delete_tar(self):
@@ -1689,7 +1695,8 @@ class TestStartFromTar:
         utils.mkdir(base_dir, reset=True)
 
         # Go - initialize working directories
-        gdirs = workflow.init_glacier_directories(self.rgidf)
+        gdirs = workflow.init_glacier_directories(
+            self.rgidf, intersects=self.intersects)
         paths = workflow.execute_entity_task([
             tasks.define_glacier_region,
             (utils.gdir_to_tar, {"base_dir": base_dir, "delete": False})],

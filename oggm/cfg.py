@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import glob
+import warnings
 from collections import OrderedDict
 
 import numpy as np
@@ -158,7 +159,8 @@ PARAMS = ParamsLoggingDict()
 PATHS = PathOrderedDict()
 BASENAMES = DocumentedDict()
 LRUHANDLERS = ResettingOrderedDict()
-# The glacier intersects, set with set_intersects_db. This is a dataframe and
+# The glacier intersects, set with the deprecated set_intersects_db (they are
+# now an argument of init_glacier_directories). This is a dataframe and
 # not a parameter, so it is kept out of PARAMS: it can be a large, region wide
 # table, and PARAMS is copied around and pickled as if it held scalars only
 INTERSECTS_GDF = pd.DataFrame()
@@ -770,9 +772,10 @@ def get_lru_handler(tmpdir=None, maxsize=None, ending='.tif'):
 def set_intersects_db(path_or_gdf=None):
     """Set the glacier intersection database for OGGM to use.
 
-    It is now set automatically by the
-    :func:`oggm.workflow.init_glacier_directories` task, but setting it
-    manually can be useful for a slightly faster run initialization.
+    .. deprecated::
+        The intersects are only needed to create the glacier directories:
+        pass them to :func:`oggm.workflow.init_glacier_directories` with its
+        ``intersects`` argument instead (it downloads them if not given).
 
     See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain
     such data.
@@ -780,10 +783,16 @@ def set_intersects_db(path_or_gdf=None):
     Parameters
     ----------
     path_or_gdf : str of geopandas.GeoDataframe
-        the intersects file to use
+        the intersects file to use. None (the default) empties the database.
     """
 
     global INTERSECTS_GDF, CONFIG_MODIFIED
+
+    if path_or_gdf is not None:
+        warnings.warn('`cfg.set_intersects_db` is deprecated: pass the '
+                      'intersects to `workflow.init_glacier_directories` '
+                      'with its `intersects` argument instead.',
+                      DeprecationWarning, stacklevel=2)
 
     if PARAMS['use_intersects'] and path_or_gdf is not None:
         if isinstance(path_or_gdf, str):

@@ -174,7 +174,6 @@ def test_multiple_inversion():
     # Init
     cfg.initialize()
     cfg.PARAMS['round_smoothed_dem'] = False
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['border'] = 40
@@ -187,7 +186,8 @@ def test_multiple_inversion():
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
     hef_rgi.loc[0, 'RGIId'] = 'RGI50-11.00897'
 
-    gdirs = workflow.init_glacier_directories(hef_rgi)
+    gdirs = workflow.init_glacier_directories(
+        hef_rgi, intersects=get_demo_file('rgi_intersect_oetztal.shp'))
     workflow.gis_prepro_tasks(gdirs)
     workflow.execute_entity_task(climate.process_climate_data, gdirs)
     workflow.execute_entity_task(massbalance.mb_calibration_from_scalar_mb,
@@ -259,7 +259,6 @@ def test_multiple_models():
     # Init
     cfg.initialize()
     cfg.PARAMS['round_smoothed_dem'] = False
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PATHS['working_dir'] = testdir
@@ -272,7 +271,8 @@ def test_multiple_models():
     hef_rgi = gpd.read_file(get_demo_file('divides_hef.shp'))
     hef_rgi.loc[0, 'RGIId'] = 'RGI50-11.00897'
 
-    gdirs = workflow.init_glacier_directories(hef_rgi)
+    gdirs = workflow.init_glacier_directories(
+        hef_rgi, intersects=get_demo_file('rgi_intersect_oetztal.shp'))
     workflow.gis_prepro_tasks(gdirs)
     workflow.execute_entity_task(climate.process_climate_data, gdirs)
     workflow.execute_entity_task(massbalance.mb_calibration_from_scalar_mb,
