@@ -124,6 +124,7 @@ OGGM Shop
     shop.histalp.process_histalp_data
     shop.hugonnet_maps.hugonnet_to_gdir
     shop.hugonnet_maps.compile_hugonnet_statistics
+    shop.iceboost.iceboost_to_gdir
     shop.its_live.itslive_velocity_to_gdir
     shop.its_live.compile_itslive_statistics
     shop.millan22.millan_thickness_to_gdir

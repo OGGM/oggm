@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 from oggm import utils, GlacierDirectory
 from oggm.utils import get_demo_file
-from oggm.shop import its_live, rgitopo, bedtopo, millan22, cook23, hugonnet_maps, glathida
+from oggm.shop import (its_live, rgitopo, bedtopo, millan22, cook23,
+                       hugonnet_maps, glathida, iceboost)
+from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
 from oggm.core import gis, centerlines
 from oggm import cfg, tasks, workflow
 
@@ -221,6 +223,91 @@ class Test_cook23:
         df = cook23.compile_cook23_statistics([gdir]).iloc[0]
         assert df['cook23_perc_cov'] > 0.98
         assert df['cook23_vol_km3'] > 0.4
+
+
+class Test_iceboost:
+
+    @pytest.mark.slow
+    def test_iceboost_to_gdir(self, class_case_dir):
+
+        # Init
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = class_case_dir
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
+        cfg.PARAMS['border'] = 10
+
+        # RGI6
+        entity = gpd.read_file(get_demo_file('Hintereisferner_RGI5.shp'))
+        entity['RGIId'] = 'RGI60-11.00897'
+        gdir = workflow.init_glacier_directories(entity)[0]
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        iceboost.iceboost_to_gdir(gdir, add_error=True)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            mask = ds.glacier_mask.data.astype(bool)
+            thick = ds.iceboost_ice_thickness.where(mask).data
+            err = ds.iceboost_ice_thickness_err.where(mask).data
+            attrs = ds.iceboost_ice_thickness.attrs
+
+        # IceBoost: 0.4216 km3 for this glacier, matched by default
+        assert np.isfinite(thick).sum() / mask.sum() > 0.98
+        assert 100 < np.nanmax(thick) < 200
+        vol = np.nansum(thick) * gdir.grid.dx**2 * 1e-9
+        np.testing.assert_allclose(vol, 0.4216, rtol=1e-4)
+        np.testing.assert_allclose(attrs['iceboost_volume_km3'], 0.4216,
+                                   rtol=1e-3)
+        assert 0.9 < attrs['volume_correction_factor'] < 1
+        assert np.all(np.isfinite(err[np.isfinite(thick)]))
+        assert np.nanmean(err) > 0
+
+        # Without volume matching, the volume differs a bit
+        iceboost.iceboost_to_gdir(gdir, match_volume=False)
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            thick_nm = ds.iceboost_ice_thickness.where(mask).data
+            assert ds.iceboost_ice_thickness.volume_correction_factor == 1
+        vol_nm = np.nansum(thick_nm) * gdir.grid.dx**2 * 1e-9
+        np.testing.assert_allclose(vol_nm, 0.4216, rtol=0.1)
+        assert vol_nm > vol * 1.02
+        np.testing.assert_allclose(thick_nm * attrs['volume_correction_factor'],
+                                   thick, rtol=1e-5)
+
+        # RGI7C (a glacier complex)
+        entity = gpd.read_file(get_demo_file('rgi7c_hef.shp'))
+        gdir = workflow.init_glacier_directories(entity)[0]
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        # The source file has holes (nunataks): zeros with linear interp,
+        # NaNs with nearest
+        vols = []
+        for interp in ['linear', 'nearest']:
+            iceboost.iceboost_to_gdir(gdir, interp=interp)
+
+            with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+                mask = ds.glacier_mask.data.astype(bool)
+                thick = ds.iceboost_ice_thickness.where(mask).data
+                assert 'iceboost_ice_thickness_err' not in ds
+
+            if interp == 'linear':
+                assert np.isfinite(thick).sum() / mask.sum() > 0.98
+                assert (thick == 0).sum() / mask.sum() > 0.01
+            else:
+                assert 0.85 < np.isfinite(thick).sum() / mask.sum() < 0.95
+                assert (thick == 0).sum() / mask.sum() < 0.001
+            vols.append(np.nansum(thick) * gdir.grid.dx**2 * 1e-9)
+
+        # IceBoost: 4.8165 km3 for this complex, matched by default
+        np.testing.assert_allclose(vols, 4.8165, rtol=1e-4)
+
+        # Errors
+        with pytest.raises(InvalidParamsError):
+            iceboost.iceboost_to_gdir(gdir, interp='cubic')
+        gdir.rgi_version = '50'
+        with pytest.raises(InvalidWorkflowError):
+            iceboost.iceboost_to_gdir(gdir)
 
 
 class Test_HugonnetMaps:
