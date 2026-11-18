@@ -138,8 +138,8 @@ Refer to the original product pages on NSIDC for reference.
 Add-ons
 -------
 
-The datasets above (ITS_LIVE, consensus and Millan thickness, Millan
-velocity, Hugonnet dh/dt, BedMachine, GlaThiDa) are also published as
+The shop datasets (ITS_LIVE, IceBoost, consensus and Millan thickness,
+Millan velocity, Hugonnet dh/dt, BedMachine, GlaThiDa) are also published as
 **add-ons**: preprocessed data which you can add to the preprocessed glacier
 directories. An add-on is matched to a glacier directory by its grid, so the
 same add-on works whatever the flowline type, climate or calibration of the

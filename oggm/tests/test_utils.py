@@ -2363,7 +2363,9 @@ class TestPreproCLI:
         monkeypatch.setitem(prepro_addons.ADDON_PRODUCTS, 'points', dict(
             task='points:task', files=['points.csv'],
             statistics='fake:stats', source='test'))
-        monkeypatch.setattr(prepro_addons, '_import', funcs.get)
+        import_product = prepro_addons._import
+        monkeypatch.setattr(prepro_addons, '_import',
+                            lambda p: funcs.get(p) or import_product(p))
 
         inter, rgidf = _read_shp()
         odir = str(tmpdir.mkdir('my_levs'))
@@ -2387,7 +2389,7 @@ class TestPreproCLI:
 
         prepro_addons.run_prepro_addons(
             rgi_version='61', rgi_reg='11', border=20,
-            products=['fake', 'points'],
+            products=['fake', 'points', 'iceboost'],
             output_folder=adir, working_dir=str(tmpdir.mkdir('wd_addons')),
             start_from_dir=odir, version='v0', is_test=True, rgi_file=rgidf,
             disable_mp=True, continue_on_error=False)
@@ -2441,6 +2443,25 @@ class TestPreproCLI:
         fp = gdir.get_filepath('elevation_band_flowline',
                                filesuffix='_fixed_dx')
         assert_allclose(pd.read_csv(fp, index_col=0)['fake_v'], 2.)
+
+        # A real product, without statistics: IceBoost. The binned volume
+        # is the IceBoost one (matched to the glacier mask)
+        workflow.apply_addons([gdir], addons='iceboost',
+                              base_urls={'iceboost': os.path.join(
+                                  adir, 'iceboost')})
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ref_vol = ds.iceboost_ice_thickness.attrs['iceboost_volume_km3']
+        df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'),
+                         index_col=0)
+        vn = 'iceboost_ice_thickness'
+        assert_allclose((df[vn] * df['area']).sum() * 1e-9, ref_vol,
+                        rtol=1e-4)
+        fdf = pd.read_csv(fp, index_col=0)
+        assert_allclose((fdf[vn] * fdf['area_m2']).sum() * 1e-9, ref_vol,
+                        rtol=1e-4)
+        assert not os.path.exists(os.path.join(adir, 'iceboost', 'RGI61',
+                                               'b_020', 'summary',
+                                               'iceboost_statistics_11.csv'))
 
         # Add-on on L1: no flowline to bin onto
         gdir = oggm.GlacierDirectory(entity, from_tar=lev_tars(1))

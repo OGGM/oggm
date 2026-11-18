@@ -33,10 +33,16 @@ from oggm.utils import entity_task
 log = logging.getLogger(__name__)
 
 # The add-on products: the shop task adding them to gridded_data, the
-# variables it writes, the task compiling their statistics, where the data
-# comes from, and whether binning preserves their totals (True by default,
-# for thicknesses and elevation changes, but meaningless for velocities)
+# variables it writes, the task compiling their statistics (optional), where
+# the data comes from, and whether binning preserves their totals (True by
+# default, for thicknesses and elevation changes, but meaningless for
+# velocities)
 ADDON_PRODUCTS = {
+    'iceboost': dict(
+        task='oggm.shop.iceboost:iceboost_to_gdir',
+        variables=['iceboost_ice_thickness'],
+        source='IceBoost v2.0, Maffezzoli et al., '
+               'https://github.com/nmaffe/iceboost'),
     'consensus': dict(
         task='oggm.shop.bedtopo:add_consensus_thickness',
         variables=['consensus_ice_thickness'],
@@ -244,8 +250,9 @@ def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
         utils.mkdir(sum_dir)
         utils.bundle_addon(str(out),
                            regions=sorted({g.rgi_id[:-6] for g in gdirs}))
-        _import(spec['statistics'])(
-            gdirs, path=sum_dir / f'{product}_statistics_{rgi_reg}.csv')
+        if spec.get('statistics'):
+            _import(spec['statistics'])(
+                gdirs, path=sum_dir / f'{product}_statistics_{rgi_reg}.csv')
 
     m, s = divmod(time.time() - start, 60)
     h, m = divmod(m, 60)

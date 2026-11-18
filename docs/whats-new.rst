@@ -330,8 +330,8 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-- Add-ons: optional data (e.g. velocity or thickness products, GlaThiDa
-  thickness observations) can be added to the glacier directories with
+- Add-ons: optional data (e.g. velocity or thickness products such as
+  IceBoost, GlaThiDa thickness observations) can be added to the glacier directories with
   :py:func:`workflow.apply_addons`, whatever chain they were built from. An
   add-on is matched to a glacier directory by its grid. Its variables are
   added to ``gridded_data.nc`` (at any level from L1 to L4) and binned onto
