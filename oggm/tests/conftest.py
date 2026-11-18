@@ -176,6 +176,7 @@ def patch_download_url_allowlist():
         'klima.uni-bremen.de/~oggm/climate/cru/cru_cl2.nc.zip',
         'klima.uni-bremen.de/~oggm/geodetic_ref_mb',
         'klima.uni-bremen.de/~oggm/g2ti',
+        'klima.uni-bremen.de/~oggm/ice_thickness/iceboost_v2/',
         'RGI2000-v7.0-regions.zip',
     ]
     cfg.PARAMS.do_log = old_do_log

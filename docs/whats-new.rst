@@ -9,6 +9,12 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New shop module ``oggm.shop.iceboost``: ``iceboost_to_gdir`` adds the
+  IceBoost v2.0 ice thickness (and optionally its uncertainty) of a glacier
+  to its gridded data, for RGI6, RGI7 glaciers and RGI7 glacier complexes.
+  By default, the reprojected thickness is scaled to match the glacier
+  volume reported by IceBoost (``match_volume``).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Various performance improvements to the flowline model runs
   (:pull:`2024`, :pull:`2025`, :pull:`2026`).
   By `Fabien Maussion <https://github.com/fmaussion>`_

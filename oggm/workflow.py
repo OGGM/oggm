@@ -39,9 +39,9 @@ log = logging.getLogger(__name__)
 ICEBOOST_V2_BASE_URL = ('https://cluster.klima.uni-bremen.de/~oggm/'
                         'ice_thickness/iceboost_v2/')
 ICEBOOST_V2_FILES = {
-    '6': 'iceboostv2_compiled_rgi62_v20260701.parquet',
-    '7G': 'iceboostv2_compiled_rgi70G_v20260701.parquet',
-    '7C': 'iceboostv2_compiled_rgi70C_v20260701.parquet',
+    '6': 'iceboostv2_compiled_rgi62_v20261116.parquet',
+    '7G': 'iceboostv2_compiled_rgi70G_v20261116.parquet',
+    '7C': 'iceboostv2_compiled_rgi70C_v20261116.parquet',
 }
 
 # Farinotti et al. (2019) consensus (ITMIX) reference volume table (RGI6 only)
