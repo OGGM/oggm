@@ -2362,7 +2362,10 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(smb.mean(), 0, atol=1e-6)
 
     @pytest.mark.slow
-    def test_sfc_type_mb_model_calib_dynamics(self):
+    def test_sfc_type_mb_model_calib_dynamics(self, tmp_path):
+
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = str(tmp_path)
 
         # sfc tracking only works with a single flowline
         gdir = workflow.init_glacier_directories(
