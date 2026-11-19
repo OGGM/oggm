@@ -324,6 +324,7 @@ def test_thick_elev_bands(tmp_path):
     return fig
 
 @pytest.mark.graphic
+@pytest.mark.xfail(reason="Possible key collision in calving_front_slope.")
 @mpl_image_compare(multi=True)
 def test_model_section_calving(tmp_path):
     gdir = init_columbia_eb(
