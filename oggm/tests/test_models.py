@@ -1187,7 +1187,6 @@ class TestMassBalanceModels:
 
             plt.plot(mb_annual_d, h, label='daily')
             plt.plot(mb_annual_m, h, label='monthly')
-            plt.plot(mb_annual_oggm_v16, h, label='monthly, OGGM v1.6')
             plt.title(f'annual mb for {yr}')
             plt.legend()
             plt.show()
@@ -1225,7 +1224,6 @@ class TestMassBalanceModels:
 
             plt.plot(mb_monthly_d, h, label='daily')
             plt.plot(mb_monthly_m, h, label='monthly')
-            plt.plot(mb_monthly_oggm_v16, h, label='monthly, OGGM v1.6')
             plt.title(f'monthly mb for {m:02d}.{yr}')
             plt.legend()
             plt.show()
