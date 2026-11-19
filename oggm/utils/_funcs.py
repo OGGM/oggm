@@ -6,6 +6,7 @@ import os
 import sys
 import bisect
 import math
+import functools
 import logging
 import warnings
 from packaging.version import Version
@@ -75,6 +76,26 @@ _DAYS_IN_MONTH_NOLEAP = np.array([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
                                   dtype=np.int64)
 _DAYS_IN_MONTH_LEAP = np.array([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
                                 dtype=np.int64)
+_DAYS_IN_MONTH_NOLEAP_LIST = _DAYS_IN_MONTH_NOLEAP.tolist()
+_SCALAR_TYPES = (int, float, np.integer, np.floating)
+
+
+def _is_scalar(x):
+    # Same as np.ndim(x) == 0, faster for the usual Python and numpy scalars
+    return isinstance(x, _SCALAR_TYPES) or np.ndim(x) == 0
+
+
+def _is_leap_year_scalar(y):
+    return (y % 4 == 0) and ((y % 100 != 0) or (y % 400 == 0))
+
+
+@functools.lru_cache(maxsize=2**15)
+def _days_of_month_scalar(year, use_leap_years):
+    # The MB models ask for the same months again and again: cache it
+    y, m = _floatyear_to_date_scalar(year)
+    if use_leap_years and m == 2 and _is_leap_year_scalar(y):
+        return 29
+    return _DAYS_IN_MONTH_NOLEAP_LIST[m - 1]
 
 
 def parse_rgi_meta(version=None):
@@ -805,7 +826,7 @@ def _date_to_floatyear_scalar(y, m, d=None):
     y = int(y)
     m = int(m)
     d = 1 if d is None else int(d)
-    leap = (y % 4 == 0) and ((y % 100 != 0) or (y % 400 == 0))
+    leap = _is_leap_year_scalar(y)
     doy = d + _BASE_CUM_START_LIST[m - 1] + (leap and m > 2)
     return np.float64(y + (doy - 1) / (366 if leap else 365))
 
@@ -826,7 +847,8 @@ def date_to_floatyear(y, m, d=None):
     d : int or array_like or None
         the day. If None the 1. of the month is used
     """
-    if np.ndim(y) == 0 and np.ndim(m) == 0 and np.ndim(d) == 0:
+    if (_is_scalar(y) and _is_scalar(m) and
+            (d is None or _is_scalar(d))):
         return _date_to_floatyear_scalar(y, m, d)
 
     y = np.asarray(y, dtype=np.int64)
@@ -860,7 +882,7 @@ def _floatyear_to_date_scalar(yr, return_day=False):
     y = math.floor(yr)
     f = min(max(yr - y, 0.0), _ONE_MINUS_EPS)
 
-    leap = (y % 4 == 0) and ((y % 100 != 0) or (y % 400 == 0))
+    leap = _is_leap_year_scalar(y)
     n = 366 if leap else 365
 
     # round() is half-to-even, like np.rint
@@ -899,7 +921,7 @@ def floatyear_to_date(yr, return_day=False):
         If False a tuple (year, month) will be returned, if True a tuple
         (year, month, day) will be returned. Default is False.
     """
-    if np.ndim(yr) == 0:
+    if _is_scalar(yr):
         return _floatyear_to_date_scalar(yr, return_day=return_day)
 
     yr = np.asarray(yr, dtype=np.float64)
@@ -1125,9 +1147,11 @@ def get_days_of_year(year, use_leap_years: bool = False):
         The number of days of the given year(s). Returns a scalar int when
         ``year`` is scalar, and an ``np.ndarray`` of int64 when it is array_like.
     """
-    scalar = np.ndim(year) == 0
+    scalar = _is_scalar(year)
     if not use_leap_years:
         return 365 if scalar else np.full(np.asarray(year).shape, 365, dtype=np.int64)
+    if scalar:
+        return 366 if _is_leap_year_scalar(math.floor(year)) else 365
     yr_int = floatyear_to_date(np.asarray(year, dtype=np.float64))[0]
     result = np.where(_is_leap_year_vec(yr_int), 366, 365).astype(np.int64)
     return int(result) if scalar else result
@@ -1149,10 +1173,12 @@ def get_seconds_of_year(year=None, use_leap_years: bool = False):
         The number of seconds in the given year(s). Returns a scalar int when
         ``year`` is scalar, and an ``np.ndarray`` of int64 when it is array_like.
     """
+    scalar = _is_scalar(year)
     if not use_leap_years:
-        scalar = np.ndim(year) == 0
         return SEC_IN_YEAR if scalar else np.full(np.asarray(year).shape,
                                                    SEC_IN_YEAR, dtype=np.int64)
+    if scalar:
+        return SEC_IN_DAY * (366 if _is_leap_year_scalar(math.floor(year)) else 365)
     return SEC_IN_DAY * get_days_of_year(year, use_leap_years=True)
 
 
@@ -1173,7 +1199,10 @@ def get_days_of_month(year=None, use_leap_years: bool = False):
         int when ``year`` is scalar, and an ``np.ndarray`` of int64 when it is
         array_like.
     """
-    scalar = np.ndim(year) == 0
+    scalar = _is_scalar(year)
+    if scalar:
+        # Fast path for one value (the MB models call this every month)
+        return _days_of_month_scalar(float(year), bool(use_leap_years))
     yr_int, mth = floatyear_to_date(np.asarray(year, dtype=np.float64))
     mth_idx = np.asarray(mth, dtype=np.int64) - 1  # 0-indexed
     if use_leap_years:
@@ -1202,6 +1231,8 @@ def get_seconds_of_month(year=None, use_leap_years: bool = False):
         scalar int when ``year`` is scalar, and an ``np.ndarray`` of int64
         when it is array_like.
     """
+    if _is_scalar(year):
+        return SEC_IN_DAY * _days_of_month_scalar(float(year), bool(use_leap_years))
     return SEC_IN_DAY * get_days_of_month(year=year, use_leap_years=use_leap_years)
 
 

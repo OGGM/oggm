@@ -1246,6 +1246,22 @@ def _parabolic_bed_from_topo(gdir, idl, interpolator):
     return bed_ma.values, terrain_heights
 
 
+def _trapezoidal_lambdas_from_parabola(depths, Ps, lambda_min, lambda_max):
+    """The trapezoid lambdas matching a parabola at a given depth.
+
+    The trapezoid has the same surface width and the same cross section area
+    as the parabola at the depth h (see
+    _trapezoidal_bottom_width_from_terrain_cross_section_area for the
+    formulas). This gives w0 = w / 3 and:
+        lambda = 2 / 3 * w / h = 4 / 3 / sqrt(h * Ps)
+
+    The lambdas are clipped to [lambda_min, lambda_max]. Where they are
+    clipped, the area is still preserved by the bottom width.
+    """
+    lambdas = 4 / 3 / np.sqrt(depths * Ps)
+    return utils.clip_array(lambdas, lambda_min, lambda_max)
+
+
 def _trapezoidal_bottom_width_from_terrain_cross_section_area(
         terrain_heights, Ps, lambdas, w0_min):
     """This function calculates a bottom width for a trapezoidal downstream
@@ -1276,9 +1292,13 @@ def _trapezoidal_bottom_width_from_terrain_cross_section_area(
 @entity_task(log, writes=['downstream_line'])
 def compute_downstream_bedshape(gdir):
     """The bedshape obtained by fitting a parabola to the line's normals.
-    Further a trapezoidal shape is fitted to match the cross section area of
-    the valley. Which downstream shape (parabola or trapezoidal) is used
-    by the later call to init_present_day_glacier can be
+    Further a trapezoidal shape is fitted to match the surface width and the
+    cross section area of the parabola at a given ice thickness
+    (cfg.PARAMS['downstream_lambda_depth_factor'] times the volume-area
+    scaling mean thickness of the glacier), with lambdas clipped to
+    cfg.PARAMS['downstream_min_lambda'] and
+    cfg.PARAMS['downstream_max_lambda']. Which downstream shape (parabola or
+    trapezoidal) is used by the later call to init_present_day_glacier can be
     selected with cfg.PARAMS['downstream_line_shape'].
 
     Also computes the downstream's altitude.
@@ -1306,7 +1326,8 @@ def compute_downstream_bedshape(gdir):
     xy = (np.arange(0, len(y)-0.1, 1), np.arange(0, len(x)-0.1, 1))
     interpolator = RegularGridInterpolator(xy, topo.astype(np.float64))
 
-    bs, terrain_heights = _parabolic_bed_from_topo(gdir, cl, interpolator)
+    # the terrain heights of the fit are not used anymore
+    bs, _ = _parabolic_bed_from_topo(gdir, cl, interpolator)
     assert len(bs) == cl.nx, 'len(bs) == cl.nx'
     assert np.all(np.isfinite(bs)), 'np.all(np.isfinite(bs))'
 
@@ -1319,10 +1340,17 @@ def compute_downstream_bedshape(gdir):
     hgts = gaussian_filter1d(hgts, cfg.PARAMS['flowline_height_smooth'])
 
     # calculate bottom width of trapezoidal shapes
-    lambdas = np.ones(len(bs)) * cfg.PARAMS['trapezoid_lambdas']
-    w0_min = cfg.PARAMS['trapezoid_min_bottom_width']
+    # matched at the thickness of a glacier advancing in its valley
+    h_vas = 0.034 * gdir.rgi_area_km2**0.375 * 1000
+    depths = (np.ones(len(bs)) * h_vas *
+              cfg.PARAMS['downstream_lambda_depth_factor'])
+    lambdas = _trapezoidal_lambdas_from_parabola(
+        depths, bs, cfg.PARAMS['downstream_min_lambda'],
+        cfg.PARAMS['downstream_max_lambda'])
+    assert np.all(np.isfinite(lambdas)), 'np.all(np.isfinite(lambdas))'
+    w0_min = cfg.PARAMS['downstream_min_bottom_width']
     w0s = _trapezoidal_bottom_width_from_terrain_cross_section_area(
-        terrain_heights, bs, lambdas, w0_min)
+        depths, bs, lambdas, w0_min)
     assert len(w0s) == cl.nx, 'len(w0s) == cl.nx'
     assert np.all(np.isfinite(w0s)), 'np.all(np.isfinite(w0s))'
     assert np.all(w0s >= w0_min), 'np.all(w0s >= w0_min)'
@@ -1332,6 +1360,7 @@ def compute_downstream_bedshape(gdir):
     out['bedshapes'] = bs
     out['surface_h'] = hgts
     out['w0s'] = w0s
+    out['lambdas'] = lambdas
     gdir.write_store(out, 'downstream_line')
 
 

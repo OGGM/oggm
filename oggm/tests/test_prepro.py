@@ -858,7 +858,37 @@ class TestCenterlines:
             # In this case the fit is simply very good (plot it if you want!)
             assert utils.rmsd(zref, myz) < 20
 
+        # Trapezoid lambdas fitted to the valley, within the allowed range
+        lam = out['lambdas']
+        assert len(lam) == len(out['w0s'])
+        assert np.all(lam >= cfg.PARAMS['downstream_min_lambda'])
+        assert np.all(lam <= cfg.PARAMS['downstream_max_lambda'])
+        assert np.all(out['w0s'] >= cfg.PARAMS['downstream_min_bottom_width'])
+        assert np.std(lam) > 0
+
         cfg.PARAMS['border'] = default_b
+
+    def test_trapezoid_from_parabola(self):
+
+        # The trapezoid matches the parabola at the terrain height h:
+        # same surface width and same cross section area
+        h = np.array([10., 50., 100., 200.])
+        ps = np.array([0.0005, 0.001, 0.003, 0.01])
+        lam = centerlines._trapezoidal_lambdas_from_parabola(h, ps, 0, 1e9)
+        w0 = centerlines._trapezoidal_bottom_width_from_terrain_cross_section_area(
+            h, ps, lam, 0)
+        w = 2 * np.sqrt(h / ps)
+        np.testing.assert_allclose(w0 + lam * h, w)
+        np.testing.assert_allclose((w0 + w) / 2 * h, 2 / 3 * w * h)
+        np.testing.assert_allclose(w0, w / 3)
+
+        # Clipped lambdas: the area is still preserved by the bottom width
+        lam = centerlines._trapezoidal_lambdas_from_parabola(h, ps, 1, 3)
+        assert np.all((lam >= 1) & (lam <= 3))
+        assert np.any(lam == 1) and np.any(lam == 3)
+        w0 = centerlines._trapezoidal_bottom_width_from_terrain_cross_section_area(
+            h, ps, lam, 0)
+        np.testing.assert_allclose((2 * w0 + lam * h) / 2 * h, 2 / 3 * w * h)
 
     @pytest.mark.slow
     def test_baltoro_centerlines(self):
@@ -2025,9 +2055,36 @@ class TestClimate:
         return gdir
 
     def _get_specific_mb(self, gdir, years):
+        # MB of hydrological years (October to September), as in
+        # mb_calibration_to_rmsd
         h, w = gdir.get_inversion_flowline_hw()
         mb = massbalance.MonthlyTIModel(gdir)
-        return pd.Series(mb.get_specific_mb(h, w, year=years), index=years)
+        fy = massbalance._hydro_year_monthly_floatyears(years, 10)
+        mbs = mb.get_specific_mb(h, w, year=fy.ravel(),
+                                 time_resolution='monthly')
+        return pd.Series(np.reshape(mbs, fy.shape).sum(axis=1), index=years)
+
+    def test_hydro_year_monthly_floatyears(self):
+        from oggm.core.massbalance import _hydro_year_monthly_floatyears
+
+        # Northern hemisphere: October 1999 to September 2000
+        fy = _hydro_year_monthly_floatyears([2000, 2001], 10)
+        assert fy.shape == (2, 12)
+        y, m = utils.floatyear_to_date(fy[0])
+        np.testing.assert_equal(y, [1999] * 3 + [2000] * 9)
+        np.testing.assert_equal(m, [10, 11, 12] + list(range(1, 10)))
+        np.testing.assert_allclose(fy[1], utils.date_to_floatyear(
+            [2000] * 3 + [2001] * 9, [10, 11, 12] + list(range(1, 10))))
+
+        # Southern hemisphere: April 1999 to March 2000
+        y, m = utils.floatyear_to_date(_hydro_year_monthly_floatyears(2000, 4)[0])
+        np.testing.assert_equal(y, [1999] * 9 + [2000] * 3)
+        np.testing.assert_equal(m, list(range(4, 13)) + [1, 2, 3])
+
+        # Calendar years
+        y, m = utils.floatyear_to_date(_hydro_year_monthly_floatyears(2000, 1)[0])
+        np.testing.assert_equal(y, 2000)
+        np.testing.assert_equal(m, np.arange(1, 13))
 
     @pytest.fixture(autouse=True, scope="class")
     def _rmsd_calib(self):
@@ -2067,10 +2124,14 @@ class TestClimate:
         years = mbdf.index
         ref_mb_period = f"{years[0]}-01-01_{years[-1] + 1}-01-01"
 
-        mb_calibration_to_rmsd(
+        df = mb_calibration_to_rmsd(
             gdir, ref_df=ref_mb, calibrate_params=arg_calib_params
         )
         rmsd_mb = self._get_specific_mb(gdir, years)
+
+        # The RMSD is computed on hydrological years
+        np.testing.assert_allclose(df['rmsd'], utils.rmsd(rmsd_mb, ref_mb),
+                                   rtol=1e-5)
 
         # All calibrated parameters stay within configured bounds
         for param in ["melt_f", "prcp_fac", "temp_bias"]:
@@ -2121,9 +2182,11 @@ class TestClimate:
         years = mbdf.index
 
         # Check all permutations of parameters gather the same results for
-        # differential evolution, as it's stochastic and so may differ slightly
-        # (hence rtol here)
-        mb_calibration_to_rmsd(
+        # differential evolution. It is stochastic, and the optimum is flat
+        # (melt_f and temp_bias trade off): it may stop at slightly different
+        # parameters with the same RMSD. Hence a tight tolerance on the RMSD
+        # and a looser one on the MB.
+        df = mb_calibration_to_rmsd(
             gdir,
             ref_df=ref_mb,
             calibrate_params=("melt_f", "prcp_fac", "temp_bias"),
@@ -2133,9 +2196,11 @@ class TestClimate:
         permutations = [('prcp_fac', 'temp_bias', 'melt_f'),
                         ('temp_bias', 'melt_f', 'prcp_fac')]
         for params in permutations:
-            mb_calibration_to_rmsd(gdir, ref_df=ref_mb, calibrate_params=params)
+            dfp = mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                         calibrate_params=params)
             perm = self._get_specific_mb(gdir, years)
-            np.testing.assert_allclose(base.values, perm.values, rtol=0.01)
+            np.testing.assert_allclose(df['rmsd'], dfp['rmsd'], rtol=1e-3)
+            np.testing.assert_allclose(base.values, perm.values, atol=25)
 
     def test_mb_calibration_to_rmsd_invalid_bounds(self, _rmsd_calib):
 
@@ -2163,6 +2228,29 @@ class TestClimate:
                                    calibrate_params=('temp_bias',),
                                    temp_bias_min=-np.inf,
                                    temp_bias_max=np.inf)
+
+        # The first hydrological year of the climate data is incomplete
+        # (it starts in October of the year before): it is dropped
+        y0 = massbalance.MonthlyTIModel(gdir, melt_f=5, prcp_fac=2.5,
+                                        temp_bias=0,
+                                        check_calib_params=False).ys
+        ref_mb = pd.Series([-500., -600., -700.],
+                           index=[y0, y0 + 1, y0 + 2])
+        df = mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                    calibrate_params=('melt_f',))
+        assert df['reference_mb'] == -650.
+        assert df['reference_period'] == str(np.array([y0 + 1, y0 + 2]))
+
+        # But not if it is the only one
+        with pytest.raises(ValueError, match='hydrological year'):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb.iloc[:1],
+                                   calibrate_params=('melt_f',))
+
+        # Years entirely outside the climate data still fail
+        ref_mb = pd.Series([-500., -600.], index=[y0 - 5, y0 + 1])
+        with pytest.raises(ValueError, match='hydrological year'):
+            mb_calibration_to_rmsd(gdir, ref_df=ref_mb,
+                                   calibrate_params=('melt_f',))
 
     @pytest.mark.slow
     def test_mb_calibration_from_scalar_mb_multiple_fl(self):
@@ -2528,6 +2616,33 @@ class TestInversion:
         np.testing.assert_allclose(glen_a_target, out['glen_a'],
                                    rtol=2e-3)
 
+    def test_trapezoid_min_bottom_width(self):
+
+        slope = np.deg2rad(5.)
+        flux = 0.05
+        w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+
+        # wide enough: the requested lambda works
+        h, lam = inversion._trapezoid_thickness(slope, 500., flux, 2.)
+        assert lam == 2.
+        assert 500. - lam * h > w0_min
+
+        # too narrow: lambda is reduced to give the minimum bottom width,
+        # and the flux is unchanged. 15 m is narrow enough for the mean
+        # width of the trapezoid to be below MIN_WIDTH_FOR_INV.
+        for w in [15., 50.]:
+            h, lam = inversion._trapezoid_thickness(slope, w, flux, 2.)
+            assert h > 0
+            assert 0 < lam < 2.
+            np.testing.assert_allclose(w - lam * h, w0_min)
+            h_ref = inversion.sia_thickness_via_optim(slope, w, flux,
+                                                      shape='trapezoid',
+                                                      t_lambda=lam)
+            np.testing.assert_allclose(h, h_ref, rtol=1e-6)
+
+        # no flux, no ice
+        assert inversion._trapezoid_thickness(slope, 50., 0., 2.)[0] == 0
+
     @pytest.mark.slow
     def test_invert_hef_shapes(self, hef_entity):
 
@@ -2544,6 +2659,37 @@ class TestInversion:
 
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)
         vt1 = inversion.mass_conservation_inversion(gdir)
+
+        # Where lambda=2 gives a bottom width below 1 m, reduce lambda
+        # and solve again while preserving the inversion flux.
+        n_reduced = 0
+        for cl in gdir.read_store('inversion_output'):
+            lam, w, h = cl['lambdas'], cl['width'], cl['thick']
+            assert np.all(cl['is_trapezoid'])
+            assert not np.any(cl['is_rectangular'])
+            assert np.all((lam > 0) & (lam <= 2))
+            reduced = lam < 2
+            n_reduced += reduced.sum()
+            # reduced lambdas give the minimum bottom width
+            w0_min = inversion.TRAPEZOID_MIN_BOTTOM_WIDTH
+            np.testing.assert_allclose(w[reduced] - lam[reduced] * h[reduced],
+                                       w0_min)
+            assert np.all(w - lam * h >= np.minimum(w0_min, w) - 1e-6)
+            np.testing.assert_allclose(cl['volume'],
+                                       (2 * w - lam * h) / 2 * h * cl['dx'])
+            settings = gdir.settings
+            min_slope = ('min_slope_ice_caps' if gdir.is_icecap
+                         else 'min_slope')
+            slope = np.clip(cl['slope_angle'],
+                            np.deg2rad(settings[min_slope]), np.pi / 2)
+            n = settings['glen_n']
+            velocity = ((settings['ice_density'] * cfg.G * slope) ** n *
+                        (2 / (n + 2) * settings['inversion_glen_a'] *
+                         h ** (n + 1) + settings['inversion_fs'] *
+                         h ** (n - 1)))
+            np.testing.assert_allclose(
+                cl['volume'] / cl['dx'] * velocity, cl['flux'], atol=1e-8)
+        assert n_reduced > 0
 
         gdir.settings['trapezoid_lambdas'] = 1
         inversion.prepare_for_inversion(gdir, invert_all_trapezoid=True)

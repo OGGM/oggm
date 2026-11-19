@@ -9,8 +9,30 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- New shop module ``oggm.shop.iceboost``: ``iceboost_to_gdir`` adds the
+  IceBoost v2.0 ice thickness (and optionally its uncertainty) of a glacier
+  to its gridded data, for RGI6, RGI7 glaciers and RGI7 glacier complexes.
+  By default, the reprojected thickness is scaled to match the glacier
+  volume reported by IceBoost (``match_volume``).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Various performance improvements to the flowline model runs
   (:pull:`2024`, :pull:`2025`, :pull:`2026`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- New ``get_monthly_mb_series`` and ``get_annual_mb_series`` methods of the
+  MB models: the MB at given heights for many months or years at once, e.g.
+  to average the MB over a period on a fixed geometry. ``MonthlyTIModel``
+  computes all the time steps at once (vectorised); the other models loop
+  over ``get_monthly_mb`` / ``get_annual_mb``, and so does a subclass of
+  ``MonthlyTIModel`` which overrides these methods (see
+  ``has_fast_mb_series``). ``get_specific_mb`` uses them when they are
+  fast, with identical results: 6 times faster for 50 years of annual MB,
+  25 times for 600 months (Hintereisferner). This speeds up all the
+  calibrations on a fixed geometry (:pull:`2036`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``get_days_of_year``, ``get_seconds_of_year``, ``get_days_of_month`` and
+  ``get_seconds_of_month`` (and the ``sec_in_month`` and ``sec_in_year``
+  methods of the MB models which use them) are 6 to 30 times faster for
+  scalar input, as used by the MB models at every time step (:pull:`2036`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``run_with_hydro`` with the ``SfcTypeTIModel`` is much faster (the cost
   of each time step was growing with the length of the run), and
@@ -308,6 +330,9 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Documentation changes in ``docs/`` no longer trigger the entire test
+  suite if the previous commit passed its tests (:pull:`2028`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Bug fixes
 ~~~~~~~~~
@@ -428,6 +453,42 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- ``mb_calibration_to_rmsd`` now compares the reference MB to the modelled
+  MB of hydrological years (October to September in the northern
+  hemisphere, April to March in the southern hemisphere, from
+  ``PARAMS['hydro_month_nh']`` and ``PARAMS['hydro_month_sh']``), as in the
+  WGMS data, instead of calendar years. On Hintereisferner this reduces the
+  RMSD from 369 to 289 kg m-2 yr-1 (1953-2002, test climate data). With
+  the vectorised MB (see Enhancements), it is also faster than before (0.6 s
+  instead of 3.6 s for the three parameters on Hintereisferner).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``mass_conservation_inversion`` now reduces the trapezoid lambda where
+  necessary to retain a minimum bottom width of 1 m, instead of falling
+  back to a rectangle.
+  The per-point lambdas are stored in the inversion output and used by
+  ``filter_inversion_output`` and ``init_present_time_glacier``.
+  Filtering also reduces lambda where necessary to preserve this minimum
+  bottom width after smoothing and conversion to trapezoidal beds (:pull:`2034`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The trapezoidal downstream line (``compute_downstream_bedshape``) now uses
+  lambdas fitted to the valley shape instead of the default
+  ``PARAMS['trapezoid_lambdas']``: the trapezoid has the same surface width
+  and cross section area as the fitted parabola at the thickness of a
+  glacier advancing in its valley (bottom width = 1/3 of the surface
+  width). This thickness is the new
+  ``PARAMS['downstream_lambda_depth_factor']`` (2) times the volume-area
+  scaling mean thickness of the glacier, i.e. about 20-35 m for glaciers
+  smaller than 0.5 km2 and about 100 m for glaciers larger than 2 km2.
+  The lambdas are clipped to the new ``PARAMS['downstream_min_lambda']`` (2)
+  and ``PARAMS['downstream_max_lambda']`` (10), and stored in the
+  ``downstream_line`` file. Before, with a large default lambda, the bottom
+  width was often clipped to ``PARAMS['downstream_min_bottom_width']``
+  (renamed from ``PARAMS['trapezoid_min_bottom_width']``),
+  which made the valley too wide. On a sample of 100 Alpine glaciers, 
+  the median fitted lambda is about 10 for glaciers smaller than 0.1 km2 
+  and about 4 for glaciers larger than 2 km2. Directories processed with older 
+  versions still use the default lambda downstream (:pull:`2034`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The boolean flags of the ``oggm_prepro``, ``oggm_benchmark`` and
   ``oggm_temp_bias`` commands (``--elev-bands``, ``--test``, ``--disable-mp``,
   and all the others) no longer accept a value. They used to store whatever

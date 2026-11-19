@@ -38,7 +38,8 @@ from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    MonthlyTIModel,
                                    RandomMassBalance)
 from oggm.core.centerlines import Centerline, line_order
-from oggm.core.inversion import find_sia_flux_from_thickness
+from oggm.core.inversion import (find_sia_flux_from_thickness,
+                                 get_inversion_lambdas)
 
 # Constants
 from oggm.cfg import SEC_IN_DAY, SEC_IN_YEAR
@@ -3786,9 +3787,7 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
 
             bed_shape = 4 * inv['thick'] / widths_m ** 2
 
-            lambdas = inv['thick'] * np.nan
-            lambdas[inv['is_trapezoid']] = def_lambda
-            lambdas[inv['is_rectangular']] = 0.
+            lambdas = get_inversion_lambdas(inv, def_lambda)
 
             # Where the flux and the thickness is zero we just assume trapezoid:
             lambdas[bed_shape == 0] = def_lambda
@@ -3836,8 +3835,11 @@ def init_present_time_glacier(gdir, settings_filesuffix='',
                 widths_m = np.append(widths_m, dic_ds['bedshapes'] * 0.)
             elif gdir.settings['downstream_line_shape'] == 'trapezoidal':
                 bed_shape = np.append(bed_shape, dic_ds['bedshapes'] * np.nan)
-                lambdas = np.append(lambdas, np.ones(len(dic_ds['w0s'])) *
-                                    def_lambda)
+                # older directories don't have the fitted lambdas
+                ds_lambdas = dic_ds.get('lambdas',
+                                        np.ones(len(dic_ds['w0s'])) *
+                                        def_lambda)
+                lambdas = np.append(lambdas, ds_lambdas)
                 widths_m = np.append(widths_m, dic_ds['w0s'])
             else:
                 raise InvalidParamsError(

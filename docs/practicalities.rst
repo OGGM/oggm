@@ -119,12 +119,12 @@ Once OGGM is installed, you can use your scripts (like the ones provided in the
 
 
 If you are lucky, your cluster might support
-`singularity containers <https://www.sylabs.io/>`_,
+`Apptainer <https://apptainer.org>`_ (formerly Singularity) containers,
 in which case we highly recommend their usage.
 
 
-Singularity and docker containers
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Apptainer (Singularity) and docker containers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For those not familiar with this concept,
 `containers <https://www.docker.com/resources/what-container>`_ can be seen
@@ -138,7 +138,7 @@ you. They are highly configurable, and come in many flavors.
     We highly recommend their use.
 
 The OGGM team (mostly `Timo <https://github.com/TimoRoth>`_) provides,
-maintains and updates a Docker container that can be used by Singularity as well.
+maintains and updates a Docker container that can be used by Apptainer as well.
 You can list and download all OGGM containers `here <https://github.com/orgs/OGGM/packages>`_.
 Our most important repositories are:
 
@@ -168,7 +168,7 @@ As an example, here is how we run a given fixed version of OGGM on our
 own cluster. First we pull the image we want to run from GitHub somewhere
 on your system::
 
-    $ singularity pull docker://ghcr.io/oggm/oggm:20211115
+    $ apptainer pull docker://ghcr.io/oggm/oggm:20211115
 
 This will store the image in your current directory and needs to be done only once per image.
 
@@ -180,8 +180,12 @@ This will store the image in your current directory and needs to be done only on
 
 Then, in your script, so something similar to::
 
-    # All commands in the EOF block run inside of the container
-    singularity exec /path/to/oggm/image/oggm_20211115.sif bash -s <<EOF
+    # All commands in the EOF block run inside of the container. The container
+    # sees only what is bound into it (see "Isolate the container" below):
+    # here, only the job's own directory, writable.
+    apptainer exec --containall --no-mount bind-paths \
+        --bind "$OGGM_WORKDIR" \
+        /path/to/oggm/image/oggm_20211115.sif bash -s <<EOF
       set -e
       # Setup a fake home dir inside of our workdir, so we don't clutter the
       # actual shared homedir with potentially incompatible stuff
@@ -203,16 +207,24 @@ Then, in your script, so something similar to::
 
 Some explanations:
 
-- ``singularity exec`` uses `Singularity <https://www.sylabs.io/>`_
-  to execute a series of commands in a singularity container, which here
-  simply is taken from our Docker container base (singularity
-  `can run docker containers <https://www.sylabs.io/guides/3.1/user-guide/singularity_and_docker.html>`_).
-  Singularity is preferred over Docker in cluster
+- ``apptainer exec`` uses `Apptainer <https://apptainer.org>`_
+  to execute a series of commands in a container, which here
+  simply is taken from our Docker container base (Apptainer
+  `can run docker containers <https://apptainer.org/docs/user/latest/docker_and_oci.html>`_).
+  Apptainer is preferred over Docker in cluster
   environments, mostly for security and performance reasons.
+- ``--containall --no-mount bind-paths`` and ``--bind`` control which of your
+  files the container can see and change: see
+  :ref:`container-isolation` below.
   On our cluster, we use the SLURM manager to run a number of glaciers (an RGI region
   for example), and the script above is then run on a node. You can also
-  use and run singularity with ``srun -n 1 -c X singularity exec ...``:
+  use and run apptainer with ``srun -n 1 -c X apptainer exec ...``:
   this might vary on your cluster.
+- Apptainer was called Singularity until 2021, and the ``singularity``
+  command still works on Apptainer installations. Some clusters run
+  `SingularityCE <https://sylabs.io/singularity/>`_ (a separate fork) instead,
+  which has no ``apptainer`` command: there, replace ``apptainer`` with
+  ``singularity`` in the commands of this page.
 - we fix the container version we want to use to a certain
   `tag <https://github.com/OGGM/oggm/pkgs/container/oggm/versions>`_. With this, we are
   guaranteed to always use the same software versions across runs.
@@ -238,6 +250,60 @@ Some explanations:
 
 We recommend to keep these scripts alongside your code and data, so that you
 can trace them later on.
+
+.. _container-isolation:
+
+Isolate the container from your files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, a container is **not** isolated from your files. Apptainer mounts
+your ``$HOME``, the current directory and ``/tmp`` into it, and system
+administrators can add more paths to every container (``bind path`` in
+``apptainer.conf``). Some clusters add all of ``/home`` this way. A job then runs
+with everything your account can write to: your home, your colleagues' shared
+project folders, published data. A wrong path, a bug in a cleanup step or a
+coding assistant running commands for you can delete or overwrite any of it.
+
+We recommend to start containers so that they can only write to the job's
+own directory:
+
+- ``--containall`` gives the container a private, empty ``$HOME`` and ``/tmp``,
+  and does not pass your environment variables to it.
+- ``--no-mount bind-paths`` drops the paths added by the administrators
+  (``--containall`` alone keeps them). Check with ``apptainer exec --help``
+  that your version has this option.
+- ``--bind`` then adds exactly what the job needs. The job's working directory
+  is writable; everything else is read-only (``:ro``), for example a
+  shared input data folder or a read-only download cache (see
+  `Data storage`_)::
+
+    apptainer exec --containall --no-mount bind-paths \
+        --bind "$JOB_DIR" \
+        --bind /path/to/shared/download_cache:/path/to/shared/download_cache:ro \
+        /path/to/oggm/image/oggm_20211115.sif bash -s <<EOF
+      ...
+    EOF
+
+Some practical consequences:
+
+- **Write the output to the job's directory, and copy it to its final place
+  after the container has finished**, in the part of the script outside the
+  container (as our sample scripts do with ``rsync``). This also works for
+  glacier directories that are built in place in a shared tree: the container
+  never needs write access to the tree itself.
+- **Environment variables are not passed on.** Variables written into the
+  ``<<EOF`` block (such as ``$OGGM_WORKDIR`` above) are filled in before
+  the container starts, so they work. Your script can't read variables from
+  ``os.environ`` (e.g. ``SLURM_ARRAY_TASK_ID``) unless you export them in
+  the block: ``export SLURM_ARRAY_TASK_ID=$SLURM_ARRAY_TASK_ID``.
+  **Always export** ``SLURM_JOB_CPUS_PER_NODE``: OGGM uses it to set the number
+  of processes (with ``mp_processes = -1``, the default). Without it, OGGM
+  starts one process per cpu of the whole node, not of your allocation.
+- An error ``Read-only file system`` means that the job tried to write
+  outside of its directory. Fix the path in your script rather than making
+  the bind writable.
+- Apptainer may warn that it can't change to your working directory, since
+  it is not visible in the container. This is harmless.
 
 Data storage
 ~~~~~~~~~~~~
@@ -544,8 +610,8 @@ reproducible science, and we should try to avoid these situations.
 
 .. important::
 
-    **The short answer is: use our docker/singularity containers for the
-    most reproducible workflows.** Refer to `Singularity and docker containers`_
+    **The short answer is: use our docker/apptainer containers for the
+    most reproducible workflows.** Refer to `Apptainer (Singularity) and docker containers`_
     for how to do that.
 
 
