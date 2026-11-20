@@ -2317,6 +2317,60 @@ class TestClimate:
         # Check that inversion works but it logs a warning
         massbalance.apparent_mb_from_any_mb(gdir, mb_years=[1953, 2003])
 
+    def test_mb_calibration_without_geometry(self):
+
+        from oggm.core.massbalance import (mb_calibration_from_scalar_mb,
+                                           mb_calibration_to_rmsd)
+
+        class GlacierWideModel(massbalance.MonthlyTIModel):
+            """A model which computes the MB on its own heights."""
+            uses_geometry = False
+            own_heights = np.linspace(2400, 3700, 20)
+
+            def get_specific_mb(self, heights=None, widths=None, fls=None,
+                                **kwargs):
+                assert heights is None and widths is None and fls is None
+                return super().get_specific_mb(
+                    heights=self.own_heights,
+                    widths=np.ones(len(self.own_heights)), **kwargs)
+
+        hef_file = get_demo_file('Hintereisferner_RGI5.shp')
+        entity = gpd.read_file(hef_file).iloc[0]
+
+        # No flowlines in this gdir: the calibration must not need them
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gis.define_glacier_region(gdir)
+        climate.process_custom_climate_data(gdir)
+
+        mbdf = gdir.get_ref_mb_data()
+        ref_mb = mbdf['ANNUAL_BALANCE'].mean()
+        ref_mb_period = f'{mbdf.index[0]}-01-01_{mbdf.index[-1] + 1}-01-01'
+        df, mb_mod = mb_calibration_from_scalar_mb(
+            gdir, ref_mb=ref_mb, ref_mb_period=ref_mb_period,
+            mb_model_class=GlacierWideModel, write_to_gdir=False,
+            return_mb_model=True)
+        assert type(mb_mod) is GlacierWideModel
+        np.testing.assert_allclose(mb_mod.melt_f, df['melt_f'])
+        smb = mb_mod.get_specific_mb(year=mbdf.index)
+        np.testing.assert_allclose(smb.mean(), ref_mb)
+
+        df = mb_calibration_to_rmsd(gdir, ref_df=mbdf['ANNUAL_BALANCE'],
+                                    mb_model_class=GlacierWideModel,
+                                    write_to_gdir=False,
+                                    optimisation_kwargs={'seed': 42})
+        assert np.isfinite(df['rmsd'])
+
+        # 2D mass balance makes no sense for these models
+        with pytest.raises(InvalidParamsError):
+            mb_calibration_from_scalar_mb(
+                gdir, ref_mb=ref_mb, ref_mb_period=ref_mb_period,
+                mb_model_class=GlacierWideModel, write_to_gdir=False,
+                use_2d_mb=True)
+        with pytest.raises(InvalidParamsError):
+            mb_calibration_to_rmsd(gdir, ref_df=mbdf['ANNUAL_BALANCE'],
+                                   mb_model_class=GlacierWideModel,
+                                   write_to_gdir=False, use_2d_mb=True)
+
     def test_ref_mb_glaciers(self):
 
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
