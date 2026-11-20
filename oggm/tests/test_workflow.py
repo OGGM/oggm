@@ -74,7 +74,6 @@ def up_to_climate(reset=False, use_mp=None, params_file=None,
     # Working dir
     cfg.PATHS['working_dir'] = _TEST_DIR
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
 
     # Read in the RGI file
     rgi_file = get_demo_file('rgi_oetztal.shp')
@@ -119,7 +118,8 @@ def up_to_climate(reset=False, use_mp=None, params_file=None,
     cfg.PARAMS['min_ice_thick_for_length'] = 0
 
     # Go
-    gdirs = workflow.init_glacier_directories(rgidf)
+    gdirs = workflow.init_glacier_directories(
+        rgidf, intersects=get_demo_file('rgi_intersect_oetztal.shp'))
 
     try:
         tasks.catchment_width_correction(gdirs[0])
@@ -621,13 +621,13 @@ def test_rgi7_glacier_dirs():
         os.makedirs(_TEST_DIR)
     # initialize
     cfg.initialize()
-    # Set intersects
-    cfg.set_intersects_db(gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp')))
     cfg.PATHS['working_dir'] = _TEST_DIR
     # load and read test data
     hef_rgi7_df = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    inter = gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp'))
     # create GDIR
-    gdir = workflow.init_glacier_directories(hef_rgi7_df)[0]
+    gdir = workflow.init_glacier_directories(hef_rgi7_df,
+                                             intersects=inter)[0]
     assert gdir.rgi_region == '11'
     assert gdir.rgi_area_km2 > 8
     assert gdir.name == 'Hintereisferner'
@@ -639,6 +639,98 @@ def test_rgi7_glacier_dirs():
     assert gdir.rgi_version == '70G'
     assert gdir.rgi_dem_source == 'COPDEM30'
     assert gdir.utm_zone == 32
+
+
+def test_intersects_argument(tmp_path):
+    # The intersects are an argument, not a global (#1981)
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = str(tmp_path)
+    hef = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    inter_file = get_demo_file('rgi7g_hef_intersects.shp')
+    inter = gpd.read_file(inter_file)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', DeprecationWarning)
+        for i in [inter, inter_file]:
+            gdir = workflow.init_glacier_directories(hef, reset=True,
+                                                     force=True,
+                                                     intersects=i)[0]
+            assert len(gdir.intersects_ids) == 2
+            # also without the workflow
+            gdir = oggm.GlacierDirectory(hef.iloc[0], reset=True,
+                                         intersects=i)
+            assert len(gdir.intersects_ids) == 2
+    # nothing was set globally
+    assert cfg.INTERSECTS_GDF is None
+
+    # Intersects not concerning this glacier are a valid choice
+    gdir = workflow.init_glacier_directories(hef, reset=True, force=True,
+                                             intersects=inter.iloc[:0])[0]
+    assert not gdir.has_file('intersects')
+
+    # Without intersects at all, GlacierDirectory complains
+    with pytest.raises(InvalidParamsError, match='no intersects given'):
+        oggm.GlacierDirectory(hef.iloc[0], reset=True)
+    cfg.PARAMS['use_intersects'] = False
+    gdir = oggm.GlacierDirectory(hef.iloc[0], reset=True, intersects=inter)
+    assert not gdir.has_file('intersects')
+
+
+def test_existing_gdir_opened_as_is(tmp_path):
+    # Outlines and intersects are only written at creation (#1981)
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = str(tmp_path)
+    hef = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    inter = get_demo_file('rgi7g_hef_intersects.shp')
+
+    # A failed creation is not an existing directory the next time
+    for _ in range(2):
+        with pytest.raises(InvalidParamsError, match='no intersects given'):
+            workflow.init_glacier_directories(hef)
+    gdir = workflow.init_glacier_directories(hef, intersects=inter)[0]
+
+    # Other outlines only tell which directory to open, without intersects
+    other = hef.copy()
+    other['glac_name'] = 'Other'
+    g = workflow.init_glacier_directories(other)[0]
+    assert g.name == gdir.name
+    assert len(g.intersects_ids) == 2
+
+    # With reset the directory is created again
+    g = workflow.init_glacier_directories(other, reset=True, force=True,
+                                          intersects=inter)[0]
+    assert g.name == 'Other'
+
+
+def test_intersects_global_deprecated(tmp_path):
+    # The old global way still works (#1981)
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = str(tmp_path)
+    hef = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    try:
+        with pytest.warns(DeprecationWarning, match='intersects'):
+            cfg.set_intersects_db(
+                gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp')))
+        gdir = workflow.init_glacier_directories(hef, reset=True,
+                                                 force=True)[0]
+        assert len(gdir.intersects_ids) == 2
+    finally:
+        cfg.set_intersects_db()
+
+
+def test_split_intersects():
+    from oggm.utils._workflow import _split_intersects
+    cfg.initialize()
+    inter = gpd.read_file(get_demo_file('rgi_intersect_oetztal.shp'))
+    rgi_ids = list(np.unique(inter.RGIId_1)) + ['RGI50-11.99999']
+    out = _split_intersects(inter, rgi_ids)
+    assert len(out) == len(rgi_ids)
+    for rid, df in zip(rgi_ids, out):
+        ref = inter.loc[(inter.RGIId_1 == rid) | (inter.RGIId_2 == rid)]
+        pd.testing.assert_frame_equal(df, ref)
+        # single glacier shortcut
+        pd.testing.assert_frame_equal(_split_intersects(inter, [rid])[0], ref)
+    assert len(out[-1]) == 0
 
 
 def test_rgi7_complex_glacier_dirs():
@@ -999,6 +1091,8 @@ class TestGdirSettings:
         entity.RGIId = 'RGI60-01.10299'
         cfg.PARAMS['use_kcalving_for_inversion'] = True
         cfg.PARAMS['use_kcalving_for_run'] = True
+        # Coxe has no intersects
+        cfg.PARAMS['use_intersects'] = False
 
         gdir = oggm.GlacierDirectory(entity)
         gis.define_glacier_region(gdir)

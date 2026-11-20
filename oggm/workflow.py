@@ -22,6 +22,7 @@ from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate, gis
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.utils import global_task, entity_task
+from oggm.utils._workflow import _entity_rgi_id, _split_intersects
 
 # MPI
 try:
@@ -668,11 +669,15 @@ def _isdir(path):
 def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                              from_prepro_level=None, prepro_border=None,
                              prepro_rgi_version=None, prepro_base_url=None,
-                             from_tar=False, delete_tar=False):
+                             from_tar=False, delete_tar=False,
+                             intersects=None):
     """Initializes the list of Glacier Directories for this run.
 
     This is the very first task to do (always). If the directories are already
     available in the working directory, use them. If not, create new ones.
+    Existing directories are opened as they are: `rgidf` then only tells
+    which ones to open, and their outlines and intersects are not written
+    again. Use `reset=True` to create them anew, e.g. with other outlines.
 
     **Careful**: when starting from a pre-processed directory with
     `from_prepro_level` or `from_tar`, the existing directories will be overwritten!
@@ -707,6 +712,15 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
         will check for a tar file at the expected location in `base_dir`.
         delete the original tar file after extraction. If this
         argument is set, the existing directories will be overwritten!
+    intersects : str or geopandas.GeoDataFrame, optional
+        the glacier intersects (a path or a table, which may contain more
+        or fewer glaciers than `rgidf`). They are needed to create new
+        directories from `rgidf`, and not used afterwards: existing
+        directories are opened without them. Required for new directories
+        if ``cfg.PARAMS['use_intersects']`` is True, except for RGI7
+        glacier complexes. For the RGI, see
+        :func:`oggm.utils.get_rgi_intersects_region_file` and
+        :func:`oggm.utils.get_rgi_intersects_entities`.
 
     Returns
     -------
@@ -778,46 +792,24 @@ def init_glacier_directories(rgidf=None, *, reset=False, force=False,
                                         prepro_rgi_version=prepro_rgi_version,
                                         base_url=prepro_base_url)
         else:
-            # We can set the intersects file automatically here
-            if (cfg.PARAMS['use_intersects'] and
-                    len(cfg.INTERSECTS_GDF) == 0 and
-                    not from_tar):
-                try:
-                    rgi_ids = np.unique(np.sort([entity.rgi_id for entity in
-                                                 entities]))
-                    if len(rgi_ids[0]) == 23:
-                        # RGI7
-                        assert rgi_ids[0].split('-')[1] == 'v7.0'
-                        if rgi_ids[0].split('-')[2] == 'C':
-                            # No need for interstects
-                            fp = []
-                            rgi_version = '70C'
-                        else:
-                            rgi_version = '70G'
-                            fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                                   version=rgi_version)
-
-                    else:
-                        rgi_version = rgi_ids[0].split('-')[0][-2:]
-                        if rgi_version == '60':
-                            rgi_version = '62'
-                        fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                               version=rgi_version)
-                    cfg.set_intersects_db(fp)
-                except AttributeError:
-                    # RGI V6
-                    try:
-                        rgi_ids = np.unique(np.sort([entity.RGIId for entity in
-                                                     entities]))
-                        rgi_version = rgi_ids[0].split('-')[0][-2:]
-                        if rgi_version == '60':
-                            rgi_version = '62'
-                        fp = utils.get_rgi_intersects_entities(rgi_ids,
-                                                               version=rgi_version)
-                        cfg.set_intersects_db(fp)
-                    except AttributeError:
-                        # List of str
-                        pass
+            # The intersects are only needed to create new directories from
+            # RGI entities (existing directories are opened as they are)
+            if (cfg.PARAMS['use_intersects'] and not from_tar and
+                    len(entities) > 0 and not isinstance(entities[0], str)):
+                if intersects is None:
+                    # Deprecated global, set with cfg.set_intersects_db
+                    intersects = cfg.INTERSECTS_GDF
+                if intersects is not None:
+                    rgi_ids = [_entity_rgi_id(e) for e in entities]
+                    if isinstance(intersects, (str, os.PathLike)):
+                        import geopandas as gpd
+                        intersects = gpd.read_file(intersects)
+                    # Each glacier only gets its own intersects: with
+                    # multiprocessing, the whole table would otherwise
+                    # be pickled with every task
+                    entities = [(e, {'intersects': i}) for e, i in
+                                zip(entities,
+                                    _split_intersects(intersects, rgi_ids))]
 
             if _isdir(from_tar):
                 gdirs = execute_entity_task(

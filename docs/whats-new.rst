@@ -15,6 +15,13 @@ Enhancements
   By default, the reprojected thickness is scaled to match the glacier
   volume reported by IceBoost (``match_volume``).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- New ``uses_geometry`` class attribute of the MB models (``True`` per
+  default). Models which compute the glacier wide MB from their own geometry
+  (e.g. volume/area scaling) can set it to ``False``:
+  ``mb_calibration_from_scalar_mb`` and ``mb_calibration_to_rmsd`` then
+  dont read the flowlines and call ``get_specific_mb`` without
+  geometry.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Various performance improvements to the flowline model runs
   (:pull:`2024`, :pull:`2025`, :pull:`2026`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
@@ -532,13 +539,30 @@ Breaking changes
   error: use the bare flag to switch a behaviour on, and omit it to switch it
   off (:pull:`1986`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-- The glacier intersects are no longer stored in
-  ``cfg.PARAMS['intersects_gdf']``, but in ``cfg.INTERSECTS_GDF``. They are a
-  (potentially large, region wide) dataframe and not a parameter, and having
-  them in ``cfg.PARAMS`` meant they were silently copied and pickled along
-  wherever the parameters are, which is not what a parameter dict is for. The
-  way to set them, ``cfg.set_intersects_db``, is unchanged, and so is
-  ``cfg.PARAMS['use_intersects']`` (:pull:`1980`).
+- The glacier intersects are no longer a global setting: they are now an
+  argument of :py:func:`workflow.init_glacier_directories` (and of
+  :py:class:`GlacierDirectory`), ``intersects``, like the RGI outlines.
+  They are only needed to create new glacier directories, never afterwards.
+  They are no longer downloaded automatically: OGGM can't know whether
+  the outlines are the RGI ones, and RGI intersects on modified outlines
+  silently give wrong ice divides. Creating new directories from outlines
+  without intersects is now an error (except for RGI7 glacier complexes).
+  For the RGI, pass e.g.
+  ``intersects=utils.get_rgi_intersects_region_file('11')``.
+  ``cfg.set_intersects_db`` still works but is deprecated. They used to be
+  stored in ``cfg.PARAMS['intersects_gdf']``, which is gone.
+  ``cfg.PARAMS['use_intersects']`` is unchanged: set it to False to run
+  without intersects (:pull:`2039`, :issue:`1981`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_ based on a PR by
+  `Louis Schlegel <https://github.com/louisschlegel>`_ (:pull:`2010`)
+- Existing glacier directories are now opened as they are when
+  :py:func:`workflow.init_glacier_directories` (or
+  :py:class:`GlacierDirectory`) gets RGI outlines: the outlines are only
+  used to find the directories, exactly as if their RGI ids were given.
+  Since :pull:`983`, the outlines (and the intersects) were written again
+  each time. If you change the outlines of existing directories (or
+  parameters like ``use_rgi_area`` and ``map_proj``), use ``reset=True``
+  to create them anew (:pull:`2010`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The temperature-bias prior file of the `informed_threestep` calibration
   now always has to given explicitly. There is no
