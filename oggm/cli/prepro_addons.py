@@ -84,6 +84,18 @@ ADDON_PRODUCTS = {
 }
 
 
+def _check_products(products):
+    """The list of products to make, with 'all' expanded."""
+    products = utils.tolist(products) if products else []
+    if 'all' in products:
+        return list(ADDON_PRODUCTS)
+    unknown = [p for p in products if p not in ADDON_PRODUCTS]
+    if not products or unknown:
+        raise InvalidParamsError(f'products should be "all" or some of '
+                                 f'{list(ADDON_PRODUCTS)}, got {products}.')
+    return products
+
+
 def _import(path):
     """Import a function from its `module:function` path."""
     module, name = path.split(':')
@@ -139,8 +151,12 @@ def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
         the RGI region to process
     border : int
         the number of pixels at the maps border
-    products : list of str
-        the products to make, keys of ``ADDON_PRODUCTS``
+    products : str or list of str
+        the products to make, keys of ``ADDON_PRODUCTS``, or ``'all'``.
+        With ``'all'``, every product gets an index for the region, even
+        an empty one where it has no data (e.g. BedMachine outside
+        Greenland and Antarctica): ``apply_addon`` then skips these
+        glaciers instead of raising an error.
     output_folder : str
         path to the output folder (where to put the add-on trees)
     working_dir : str
@@ -169,11 +185,7 @@ def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
         set to False to stop at the first error (for testing)
     """
 
-    products = utils.tolist(products) if products else []
-    unknown = [p for p in products if p not in ADDON_PRODUCTS]
-    if not products or unknown:
-        raise InvalidParamsError(f'products should be some of '
-                                 f'{list(ADDON_PRODUCTS)}, got {products}.')
+    products = _check_products(products)
     if start_base_url is None and start_from_dir is None:
         raise InvalidParamsError('The add-ons are made from the L1 '
                                  'directories: set start_base_url or '
@@ -276,8 +288,8 @@ def parse_args(args):
                         help='the RGI version to use. Defaults to the OGGM '
                              'default.')
     parser.add_argument('--products', nargs='+', required=True,
-                        choices=list(ADDON_PRODUCTS),
-                        help='the add-on products to make.')
+                        choices=['all'] + list(ADDON_PRODUCTS),
+                        help='the add-on products to make, or "all".')
     parser.add_argument('--start-base-url', type=str,
                         help='the base url of the tree holding the L1 '
                              'directories.')

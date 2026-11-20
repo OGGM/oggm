@@ -162,6 +162,7 @@ skipped:
 
 The add-on data is never part of a prepro level: it is optional, and OGGM
 does not use it operationally. The add-on trees are made from the L1
-directories with the ``oggm_prepro_addons`` command. Each tree is laid out as
+directories with the ``oggm_prepro_addons`` command, one RGI region at a time
+(``--products all`` makes all of them). Each tree is laid out as
 the level trees, with an index per RGI region of the glaciers the add-on has
 data for: ``{base_url}/RGI{version}/b_{border}/index/{region}.csv``.

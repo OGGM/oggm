@@ -2327,6 +2327,34 @@ class TestPreproCLI:
             df.loc[(df.rgi_version == '62') & (df.rgi_reg == '13') &
                    (df.chunk_size == 1000)].n_chunks.iloc[0])
 
+    def test_addons_parse_args(self):
+
+        from oggm.cli import prepro_addons
+
+        kwargs = prepro_addons.parse_args(['--rgi-reg', '11',
+                                           '--map-border', '80',
+                                           '--products', 'all',
+                                           '--start-base-url', 'http://foo'])
+        assert kwargs['products'] == ['all']
+        assert kwargs['rgi_reg'] == '11'
+        assert kwargs['border'] == 80
+        assert prepro_addons._check_products(['all']) == list(
+            prepro_addons.ADDON_PRODUCTS)
+        assert prepro_addons._check_products('glathida') == ['glathida']
+
+        kwargs = prepro_addons.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '80',
+                                           '--products', 'itslive',
+                                           'iceboost'])
+        assert kwargs['products'] == ['itslive', 'iceboost']
+
+        with pytest.raises(SystemExit):
+            prepro_addons.parse_args(['--rgi-reg', '1', '--map-border', '80',
+                                      '--products', 'foo'])
+        for bad in [None, [], ['foo']]:
+            with pytest.raises(InvalidParamsError, match='products'):
+                prepro_addons._check_products(bad)
+
     @pytest.mark.slow
     def test_addons_stage(self, tmpdir, monkeypatch):
         """Add-ons made from the L1 tree, applied to L1 and L2 and binned."""
