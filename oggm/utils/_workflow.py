@@ -3318,7 +3318,9 @@ def idealized_gdir(surface_h, widths_m, map_dx, flowline_dx=1,
     entity.RGIId = 'RGI50-00.00000'
     entity.O1Region = '00'
     entity.O2Region = '0'
-    gdir = GlacierDirectory(entity, base_dir=base_dir, reset=reset)
+    # An idealized glacier has no intersects
+    gdir = GlacierDirectory(entity, base_dir=base_dir, reset=reset,
+                            intersects=gpd.GeoDataFrame())
     gdir.write_shapefile(gpd.GeoDataFrame([entity], crs='EPSG:4326'), 'outlines')
 
     # Idealized flowline
@@ -3488,6 +3490,42 @@ def utm_proj4_from_lonlat(lon, lat, utm_zone=None):
     return utm_crs_list[0].code
 
 
+def _entity_rgi_id(entity):
+    """The RGI id of an RGI entity (RGI7 or older)."""
+    try:
+        return entity.rgi_id
+    except AttributeError:
+        return entity.RGIId
+
+
+def _split_intersects(gdf, rgi_ids):
+    """The rows of the intersects table concerning each glacier of rgi_ids.
+
+    One sorted search instead of a selection per glacier, which is too slow
+    on region wide tables.
+
+    Returns
+    -------
+    a list of (possibly empty) GeoDataFrames, one per id, with the rows in
+    their original order
+    """
+    if len(gdf) == 0:
+        return [gdf] * len(rgi_ids)
+    c1, c2 = ('RGIId_1', 'RGIId_2') if 'RGIId_1' in gdf else ('rgi_g_id_1',
+                                                              'rgi_g_id_2')
+    if len(rgi_ids) == 1:
+        # No need to sort for a single glacier
+        return [gdf.loc[(gdf[c1] == rgi_ids[0]) | (gdf[c2] == rgi_ids[0])]]
+    ids = np.concatenate([gdf[c1].values, gdf[c2].values]).astype(str)
+    pos = np.tile(np.arange(len(gdf)), 2)
+    order = np.argsort(ids, kind='stable')
+    ids, pos = ids[order], pos[order]
+    rgi_ids = np.asarray(rgi_ids).astype(str)
+    lo = np.searchsorted(ids, rgi_ids, side='left')
+    hi = np.searchsorted(ids, rgi_ids, side='right')
+    return [gdf.iloc[np.unique(pos[i:j])] for i, j in zip(lo, hi)]
+
+
 class GlacierDirectory(object):
     """Organizes read and write access to the glacier's files.
 
@@ -3570,6 +3608,7 @@ class GlacierDirectory(object):
         settings_filesuffix='',
         observations_filesuffix='',
         add_parent_values_to_settings=False,
+        intersects=None,
     ):
         """Creates a new directory or opens an existing one.
 
@@ -3577,7 +3616,10 @@ class GlacierDirectory(object):
         ----------
         rgi_entity : a ``geopandas.GeoSeries`` or str
             glacier entity read from the shapefile (or a valid RGI ID if the
-            directory exists)
+            directory exists). If the directory exists already (and without
+            `reset` or `from_tar`), it is opened as it is: the entity is
+            only used to find it, and the outlines in the directory are
+            the ones that count. Use ``reset=True`` to change them.
         base_dir : str
             path to the directory where to open the directory.
             Defaults to `cfg.PATHS['working_dir'] + /per_glacier/`
@@ -3597,12 +3639,29 @@ class GlacierDirectory(object):
         add_parent_values_to_settings : bool, default=False
             if True and a settings value is read from the parent settings file
             this value is also added to the current settings file
+        intersects : str or geopandas.GeoDataFrame, optional
+            the glacier intersects (a path or a table, which may contain
+            other glaciers). Only used when a new directory is created from
+            an RGI entity, to write ``intersects.shp``: they are not needed
+            (and ignored) to open an existing directory. If None, the
+            deprecated global set with ``cfg.set_intersects_db`` is used,
+            and without it an error is raised (except for RGI7 glacier
+            complexes). Ignored if ``cfg.PARAMS['use_intersects']`` is False.
         """
 
         if base_dir is None:
             if not cfg.PATHS.get('working_dir', None):
                 raise ValueError("Need a valid PATHS['working_dir']!")
             base_dir = os.path.join(cfg.PATHS['working_dir'], 'per_glacier')
+
+        if not isinstance(rgi_entity, str) and not reset and not from_tar:
+            # An existing directory is opened as it is: its outlines (and
+            # intersects) are only written when it is created
+            _id = _entity_rgi_id(rgi_entity)
+            _shp = os.path.join(base_dir, _id[:-6], _id[:-3], _id,
+                                'outlines.shp')
+            if self._shapefile_exists(_shp):
+                rgi_entity = _id
 
         # RGI IDs are also valid entries
         if isinstance(rgi_entity, str):
@@ -3723,12 +3782,13 @@ class GlacierDirectory(object):
                 self.glacier_type = 'Glacier complex'
                 self.status = 'Glacier complex'
             self.rgi_dem_source = rgi_entity.dem_source
-            self.utm_zone = rgi_entity.utm_zone
+            # (numbers come back as str from the outlines on disk)
+            self.utm_zone = int(rgi_entity.utm_zone)
 
             # New attrs
             try:
-                self.rgi_termlon = rgi_entity.termlon
-                self.rgi_termlat = rgi_entity.termlat
+                self.rgi_termlon = float(rgi_entity.termlon)
+                self.rgi_termlat = float(rgi_entity.termlat)
             except AttributeError:
                 pass
         else:
@@ -3846,7 +3906,7 @@ class GlacierDirectory(object):
 
         if write_shp:
             # Write shapefile
-            self._reproject_and_write_shapefile(rgi_entity)
+            self._reproject_and_write_shapefile(rgi_entity, intersects)
 
         # Optimization
         self._mbdf = None
@@ -3890,7 +3950,7 @@ class GlacierDirectory(object):
                         str(self.grid.dy) + ')']
         return '\n'.join(summary) + '\n'
 
-    def _reproject_and_write_shapefile(self, entity):
+    def _reproject_and_write_shapefile(self, entity, intersects=None):
         # Make a local glacier map
         if cfg.PARAMS['map_proj'] == 'utm':
             # RGI7 ships a UTM zone; otherwise we look it up from the center
@@ -3953,35 +4013,44 @@ class GlacierDirectory(object):
         towrite = gpd.GeoDataFrame(entity).T.set_geometry('geometry')
         towrite.set_crs(crs=proj4_str, inplace=True, allow_override=True)
 
-        # Write shapefile
+        # The outlines are written last: they are what makes this an
+        # existing directory, which is opened as it is the next time. If
+        # something goes wrong before, the directory still has to be created
+        self._write_intersects(intersects, proj_out)
         self.write_shapefile(towrite, 'outlines')
 
-        # Also transform the intersects if necessary
-        gdf = cfg.INTERSECTS_GDF
-        if len(gdf) > 0:
-            try:
-                gdf = gdf.loc[((gdf.RGIId_1 == self.rgi_id) |
-                               (gdf.RGIId_2 == self.rgi_id))]
-            except AttributeError:
-                gdf = gdf.loc[((gdf.rgi_g_id_1 == self.rgi_id) |
-                               (gdf.rgi_g_id_2 == self.rgi_id))]
+    def _write_intersects(self, intersects, proj_out):
+        """Writes the intersects of this glacier in the local projection."""
+        if not cfg.PARAMS['use_intersects']:
+            return
+        if intersects is None:
+            # Not given: fall back to the deprecated global
+            # (cfg.set_intersects_db)
+            intersects = cfg.INTERSECTS_GDF
+        if intersects is None:
+            if self.rgi_version == '70C':
+                # RGI7 glacier complexes have no intersects
+                return
+            # A table without entries for this glacier is fine, but no
+            # table at all is probably a mistake
+            raise InvalidParamsError(
+                f'{self.rgi_id}: no intersects given to create this glacier '
+                'directory. Pass them with the `intersects` argument of '
+                '`workflow.init_glacier_directories` or `GlacierDirectory` '
+                '(a table, possibly without entries for this glacier, or a '
+                'file path, e.g. from `utils.get_rgi_intersects_region_file`'
+                '). To run without intersects, set '
+                "cfg.PARAMS['use_intersects'] = False.")
+        if isinstance(intersects, (str, os.PathLike)):
+            intersects = gpd.read_file(intersects)
 
-            if len(gdf) > 0:
-                gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
-                if hasattr(gdf.crs, 'srs'):
-                    # salem uses pyproj
-                    gdf.set_crs(gdf.crs.srs, allow_override=True, inplace=True)
-                self.write_shapefile(gdf, 'intersects')
-        else:
-            # Sanity check
-            if cfg.PARAMS['use_intersects'] and not self.rgi_version == '70C':
-                raise InvalidParamsError(
-                    'You seem to have forgotten to set the '
-                    'intersects file for this run. OGGM '
-                    'works better with such a file. If you '
-                    'know what your are doing, set '
-                    "cfg.PARAMS['use_intersects'] = False to "
-                    "suppress this error.")
+        gdf = _split_intersects(intersects, [self.rgi_id])[0]
+        if len(gdf) > 0:
+            gdf = salem.transform_geopandas(gdf, to_crs=proj_out)
+            if hasattr(gdf.crs, 'srs'):
+                # salem uses pyproj
+                gdf.set_crs(gdf.crs.srs, allow_override=True, inplace=True)
+            self.write_shapefile(gdf, 'intersects')
 
     def grid_from_params(self):
         """If the glacier_grid.json file is lost, reconstruct it."""
@@ -4554,6 +4623,15 @@ class GlacierDirectory(object):
         with open(fp, 'r') as f:
             out = f.read()
         return out
+
+    @staticmethod
+    def _shapefile_exists(fp):
+        """If a shapefile is there, in the format we are told to use."""
+        if cfg.PARAMS['use_tar_shapefiles']:
+            fp = fp.replace('.shp', '.tar')
+            if cfg.PARAMS['use_compression']:
+                fp += '.gz'
+        return os.path.exists(fp)
 
     @classmethod
     def _read_shapefile_from_path(cls, fp):
@@ -5586,7 +5664,9 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
     dx_spacing = cfg.PARAMS['fixed_dx']
     cfg.PARAMS['grid_dx_method'] = 'fixed'
     cfg.PARAMS['fixed_dx'] = mfls[-1].map_dx
-    merged = GlacierDirectory(maindf.loc[idx].iloc[0])
+    # (the merged glacier has no intersects)
+    merged = GlacierDirectory(maindf.loc[idx].iloc[0],
+                              intersects=gpd.GeoDataFrame())
 
     # run define_glacier_region to get a fitting DEM and proper grid
     define_glacier_region(merged, entity=maindf.loc[idx].iloc[0],

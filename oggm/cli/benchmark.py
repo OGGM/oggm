@@ -104,12 +104,11 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
         # We use intersects
-        rgif = utils.get_rgi_intersects_region_file(rgi_reg,
-                                                    version=rgi_version)
-        cfg.set_intersects_db(rgif)
+        intersects = utils.get_rgi_intersects_region_file(
+            rgi_reg, version=rgi_version)
     else:
         rgidf = test_rgidf
-        cfg.set_intersects_db(test_intersects_file)
+        intersects = test_intersects_file
 
     if is_test:
         # Just for fun
@@ -129,7 +128,8 @@ def run_benchmark(rgi_version=None, rgi_reg=None, border=None,
 
     # Initialize working directories
     start = time.time()
-    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+    gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True,
+                                              intersects=intersects)
     _add_time_to_df(odf, 'init_glacier_directories', time.time()-start)
 
     # Tasks

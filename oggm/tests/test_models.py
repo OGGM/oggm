@@ -341,7 +341,6 @@ class TestInitPresentDayFlowline:
 @pytest.fixture(scope='class')
 def other_glacier_cfg():
     cfg.initialize()
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['prcp_fac'] = 2.5
@@ -364,7 +363,8 @@ class TestInitFlowlineOtherGlacier:
 
         # This is another glacier with divides
         entity = rgidf.loc[rgidf.RGIId == 'RGI50-11.00719_d01'].iloc[0]
-        gdir = GlacierDirectory(entity, base_dir=class_case_dir)
+        gdir = GlacierDirectory(entity, base_dir=class_case_dir,
+                                intersects=get_demo_file('rgi_intersect_oetztal.shp'))
         gis.define_glacier_region(gdir)
         gis.glacier_masks(gdir)
         centerlines.compute_centerlines(gdir)
@@ -4456,14 +4456,14 @@ def inversion_gdir(class_case_dir):
 
     # Init
     cfg.initialize()
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
 
     hef_file = get_demo_file('Hintereisferner_RGI5.shp')
     entity = gpd.read_file(hef_file).iloc[0]
 
-    gdir = GlacierDirectory(entity, base_dir=class_case_dir, reset=True)
+    gdir = GlacierDirectory(entity, base_dir=class_case_dir, reset=True,
+                            intersects=get_demo_file('rgi_intersect_oetztal.shp'))
     define_glacier_region(gdir)
     return gdir
 
@@ -8447,7 +8447,6 @@ class TestMassRedis:
         import geopandas as gpd
 
         cfg.initialize()
-        cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
         cfg.PATHS['working_dir'] = class_case_dir
         cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
         cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
@@ -8460,7 +8459,8 @@ class TestMassRedis:
         hef_file = get_demo_file('Hintereisferner_RGI5.shp')
         entity = gpd.read_file(hef_file).iloc[0]
 
-        gdir = oggm.GlacierDirectory(entity, base_dir=class_case_dir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=class_case_dir,
+                                     intersects=get_demo_file('rgi_intersect_oetztal.shp'))
         tasks.define_glacier_region(gdir)
         tasks.simple_glacier_masks(gdir)
         tasks.elevation_band_flowline(gdir)
@@ -8579,7 +8579,6 @@ def merged_hef_cfg(class_case_dir):
 
     # Init
     cfg.initialize()
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('srtm_oetztal.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['baseline_climate'] = 'CUSTOM'
@@ -8613,7 +8612,8 @@ class TestMergedHEF:
 
         cfg.PARAMS['use_multiprocessing'] = True
 
-        gdirs = workflow.init_glacier_directories(glcdf)
+        gdirs = workflow.init_glacier_directories(
+            glcdf, intersects=get_demo_file('rgi_intersect_oetztal.shp'))
         workflow.gis_prepro_tasks(gdirs)
         # # Process climate data
         # execute_entity_task(tasks.process_climate_data, gdirs)

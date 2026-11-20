@@ -896,21 +896,20 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
     with open(opath, 'w') as vfile:
         vfile.write(utils.show_versions(logger=log))
 
+    # The intersects are only needed to build the glacier directories from
+    # the RGI: from L1 on, each directory has its own intersects.shp
+    intersects = None
     if rgi_file is None:
 
         # Get the RGI file
         rgidf = gpd.read_file(utils.get_rgi_region_file(rgi_reg,
                                                         version=rgi_version))
-        # We use intersects. They are only needed to build the glacier
-        # directories from the RGI: from L1 on, each directory has its
-        # own intersects.shp and the region wide file is never read again
+        # We use the region wide intersects file
         if rgi_version != '70C' and start_level == 0:
-            if intersects_file is None:
-                rgif = utils.get_rgi_intersects_region_file(rgi_reg,
-                                                            version=rgi_version)
-            else:
-                rgif = intersects_file
-            cfg.set_intersects_db(rgif)
+            intersects = intersects_file
+            if intersects is None:
+                intersects = utils.get_rgi_intersects_region_file(
+                    rgi_reg, version=rgi_version)
 
         rgidf = apply_rgi_fixes(rgidf, rgi_version, rgi_reg)
     else:
@@ -919,7 +918,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         else:
             rgidf = rgi_file
         if start_level == 0:
-            cfg.set_intersects_db(intersects_file)
+            intersects = intersects_file
 
     if is_test:
         if test_ids is not None:
@@ -992,7 +991,8 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
 
     # The glacier directories, from the RGI outlines
     if start_level == 0:
-        gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True)
+        gdirs = workflow.init_glacier_directories(rgidf, reset=True, force=True,
+                                                  intersects=intersects)
     elif start_from_dir is not None:
         # The tar files are already on disk (this is how the stages of a
         # chunked run are chained together)

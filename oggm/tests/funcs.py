@@ -460,7 +460,6 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     # Init
     cfg.initialize(logging_level=logging_level)
     cfg.PARAMS['round_smoothed_dem'] = round_smoothed_dem
-    cfg.set_intersects_db(get_demo_file('rgi_intersect_oetztal.shp'))
     cfg.PATHS['dem_file'] = get_demo_file('hef_srtm.tif')
     cfg.PATHS['climate_file'] = get_demo_file('histalp_merged_hef.nc')
     cfg.PARAMS['baseline_climate'] = ''
@@ -478,11 +477,13 @@ def init_hef(reset=False, border=40, logging_level='INFO', rgi_id=None,
     if rgi_id is not None:
         entity['RGIId'] = rgi_id
 
-    gdir = oggm.GlacierDirectory(entity, reset=reset)
+    inter = get_demo_file('rgi_intersect_oetztal.shp')
+    gdir = oggm.GlacierDirectory(entity, reset=reset, intersects=inter)
 
     if 'inversion_glen_a' not in gdir.get_diagnostics():
         reset = True
-        gdir = oggm.GlacierDirectory(entity, reset=reset)
+        gdir = oggm.GlacierDirectory(entity, reset=reset,
+                                     intersects=inter)
 
     if not reset:
         return gdir
