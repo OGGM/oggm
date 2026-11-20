@@ -70,6 +70,9 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         these models must implement ``get_specific_mb`` accordingly.
     """
 
+    # Class attribute: the calibration tasks read it before instantiation
+    uses_geometry = True
+
     def __init__(self, gdir=None, use_leap_years=False):
         """ Initialize."""
         self.valid_bounds = None
@@ -80,7 +83,6 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
             self.ice_density = gdir.settings['ice_density']
             self.gdir = gdir
         self.use_leap_years = use_leap_years
-        self.uses_geometry = True
 
     def __repr__(self):
         """String Representation of the mass balance model"""
