@@ -2375,7 +2375,8 @@ class TestClimate:
         entity = gpd.read_file(hef_file).iloc[0]
 
         # No flowlines in this gdir: the calibration must not need them
-        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir)
+        gdir = oggm.GlacierDirectory(entity, base_dir=self.testdir,
+                                     intersects=_oetztal_intersects())
         gis.define_glacier_region(gdir)
         climate.process_custom_climate_data(gdir)
 
