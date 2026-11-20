@@ -2487,10 +2487,12 @@ def run_dynamic_melt_f_calibration(
                 # this is only for backwards compatibility
                 gdir.add_to_diagnostics('used_spinup_option', 'fallback_function')
 
+                # the fallback goes back to the original melt_f, not to the
+                # best guess which just failed
                 model = fallback_function(
                     gdir=gdir,
                     settings_filesuffix=settings_filesuffix,
-                    melt_f=melt_f, fls_init=fls_init,
+                    melt_f=melt_f_initial, fls_init=fls_init,
                     mb_model_class=mb_model_class,
                     save_mb_diagnostics_filesuffix=save_mb_diagnostics_filesuffix,
                     ys=ys, ye=ye,

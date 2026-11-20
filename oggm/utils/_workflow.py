@@ -1771,6 +1771,17 @@ def glacier_statistics(gdir, settings_filesuffix='',
         except BaseException:
             pass
 
+        try:
+            # Glen A used by the inversion, and its ratio to the default A
+            # (easier to read than A itself)
+            if gdir.has_file('inversion_output'):
+                glen_a = gdir.settings['inversion_glen_a']
+                d['inversion_glen_a'] = glen_a
+                d['inversion_glen_a_factor'] = (glen_a /
+                                                cfg.PARAMS['inversion_glen_a'])
+        except BaseException:
+            pass
+
         if inversion_only:
             return d
 
