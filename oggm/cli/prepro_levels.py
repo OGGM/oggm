@@ -1053,8 +1053,7 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
             log.workflow('Running prepro on several sources')
             for s in sources:
                 log.workflow('Running prepro on sources: {}'.format(s))
-                gdirs = workflow.init_glacier_directories(
-                    rgidf, intersects=intersects)
+                gdirs = workflow.init_glacier_directories(rgidf)
                 workflow.execute_entity_task(tasks.define_glacier_region, gdirs,
                                              source=s)
                 workflow.execute_entity_task(_rename_dem_folder, gdirs, source=s)

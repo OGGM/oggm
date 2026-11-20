@@ -163,7 +163,7 @@ LRUHANDLERS = ResettingOrderedDict()
 # now an argument of init_glacier_directories). This is a dataframe and
 # not a parameter, so it is kept out of PARAMS: it can be a large, region wide
 # table, and PARAMS is copied around and pickled as if it held scalars only
-INTERSECTS_GDF = pd.DataFrame()
+INTERSECTS_GDF = None
 
 # Constants
 SEC_IN_YEAR = 365*24*3600
@@ -775,7 +775,7 @@ def set_intersects_db(path_or_gdf=None):
     .. deprecated::
         The intersects are only needed to create the glacier directories:
         pass them to :func:`oggm.workflow.init_glacier_directories` with its
-        ``intersects`` argument instead (it downloads them if not given).
+        ``intersects`` argument instead.
 
     See :func:`oggm.utils.get_rgi_intersects_region_file` for how to obtain
     such data.
@@ -783,7 +783,7 @@ def set_intersects_db(path_or_gdf=None):
     Parameters
     ----------
     path_or_gdf : str of geopandas.GeoDataframe
-        the intersects file to use. None (the default) empties the database.
+        the intersects file to use. None (the default) unsets it.
     """
 
     global INTERSECTS_GDF, CONFIG_MODIFIED
@@ -800,7 +800,7 @@ def set_intersects_db(path_or_gdf=None):
         else:
             INTERSECTS_GDF = path_or_gdf
     else:
-        INTERSECTS_GDF = pd.DataFrame()
+        INTERSECTS_GDF = None
 
     # the workers need to be given the new database: this used to happen for
     # free when the intersects were stored in PARAMS

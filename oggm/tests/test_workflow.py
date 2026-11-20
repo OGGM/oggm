@@ -661,19 +661,65 @@ def test_intersects_argument(tmp_path):
                                          intersects=i)
             assert len(gdir.intersects_ids) == 2
     # nothing was set globally
-    assert len(cfg.INTERSECTS_GDF) == 0
+    assert cfg.INTERSECTS_GDF is None
 
     # Intersects not concerning this glacier are a valid choice
     gdir = workflow.init_glacier_directories(hef, reset=True, force=True,
                                              intersects=inter.iloc[:0])[0]
     assert not gdir.has_file('intersects')
 
-    # Without intersects at all, GlacierDirectory only warns
-    gdir = oggm.GlacierDirectory(hef.iloc[0], reset=True)
-    assert not gdir.has_file('intersects')
+    # Without intersects at all, GlacierDirectory complains
+    with pytest.raises(InvalidParamsError, match='no intersects given'):
+        oggm.GlacierDirectory(hef.iloc[0], reset=True)
     cfg.PARAMS['use_intersects'] = False
     gdir = oggm.GlacierDirectory(hef.iloc[0], reset=True, intersects=inter)
     assert not gdir.has_file('intersects')
+
+
+def test_existing_gdir_opened_as_is(tmp_path):
+    # Outlines and intersects are only written at creation (#1981)
+    cfg.initialize()
+    cfg.PATHS['working_dir'] = str(tmp_path)
+    hef = gpd.read_file(get_demo_file('rgi7g_hef.shp'))
+    inter = gpd.read_file(get_demo_file('rgi7g_hef_intersects.shp'))
+
+    # A failed creation is not an existing directory the next time
+    for _ in range(2):
+        with pytest.raises(InvalidParamsError, match='no intersects given'):
+            workflow.init_glacier_directories(hef)
+
+    gdir = workflow.init_glacier_directories(hef, intersects=inter)[0]
+    assert len(gdir.intersects_ids) == 2
+    assert gdir.name != 'Other'
+    ref = gdir.read_shapefile('outlines')
+    fp = gdir.get_filepath('outlines').replace('.shp', '.tar.gz')
+    mtime = os.path.getmtime(fp)
+
+    # Other outlines for the same glacier
+    other = hef.copy()
+    other['glac_name'] = 'Other'
+    other['geometry'] = other.geometry.scale(0.5, 0.5)
+
+    # Without reset, they only tell which directory to open: no intersects
+    # needed, nothing written, and the attributes are the ones on disk
+    for g in [workflow.init_glacier_directories(other)[0],
+              workflow.init_glacier_directories(other,
+                                                intersects=inter.iloc[:0])[0],
+              oggm.GlacierDirectory(other.iloc[0]),
+              oggm.GlacierDirectory(gdir.rgi_id)]:
+        assert g.name == gdir.name
+        assert g.cenlon == gdir.cenlon
+        assert len(g.intersects_ids) == 2
+        pd.testing.assert_frame_equal(g.read_shapefile('outlines'), ref)
+    assert os.path.getmtime(fp) == mtime
+
+    # With reset the directory is created again
+    g = workflow.init_glacier_directories(other, reset=True, force=True,
+                                          intersects=inter.iloc[:0])[0]
+    assert g.name == 'Other'
+    assert not g.has_file('intersects')
+    area = g.read_shapefile('outlines').geometry.iloc[0].area
+    assert_allclose(area, ref.geometry.iloc[0].area / 4, rtol=1e-3)
 
 
 def test_intersects_global_deprecated(tmp_path):
@@ -1065,6 +1111,8 @@ class TestGdirSettings:
         entity.RGIId = 'RGI60-01.10299'
         cfg.PARAMS['use_kcalving_for_inversion'] = True
         cfg.PARAMS['use_kcalving_for_run'] = True
+        # Coxe has no intersects
+        cfg.PARAMS['use_intersects'] = False
 
         gdir = oggm.GlacierDirectory(entity)
         gis.define_glacier_region(gdir)

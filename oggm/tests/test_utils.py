@@ -1204,7 +1204,7 @@ class TestInitialize(unittest.TestCase):
         import shapely.geometry as shpg
 
         assert 'intersects_gdf' not in cfg.PARAMS
-        assert len(cfg.INTERSECTS_GDF) == 0
+        assert cfg.INTERSECTS_GDF is None
 
         n = 500
         line = shpg.LineString([(0, 0), (1, 1)])
@@ -1226,17 +1226,17 @@ class TestInitialize(unittest.TestCase):
 
         # ... but the intersects still travel to the workers
         packed = cfg.pack_config()
-        cfg.INTERSECTS_GDF = pd.DataFrame()
+        cfg.INTERSECTS_GDF = None
         cfg.unpack_config(packed)
         assert len(cfg.INTERSECTS_GDF) == n
 
         # both ways of asking for no intersects at all
         cfg.set_intersects_db()
-        assert len(cfg.INTERSECTS_GDF) == 0
+        assert cfg.INTERSECTS_GDF is None
         cfg.PARAMS['use_intersects'] = False
         with pytest.warns(DeprecationWarning, match='intersects'):
             cfg.set_intersects_db(gdf)
-        assert len(cfg.INTERSECTS_GDF) == 0
+        assert cfg.INTERSECTS_GDF is None
 
 
 class TestWorkflowTools(unittest.TestCase):
