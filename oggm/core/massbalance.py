@@ -61,7 +61,17 @@ class MassBalanceModel(object, metaclass=SuperclassMeta):
         Density of ice
     use_leap_years : bool, default: False
         If the calendar should use leap years
+    uses_geometry : bool, default: True
+        Class attribute. Set it to False in models which compute the glacier
+        wide mass balance from their own geometry and ignore the heights,
+        widths or flowlines given to them. The calibration tasks then do not
+        read any glacier geometry and call
+        ``get_specific_mb(year=..., time_resolution=...)`` without it, so
+        these models must implement ``get_specific_mb`` accordingly.
     """
+
+    # Class attribute: the calibration tasks read it before instantiation
+    uses_geometry = True
 
     def __init__(self, gdir=None, use_leap_years=False):
         """ Initialize."""
@@ -4428,6 +4438,26 @@ def _hydro_year_monthly_floatyears(years, start_month):
     return date_to_floatyear(cy, cm).reshape(len(years), 12)
 
 
+def _calibration_geometry(gdir, mb_model_class, use_2d_mb):
+    """The geometry kwargs to give to get_specific_mb during calibration."""
+    while isinstance(mb_model_class, partial):
+        mb_model_class = mb_model_class.func
+    if not mb_model_class.uses_geometry:
+        if use_2d_mb:
+            raise InvalidParamsError(f'{mb_model_class.__name__} does not use '
+                                     'the glacier geometry: use_2d_mb=True '
+                                     'makes no sense.')
+        return {}
+    if use_2d_mb:
+        # 2D data, the flowlines are not needed
+        fp = gdir.get_filepath('gridded_data')
+        with xr.open_dataset(fp) as ds:
+            # 'topo' instead of 'topo_smoothed'?
+            heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
+        return dict(heights=heights, widths=np.ones(len(heights)))
+    return dict(fls=gdir.read_store('inversion_flowlines'))
+
+
 @entity_task(log, writes=['mb_calib'])
 def mb_calibration_to_rmsd(gdir, *,
                            settings_filesuffix='',
@@ -4561,17 +4591,7 @@ def mb_calibration_to_rmsd(gdir, *,
     if temp_bias_max is None:
         temp_bias_max = gdir.settings['temp_bias_max']
 
-    if not use_2d_mb:
-        fls = gdir.read_store('inversion_flowlines')
-    else:
-        # if the 2D data is used, the flowline is not needed.
-        fls = None
-        # get the 2D data
-        fp = gdir.get_filepath('gridded_data')
-        with xr.open_dataset(fp) as ds:
-            # 'topo' instead of 'topo_smoothed'?
-            heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
-            widths = np.ones(len(heights))
+    geom = _calibration_geometry(gdir, mb_model_class, use_2d_mb)
 
     # Climate period: hydrological years, as in the WGMS data
     ref_mb_years = ref_df.index.values
@@ -4652,14 +4672,8 @@ def mb_calibration_to_rmsd(gdir, *,
         for model_attr, val in zip(model_attrs, x):
             setattr(mb_mod, model_attr, val)
 
-        if use_2d_mb:
-            sim_out = mb_mod.get_specific_mb(heights=heights, widths=widths,
-                                             year=monthly_years.ravel(),
-                                             time_resolution='monthly')
-        else:
-            sim_out = mb_mod.get_specific_mb(fls=fls,
-                                             year=monthly_years.ravel(),
-                                             time_resolution='monthly')
+        sim_out = mb_mod.get_specific_mb(**geom, year=monthly_years.ravel(),
+                                         time_resolution='monthly')
         # Monthly to hydrological years
         sim_out = np.reshape(sim_out, monthly_years.shape).sum(axis=1)
 
@@ -5233,17 +5247,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
         raise InvalidParamsError('Cannot set `ref_mb_years` and `ref_mb_period` '
                                  'at the same time.')
 
-    if not use_2d_mb:
-        fls = gdir.read_store('inversion_flowlines')
-    else:
-        # if the 2D data is used, the flowline is not needed.
-        fls = None
-        # get the 2D data
-        fp = gdir.get_filepath('gridded_data')
-        with xr.open_dataset(fp) as ds:
-            # 'topo' instead of 'topo_smoothed'?
-            heights = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
-            widths = np.ones(len(heights))
+    geom = _calibration_geometry(gdir, mb_model_class, use_2d_mb)
 
     # handle which ref mb to use (provided or in observations file)
     ref_mb_provided = {}
@@ -5353,6 +5357,7 @@ def mb_calibration_from_scalar_mb(gdir, *,
             temp_bias = 0
 
     # Create the MB model we will calibrate
+    fls = geom.get('fls')
     if fls is not None and len(fls) > 1:
         # one mb model instance per flowline, needed for mb_model_class
         # models that need to know the flowline length at initialisation
@@ -5399,13 +5404,8 @@ def mb_calibration_from_scalar_mb(gdir, *,
     def to_minimize(x, model_attr):
         # Set the new attr value
         setattr(mb_mod, model_attr, x)
-        if use_2d_mb:
-            out = mb_mod.get_specific_mb(
-                heights=heights, widths=widths, year=years,
-                time_resolution=time_resolution)
-        else:
-            out = mb_mod.get_specific_mb(
-                fls=fls, year=years, time_resolution=time_resolution)
+        out = mb_mod.get_specific_mb(**geom, year=years,
+                                     time_resolution=time_resolution)
 
         if ref_mb_unit == 'kg m-2 yr-1':
             out = out.mean()

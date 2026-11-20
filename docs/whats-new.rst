@@ -15,6 +15,13 @@ Enhancements
   By default, the reprojected thickness is scaled to match the glacier
   volume reported by IceBoost (``match_volume``).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- New ``uses_geometry`` class attribute of the MB models (``True`` per
+  default). Models which compute the glacier wide MB from their own geometry
+  (e.g. volume/area scaling) can set it to ``False``:
+  ``mb_calibration_from_scalar_mb`` and ``mb_calibration_to_rmsd`` then
+  dont read the flowlines and call ``get_specific_mb`` without
+  geometry.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Various performance improvements to the flowline model runs
   (:pull:`2024`, :pull:`2025`, :pull:`2026`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
