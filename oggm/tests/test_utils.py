@@ -1882,7 +1882,7 @@ class TestPreproCLI:
                                                                90, 100]
         assert kwargs['dynamic_spinup_allow_shorter']
         assert kwargs['mb_calibration_strategy'] == 'informed_threestep'
-        assert not kwargs['add_consensus_thickness']
+        assert not kwargs['compute_hypsometry']
         assert not kwargs['store_hydro_output']
         assert not kwargs['store_monthly_hydro']
         assert kwargs['ref_area_yr'] is None
@@ -1996,10 +1996,7 @@ class TestPreproCLI:
                                            '--select-source-from-dir', 'BY_RES',
                                            '--dem-source', 'ALL',
                                            '--skip-inversion',
-                                           '--add-consensus-thickness',
-                                           '--add-millan-thickness',
-                                           '--add-millan-velocity',
-                                           '--add-hugonnet-dhdt',
+                                           '--compute-hypsometry',
                                            '--override-params', '{"map_proj": "tmerc"}',
                                            ])
 
@@ -2016,11 +2013,21 @@ class TestPreproCLI:
         assert not kwargs['centerlines']
         assert kwargs['select_source_from_dir'] == 'BY_RES'
         assert kwargs['keep_dem_folders'] is False
-        assert kwargs['add_consensus_thickness']
-        assert kwargs['add_millan_thickness']
-        assert kwargs['add_millan_velocity']
-        assert kwargs['add_hugonnet_dhdt']
+        assert kwargs['compute_hypsometry']
         assert kwargs['skip_inversion']
+
+        # The shop products are add-ons now
+        for flag in ['--add-consensus-thickness', '--add-itslive-velocity',
+                     '--add-millan-thickness', '--add-millan-velocity',
+                     '--add-hugonnet-dhdt', '--add-bedmachine',
+                     '--add-glathida']:
+            with pytest.raises(SystemExit):
+                prepro_levels.parse_args(['--rgi-reg', '1',
+                                          '--map-border', '160', flag])
+        for kw in ['add_itslive_velocity', 'add_glathida']:
+            with pytest.raises(InvalidParamsError, match='add-ons'):
+                prepro_levels.run_prepro_levels(rgi_reg='11', border=80,
+                                                **{kw: True})
         assert kwargs['override_params']['map_proj'] == 'tmerc'
 
         kwargs = prepro_levels.parse_args(['--rgi-reg', '1',
@@ -2126,10 +2133,7 @@ class TestPreproCLI:
 
         # passed values should be treated as errors
         for flag in ['--elev-bands', '--centerlines', '--skip-inversion',
-                     '--keep-dem-folders', '--add-consensus-thickness',
-                     '--add-itslive-velocity', '--add-millan-thickness',
-                     '--add-millan-velocity', '--add-hugonnet-dhdt',
-                     '--add-bedmachine', '--add-glathida',
+                     '--keep-dem-folders',
                      '--add-distributed-thickness',
                      '--add-export-thickness-geotiff', '--compute-hypsometry',
                      '--test', '--disable-mp', '--store-fl-diagnostics',
@@ -2329,6 +2333,192 @@ class TestPreproCLI:
         assert prepro_chunks.run_prepro_chunks('13', chunk_size=1000) == int(
             df.loc[(df.rgi_version == '62') & (df.rgi_reg == '13') &
                    (df.chunk_size == 1000)].n_chunks.iloc[0])
+
+    def test_addons_parse_args(self):
+
+        from oggm.cli import prepro_addons
+
+        kwargs = prepro_addons.parse_args(['--rgi-reg', '11',
+                                           '--map-border', '80',
+                                           '--products', 'all',
+                                           '--start-base-url', 'http://foo'])
+        assert kwargs['products'] == ['all']
+        assert kwargs['rgi_reg'] == '11'
+        assert kwargs['border'] == 80
+        assert prepro_addons._check_products(['all']) == list(
+            prepro_addons.ADDON_PRODUCTS)
+        assert prepro_addons._check_products('glathida') == ['glathida']
+
+        kwargs = prepro_addons.parse_args(['--rgi-reg', '1',
+                                           '--map-border', '80',
+                                           '--products', 'itslive',
+                                           'iceboost'])
+        assert kwargs['products'] == ['itslive', 'iceboost']
+
+        with pytest.raises(SystemExit):
+            prepro_addons.parse_args(['--rgi-reg', '1', '--map-border', '80',
+                                      '--products', 'foo'])
+        for bad in [None, [], ['foo']]:
+            with pytest.raises(InvalidParamsError, match='products'):
+                prepro_addons._check_products(bad)
+
+    @pytest.mark.slow
+    def test_addons_stage(self, tmpdir, monkeypatch):
+        """Add-ons made from the L1 tree, applied to L1 and L2 and binned."""
+
+        from oggm.cli import prepro_addons
+        from oggm.cli.prepro_levels import run_prepro_levels
+
+        @utils.entity_task(logging.getLogger(__name__),
+                           writes=['gridded_data'])
+        def fake_to_gdir(gdir):
+            """A shop task writing a constant `fake_v`."""
+            with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
+                v = nc.createVariable('fake_v', 'f4', ('y', 'x'), zlib=True,
+                                      fill_value=np.nan)
+                v[:] = 2.
+
+        pts_rids = []  # the glaciers with point data, set below
+
+        @utils.entity_task(logging.getLogger(__name__))
+        def points_to_gdir(gdir):
+            """A shop task writing a csv file, for a few glaciers only."""
+            if gdir.rgi_id in pts_rids:
+                pd.DataFrame({'thick': [10., 20.]}).to_csv(
+                    os.path.join(gdir.dir, 'points.csv'))
+
+        def compile_fake_statistics(gdirs, path=None):
+            pd.DataFrame({'n': [len(gdirs)]}).to_csv(path)
+
+        funcs = {'fake:task': fake_to_gdir, 'fake:stats': compile_fake_statistics,
+                 'points:task': points_to_gdir}
+        monkeypatch.setitem(prepro_addons.ADDON_PRODUCTS, 'fake', dict(
+            task='fake:task', variables=['fake_v', 'fake_err'],
+            statistics='fake:stats', source='test', preserve_totals=False))
+        monkeypatch.setitem(prepro_addons.ADDON_PRODUCTS, 'points', dict(
+            task='points:task', files=['points.csv'],
+            statistics='fake:stats', source='test'))
+        import_product = prepro_addons._import
+        monkeypatch.setattr(prepro_addons, '_import',
+                            lambda p: funcs.get(p) or import_product(p))
+
+        inter, rgidf = _read_shp()
+        odir = str(tmpdir.mkdir('my_levs'))
+        adir = str(tmpdir.mkdir('my_addons'))
+        topof = utils.get_demo_file('srtm_oetztal.tif')
+        run_prepro_levels(rgi_version='61', rgi_reg='11', border=20,
+                          output_folder=odir,
+                          working_dir=str(tmpdir.mkdir('wd')),
+                          is_test=True, rgi_file=rgidf, disable_mp=True,
+                          intersects_file=inter, test_topofile=topof,
+                          elev_bands=True, max_level=2,
+                          temp_bias_file_path=TEMP_BIAS_FILE_W5E5_RGI6,
+                          continue_on_error=False)
+        df = pd.read_csv(os.path.join(odir, 'RGI61', 'b_020', 'L2', 'summary',
+                                      'glacier_statistics_11.csv'),
+                         index_col=0)
+        rids = sorted(df.index)
+        rid = rids[0]
+        entity = rgidf.loc[rgidf.RGIId == rid].iloc[0]
+        pts_rids.append(rid)
+
+        prepro_addons.run_prepro_addons(
+            rgi_version='61', rgi_reg='11', border=20,
+            products=['fake', 'points', 'iceboost'],
+            output_folder=adir, working_dir=str(tmpdir.mkdir('wd_addons')),
+            start_from_dir=odir, version='v0', is_test=True, rgi_file=rgidf,
+            disable_mp=True, continue_on_error=False)
+
+        tree = os.path.join(adir, 'fake', 'RGI61', 'b_020')
+        df = pd.read_csv(os.path.join(tree, 'summary',
+                                      'fake_statistics_11.csv'))
+        assert df['n'].iloc[0] == 4
+        assert glob.glob(os.path.join(tree, 'RGI60-11', 'RGI60-11.*.tar'))
+        index = pd.read_csv(os.path.join(tree, 'index', 'RGI60-11.csv'),
+                            keep_default_na=False)
+        assert sorted(index.rgi_id) == rids
+        assert (index.variables == 'fake_v').all()
+        assert (index.files == '').all()
+
+        # The point data: one glacier only
+        ptree = os.path.join(adir, 'points', 'RGI61', 'b_020')
+        index = pd.read_csv(os.path.join(ptree, 'index', 'RGI60-11.csv'),
+                            keep_default_na=False)
+        assert list(index.rgi_id) == [rid]
+        assert index.files.iloc[0] == 'points.csv'
+        assert index.variables.iloc[0] == ''
+
+        def lev_tars(*levels, rgi_id=rid):
+            return [os.path.join(odir, 'RGI61', 'b_020', f'L{lev}',
+                                 rgi_id[:8], rgi_id[:11], rgi_id + '.tar.gz')
+                    for lev in levels]
+
+        # The elevation band L2 ships no gridded data
+        gdir = oggm.GlacierDirectory(entity, from_tar=lev_tars(1, 2))
+        with open(os.path.join(gdir.dir, 'L2.manifest.json')) as f:
+            files = json.load(f)['files']
+        assert 'variables' not in files
+        assert 'gridded_data.nc' not in files['updated']
+
+        # Add-on on L2, binned
+        workflow.apply_addons([gdir], addons='fake',
+                              base_urls={'fake': os.path.join(adir, 'fake')})
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            assert (ds.fake_v == 2).all()
+            assert 'fake_err' not in ds  # not written by the task
+        df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'),
+                         index_col=0)
+        assert 'fake_v' in df
+        with open(os.path.join(gdir.dir, 'fake.manifest.json')) as f:
+            m = json.load(f)
+        assert m['addon'] == {'variables': ['fake_v'], 'source': 'test',
+                              'version': 'v0',
+                              'preserve_totals': {'fake_v': False}}
+        # a velocity-like product: binned values are not rescaled
+        fp = gdir.get_filepath('elevation_band_flowline',
+                               filesuffix='_fixed_dx')
+        assert_allclose(pd.read_csv(fp, index_col=0)['fake_v'], 2.)
+
+        # A real product, without statistics: IceBoost. The binned volume
+        # is the IceBoost one (matched to the glacier mask)
+        workflow.apply_addons([gdir], addons='iceboost',
+                              base_urls={'iceboost': os.path.join(
+                                  adir, 'iceboost')})
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            ref_vol = ds.iceboost_ice_thickness.attrs['iceboost_volume_km3']
+        df = pd.read_csv(gdir.get_filepath('elevation_band_flowline'),
+                         index_col=0)
+        vn = 'iceboost_ice_thickness'
+        assert_allclose((df[vn] * df['area']).sum() * 1e-9, ref_vol,
+                        rtol=1e-4)
+        fdf = pd.read_csv(fp, index_col=0)
+        assert_allclose((fdf[vn] * fdf['area_m2']).sum() * 1e-9, ref_vol,
+                        rtol=1e-4)
+        assert not os.path.exists(os.path.join(adir, 'iceboost', 'RGI61',
+                                               'b_020', 'summary',
+                                               'iceboost_statistics_11.csv'))
+
+        # Add-on on L1: no flowline to bin onto
+        gdir = oggm.GlacierDirectory(entity, from_tar=lev_tars(1))
+        tasks.apply_addon(gdir, addon='fake',
+                          base_url=os.path.join(adir, 'fake'))
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            assert 'fake_v' in ds
+
+        # The point data: a file, for the glaciers which have some
+        workflow.apply_addons([gdir], addons='points',
+                              base_urls={'points': os.path.join(adir,
+                                                                'points')})
+        df = pd.read_csv(os.path.join(gdir.dir, 'points.csv'), index_col=0)
+        assert_allclose(df.thick, [10, 20])
+        other = rgidf.loc[rgidf.RGIId == rids[1]].iloc[0]
+        gdir = oggm.GlacierDirectory(other,
+                                     from_tar=lev_tars(1, rgi_id=rids[1]))
+        tasks.apply_addon(gdir, addon='points',
+                          base_url=os.path.join(adir, 'points'))
+        assert not os.path.exists(os.path.join(gdir.dir, 'points.csv'))
+        assert not os.path.exists(os.path.join(gdir.dir,
+                                               'points.manifest.json'))
 
     @pytest.mark.slow
     @pytest.mark.parametrize('mb_model_class', ['MonthlyTIModel',
@@ -3029,13 +3219,17 @@ class TestPreproCLI:
             )
 
         # The grids are made at L1, but the centerline masks replace the
-        # elevation band ones, so this L2 delta ships gridded_data.nc
+        # elevation band ones: the L2 delta ships them, not the whole file
         with open(os.path.join(gdir.dir, "L1.manifest.json")) as f:
             m1 = json.load(f)
         with open(os.path.join(gdir.dir, "L2.manifest.json")) as f:
             m2 = json.load(f)
         assert 'gridded_data.nc' in m1["files"]["added"]
-        assert 'gridded_data.nc' in m2["files"]["updated"]
+        assert 'gridded_data.nc' not in m2["files"]["updated"]
+        sec = m2["files"]["variables"]["gridded_data.nc"]
+        assert 'glacier_mask' in sec["updated"]
+        assert 'topo' not in sec["updated"]
+        assert m1["grid_id"] == m2["grid_id"]
 
         # L5 is standalone: a single tar suffices
         tarf = _lev_tars(5)[0]

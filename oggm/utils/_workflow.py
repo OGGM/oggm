@@ -455,7 +455,7 @@ class entity_task(object):
     """
 
     def __init__(self, log, writes=[], fallback=None,
-                 workflow_return_value=True):
+                 workflow_return_value=True, name_kwarg=None):
         """Decorator syntax: ``@entity_task(log, writes=['dem', 'outlines'])``
 
         Parameters
@@ -475,11 +475,17 @@ class entity_task(object):
             Calling the task directly (``tasks.run_random_climate(gdir)``)
             is unaffected by this, and callers of ``execute_entity_task``
             can still ask for the values explicitly with ``return_value=True``.
+        name_kwarg: str
+            the name of a keyword argument whose value is appended to the
+            task name in the glacier directory log, for tasks which run once
+            per value (e.g. ``apply_addon``, once per add-on). Otherwise
+            ``auto_skip_task`` would skip all runs after the first one.
         """
         self.log = log
         self.writes = writes
         self.fallback = fallback
         self.workflow_return_value = workflow_return_value
+        self.name_kwarg = name_kwarg
 
         cnt = ['    Notes']
         cnt += ['    -----']
@@ -525,6 +531,8 @@ class entity_task(object):
                 fsuffix += kwargs.get('output_filesuffix', False)
             if fsuffix:
                 task_name += fsuffix
+            if self.name_kwarg and kwargs.get(self.name_kwarg):
+                task_name += f'_{kwargs[self.name_kwarg]}'
 
             # Do we need to run this task?
             s = gdir.get_task_status(task_name)
@@ -4287,7 +4295,7 @@ class GlacierDirectory(object):
         str
             The absolute path to the group's npz file.
         """
-        return os.path.join(self.dir, f"{filename}{filesuffix}.npz")
+        return os.path.join(self.dir, f"{filename}{filesuffix or ''}.npz")
 
     def read_npz(self, filename: str, filesuffix: str = "", **kwargs) -> dict:
         """Reads an npz file located in the directory.
@@ -5728,8 +5736,8 @@ def initialize_merged_gdir(main, tribs=[], glcdf=None,
 
 # Readers compare the major part only: a minor bump stays readable, a major
 # bump raises in `_finalize_merged_dir`.
-_MANIFEST_SCHEMA = "1.0"
-_MANIFEST_KINDS = ("delta", "standalone")
+_MANIFEST_SCHEMA = "1.1"
+_MANIFEST_KINDS = ("delta", "standalone", "addon")
 
 
 def manifest_id(manifest: dict) -> str:
@@ -5756,8 +5764,217 @@ def manifest_id(manifest: dict) -> str:
     fields = ("rgi_id", "label", "border", "rgi_version", "files")
     key = {k: manifest[k] for k in fields}
     key["parent"] = (manifest.get("parent") or {}).get("id")
+    if "grid_id" in manifest:  # only when known, so older ids stay put
+        key["grid_id"] = manifest["grid_id"]
     blob = json.dumps(key, sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()
+
+
+def grid_id(grid) -> str:
+    """Content id of a glacier grid, used to match add-ons to a gdir.
+
+    Hashes the grid's parameters rather than the bytes of
+    ``glacier_grid.json``, so a change in how the file is formatted does
+    not change the id.
+
+    .. caution::
+        The projection is hashed as its proj string. If the string
+        written for the same projection changes, the id changes.
+
+    Parameters
+    ----------
+    grid : salem.Grid
+        The glacier grid, e.g. ``gdir.grid``.
+
+    Returns
+    -------
+    str
+        A sha256 hex digest.
+    """
+    blob = json.dumps(grid.to_dict(), sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+# netCDF "patches": a subset of the variables of a gridded file, which is
+# applied by adding (or replacing) these variables in the target file. They
+# carry the gridded data of the level deltas and of the add-ons, so that
+# neither has to ship the whole of gridded_data.nc again.
+
+
+def _nc_attrs(obj) -> dict:
+    """The netCDF attributes of a dataset or a variable, as a dict."""
+    return {k: obj.getncattr(k) for k in obj.ncattrs()}
+
+
+def _jsonable(value):
+    """A netCDF attribute value, as something json can write."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def _nc_meta_digest(meta: dict) -> str:
+    blob = json.dumps(meta, sort_keys=True, default=str).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _nc_var_digests(fp: str) -> dict:
+    """Content digests of each variable of a netCDF file.
+
+    A variable's digest covers its dimensions, dtype, attributes and raw
+    data, so it does not depend on how the file was written (engine,
+    compression, order of the variables). This tells which variables a
+    processing level changed, while the bytes of the file change as soon
+    as one variable is added.
+
+    Parameters
+    ----------
+    fp : str
+        Path to the netCDF file.
+
+    Returns
+    -------
+    dict
+        Mapping of variable name to sha256 hex digest, plus ``"@attrs"``
+        for the global attributes and ``"@dims"`` for the grid: the
+        dimension sizes and the coordinate variables (e.g. ``x``, ``y``),
+        which are not listed on their own.
+    """
+
+    def var_digest(var):
+        h = hashlib.sha256()
+        h.update(_nc_meta_digest({
+            "dims": var.dimensions,
+            "dtype": str(var.dtype),
+            "attrs": {k: _jsonable(v) for k, v in _nc_attrs(var).items()},
+        }).encode())
+        h.update(np.ascontiguousarray(var[:]).tobytes())
+        return h.hexdigest()
+
+    out = {}
+    with ncDataset(fp) as nc:
+        nc.set_auto_maskandscale(False)
+        out["@attrs"] = _nc_meta_digest(
+            {k: _jsonable(v) for k, v in _nc_attrs(nc).items()})
+        out["@dims"] = _nc_meta_digest({
+            d: [len(dim), var_digest(nc.variables[d])
+                if d in nc.variables else None]
+            for d, dim in nc.dimensions.items()
+        })
+        for name, var in nc.variables.items():
+            if name not in nc.dimensions:
+                out[name] = var_digest(var)
+    return out
+
+
+def _nc_copy_vars(src, dst, names: list):
+    """Copies variables (and the dimensions they need) between datasets.
+
+    Both datasets must have ``set_auto_maskandscale(False)``, so that the
+    raw data is copied.
+    """
+    for name in names:
+        for d in src.variables[name].dimensions:
+            if d not in dst.dimensions:
+                dim = src.dimensions[d]
+                dst.createDimension(d, None if dim.isunlimited() else len(dim))
+    for name in names:
+        v = src.variables[name]
+        attrs = _nc_attrs(v)
+        fill_value = attrs.pop("_FillValue", None)
+        nv = dst.createVariable(name, v.dtype, v.dimensions, zlib=True,
+                                fill_value=fill_value)
+        nv.set_auto_maskandscale(False)
+        nv.setncatts(attrs)
+        nv[:] = v[:]
+
+
+def _write_nc_patch(src_fp: str, dst_fp: str, variables: list):
+    """Writes some variables of a gridded netCDF file to a patch file.
+
+    The patch also holds the coordinate variables and the global
+    attributes of the source file.
+
+    Parameters
+    ----------
+    src_fp : str
+        Path to the source file, e.g. a glacier's gridded_data.nc.
+    dst_fp : str
+        Path to the patch file to write.
+    variables : list of str
+        The variables to write.
+    """
+    with ncDataset(src_fp) as src:
+        missing = [v for v in variables if v not in src.variables]
+        if missing:
+            raise ValueError(f"{missing} not found in {src_fp}.")
+        src.set_auto_maskandscale(False)
+        coords = [d for d in src.dimensions if d in src.variables]
+        names = coords + [v for v in variables if v not in coords]
+        with ncDataset(dst_fp, "w", format=src.data_model) as dst:
+            dst.setncatts(_nc_attrs(src))
+            _nc_copy_vars(src, dst, names)
+
+
+def _apply_nc_patch(target_fp: str, patch_fp: str, removed=()):
+    """Adds (or replaces) the variables of a patch file to a netCDF file.
+
+    The patch's coordinates must be the ones of the target: a patch made
+    on another grid is refused. The global attributes of the patch are
+    added to the ones of the target. The target is rewritten beside and
+    then moved into place, so it is never left half written.
+
+    Parameters
+    ----------
+    target_fp : str
+        Path to the file to patch, e.g. a glacier's gridded_data.nc. If it
+        does not exist yet, the patch becomes the file.
+    patch_fp : str
+        Path to the patch file.
+    removed : list of str, optional
+        Variables to remove from the target.
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If the dimensions or coordinates of the patch and the target
+        differ.
+    """
+    if not os.path.exists(target_fp):
+        shutil.copyfile(patch_fp, target_fp)
+        return
+
+    tmp = f"{target_fp}.tmp{os.getpid()}"
+    try:
+        with ncDataset(target_fp) as old, ncDataset(patch_fp) as patch:
+            old.set_auto_maskandscale(False)
+            patch.set_auto_maskandscale(False)
+            for d, dim in patch.dimensions.items():
+                if d not in old.dimensions:
+                    continue
+                same = len(old.dimensions[d]) == len(dim)
+                if same and d in patch.variables and d in old.variables:
+                    same = np.array_equal(old.variables[d][:],
+                                          patch.variables[d][:])
+                if not same:
+                    raise InvalidWorkflowError(
+                        f"{os.path.basename(patch_fp)} was made on another "
+                        f"grid than {target_fp} (dimension `{d}` differs)."
+                    )
+            new_vars = [v for v in patch.variables
+                        if v not in patch.dimensions or v not in old.variables]
+            old_vars = [v for v in old.variables
+                        if v not in new_vars and v not in removed]
+            with ncDataset(tmp, "w", format=old.data_model) as new:
+                new.setncatts({**_nc_attrs(old), **_nc_attrs(patch)})
+                _nc_copy_vars(old, new, old_vars)
+                _nc_copy_vars(patch, new, new_vars)
+        os.replace(tmp, target_fp)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def _finalize_merged_dir(dirpath: str):
@@ -5769,7 +5986,7 @@ def _finalize_merged_dir(dirpath: str):
 
     .. note::
         A file removed by one level and written again by a later one
-        stays.
+        stays. Add-on manifests sit beside the chain and are skipped.
 
     Parameters
     ----------
@@ -5804,7 +6021,8 @@ def _finalize_merged_dir(dirpath: str):
                 f"{m.get('kind')!r}, unknown to this OGGM version. "
                 "Upgrade OGGM."
             )
-        manifests[m["label"]] = m
+        if m["kind"] != "addon":  # add-ons sit beside the chain
+            manifests[m["label"]] = m
     if not manifests:
         return
 
@@ -5837,8 +6055,33 @@ def _finalize_merged_dir(dirpath: str):
             )
         chain.append(found)
 
+    # The netCDF patches, in chain order. The tars were extracted on top of
+    # each other, so a level which ships the whole file replaced it: only
+    # the patches of the levels after it apply.
+    ordered = chain[::-1]
+    for name in _PATCHED_NC:
+        start = 0
+        for i, m in enumerate(ordered):
+            files = m["files"]
+            if name in files["added"] or name in files["updated"]:
+                start = i
+        target = os.path.join(dirpath, name)
+        for m in ordered[start:]:
+            sec = m["files"].get("variables", {}).get(name)
+            if sec is None:
+                continue
+            patch = os.path.join(dirpath, _nc_patch_name(name, m["label"]))
+            if not os.path.exists(patch):
+                raise InvalidWorkflowError(
+                    f"({m['rgi_id']}) {m['label']} changed {name}, but its "
+                    f"patch file is missing. Clear the download cache."
+                )
+            _apply_nc_patch(target, patch, removed=sec["removed"])
+    for fp in glob.glob(os.path.join(dirpath, "*.patch.nc")):
+        os.remove(fp)
+
     alive = {}
-    for m in reversed(chain):
+    for m in ordered:
         for rel in m["files"].get("removed", []):
             alive[rel] = False
         for rel in [*m["files"]["added"], *m["files"]["updated"]]:
@@ -5849,6 +6092,20 @@ def _finalize_merged_dir(dirpath: str):
             os.remove(fp)
 
 
+# The netCDF files which the level deltas diff variable by variable: a level
+# adding one variable ships only that variable, in a patch file
+_PATCHED_NC = ("gridded_data.nc",)
+
+
+def _nc_patch_name(name: str, label: str) -> str:
+    """The patch file of a level, e.g. ``gridded_data.L2.patch.nc``."""
+    return f"{name[:-3]}.{label}.patch.nc"
+
+
+def _is_top_level(rel: str, suffix: str) -> bool:
+    return "/" not in rel and rel.endswith(suffix)
+
+
 def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     """Content hashes of a glacier directory, for computing level deltas.
 
@@ -5856,6 +6113,10 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
     Each group of the data store is one npz file, so a group added or
     rewritten by a prepro level shows up as its own key, e.g.
     ``inversion_flowlines.npz``.
+
+    ``gridded_data.nc`` is hashed variable by variable instead (see
+    :func:`_nc_var_digests`), with keys like ``gridded_data.nc#topo``, so
+    that a level adding one variable ships only that variable.
 
     Parameters
     ----------
@@ -5876,9 +6137,42 @@ def snapshot_gdir_state(gdir_or_dir: GlacierDirectory | str) -> dict:
                 continue  # remove partial write_npz outputs
             fpath = os.path.join(cur, fname)
             rel = os.path.relpath(fpath, root).replace(os.sep, "/")
+            if _is_top_level(rel, ".patch.nc"):
+                continue  # a level's patch, already in its tar
+            if rel in _PATCHED_NC:
+                for var, digest in _nc_var_digests(fpath).items():
+                    state[f"{rel}#{var}"] = digest
+                continue
             with open(fpath, "rb") as f:
                 state[rel] = hashlib.file_digest(f, "sha256").hexdigest()
     return state
+
+
+def _split_nc_state(state: dict) -> tuple[dict, dict]:
+    """Splits a state into its files and its netCDF variables.
+
+    Returns
+    -------
+    tuple[dict, dict]
+        ``{path: digest}`` of the files, and ``{name: {var: digest}}`` of
+        the files hashed variable by variable.
+    """
+    files, ncs = {}, {}
+    for key, digest in state.items():
+        name, sep, var = key.partition("#")
+        if sep:
+            ncs.setdefault(name, {})[var] = digest
+        else:
+            files[key] = digest
+    return files, ncs
+
+
+def _dir_grid_id(root: str) -> str | None:
+    """The :func:`grid_id` of a glacier directory, if it has a grid."""
+    fp = os.path.join(root, cfg.BASENAMES["glacier_grid"])
+    if not os.path.exists(fp):
+        return None
+    return grid_id(salem.Grid.from_json(fp))
 
 
 def write_level_manifest(
@@ -5891,6 +6185,8 @@ def write_level_manifest(
     kind: str = "delta",
     border: int | None = None,
     rgi_version: str | None = None,
+    grid_id: str | None = None,
+    addon: dict | None = None,
 ) -> tuple[str, list[str]]:
     """Diffs a glacier directory against a snapshot and writes a manifest.
 
@@ -5911,12 +6207,12 @@ def write_level_manifest(
         The artefact's label, which is also its folder name in the
         published tree, e.g. ``"L3"``.
     prev_state : dict
-        Snapshot of the parent's state. Ignored for a ``'standalone'``,
-        which ships every file.
+        Snapshot of the parent's state. Ignored for a ``'standalone'``
+        or an ``'addon'``, which ship every file.
     parent : str | None, optional
         Label of the artefact this one was built on. Required for a
-        ``'delta'``, and optional for a ``'standalone'``, which keeps it
-        for provenance only.
+        ``'delta'``, optional for a ``'standalone'``, which keeps it for
+        provenance only, and forbidden for an ``'addon'``.
     parent_base_url : str | None, optional
         Base URL of the tree holding the parent. None means the same tree
         as this manifest.
@@ -5924,13 +6220,21 @@ def write_level_manifest(
         Directory holding ``{parent}.manifest.json``. Defaults to the
         glacier directory.
     kind : str, default ``'delta'``
-        ``'delta'`` (changes against its parent) or ``'standalone'``
-        (every file it needs, e.g. the L1 root or the L5 bundle).
+        ``'delta'`` (changes against its parent), ``'standalone'``
+        (every file it needs, e.g. the L1 root or the L5 bundle), or
+        ``'addon'`` (optional data for any gdir on the same grid).
     border : int | None, optional
         Map border of the dataset; defaults to ``cfg.PARAMS['border']``.
     rgi_version : str | None, optional
         RGI version of the dataset; defaults to
         ``cfg.PARAMS['rgi_version']``.
+    grid_id : str | None, optional
+        :func:`grid_id` of the grid the add-on was built on. Required for
+        an ``'addon'``. The other kinds record the grid of the glacier
+        directory, if it has one.
+    addon : dict | None, optional
+        For an ``'addon'``: what it holds (``variables``) and where its
+        data comes from (e.g. ``source``, ``version``).
 
     Returns
     -------
@@ -5938,6 +6242,17 @@ def write_level_manifest(
         Path to the written manifest and the list of changed relative
         paths, including the manifest itself, passed to
         ``gdir_to_tar(include=...)``.
+
+    Notes
+    -----
+    ``gridded_data.nc`` is diffed variable by variable. When a delta
+    changes some of its variables (and not its grid), the manifest lists
+    them under ``files["variables"]`` and only these variables are written
+    to a ``gridded_data.{label}.patch.nc`` file, which is shipped instead
+    of the whole file and applied when the levels are layered.
+
+    The variables of the add-ons applied to the glacier directory (see
+    :func:`apply_addon`) are optional data and never part of a level.
     """
 
     if kind not in _MANIFEST_KINDS:
@@ -5950,6 +6265,10 @@ def write_level_manifest(
             f"A delta needs a parent, got label={label!r}. The root of a "
             "chain is a 'standalone'."
         )
+    if kind == "addon" and parent is not None:
+        raise ValueError(f"An addon has no parent, got parent={parent!r}.")
+    if kind == "addon" and grid_id is None:
+        raise ValueError("An addon needs the grid_id of its grid.")
     if kind != "delta":
         prev_state = {}  # self-sufficient: ship every file
 
@@ -5971,20 +6290,72 @@ def write_level_manifest(
             }
 
     def is_manifest(rel):
-        return "/" not in rel and rel.endswith(".manifest.json")
+        return _is_top_level(rel, ".manifest.json")
 
-    state = snapshot_gdir_state(root)
+    prev_files, prev_ncs = _split_nc_state(prev_state)
+    state, ncs = _split_nc_state(snapshot_gdir_state(root))
+
+    # Add-on data (variables and files) is left out of the levels
+    addon_vars, addon_files = set(), set()
+    for fp in glob.glob(os.path.join(root, "*.manifest.json")):
+        with open(fp) as f:
+            m = json.load(f)
+        if m.get("kind") == "addon" and os.path.basename(fp) != \
+                f"{label}.manifest.json":
+            addon_vars |= set((m.get("addon") or {}).get("variables", []))
+            addon_files |= set((m.get("addon") or {}).get("files", []))
+    if addon_vars or addon_files:
+        log.warning(f"({rgi_id}) {label} leaves out the add-on data "
+                    f"{sorted(addon_vars | addon_files)}.")
+        for nc in (ncs, prev_ncs):
+            for v in nc.values():
+                for var in addon_vars:
+                    v.pop(var, None)
+        for files in (state, prev_files):
+            for name in addon_files:
+                files.pop(name, None)
     added, updated = {}, {}
     for rel, digest in sorted(state.items()):
-        if is_manifest(rel) or prev_state.get(rel) == digest:
+        if is_manifest(rel) or prev_files.get(rel) == digest:
             continue
-        if rel in prev_state:
+        if rel in prev_files:
             updated[rel] = digest
         else:
             added[rel] = digest
     removed = sorted(
-        r for r in set(prev_state) - set(state) if not is_manifest(r)
+        r for r in set(prev_files) - set(state) if not is_manifest(r)
     )
+
+    # The netCDF files: patches of the changed variables, unless the file
+    # is new or its grid changed
+    variables, patches = {}, []
+    for name in sorted(set(ncs) | set(prev_ncs)):
+        now, prev = ncs.get(name, {}), prev_ncs.get(name, {})
+        if not now:
+            removed = sorted(removed + [name])
+            continue
+        if not prev or prev["@dims"] != now["@dims"]:
+            digest = _nc_meta_digest(now)
+            if not prev:
+                added[name] = digest
+            elif _nc_meta_digest(prev) != digest:
+                updated[name] = digest
+            continue
+        sec = {
+            "added": {v: d for v, d in sorted(now.items()) if v not in prev},
+            "updated": {v: d for v, d in sorted(now.items())
+                        if v in prev and prev[v] != d},
+            "removed": sorted(set(prev) - set(now)),
+        }
+        if not any(sec.values()):
+            continue
+        variables[name] = sec
+        patch = _nc_patch_name(name, label)
+        changed_vars = [v for v in [*sec["added"], *sec["updated"]]
+                        if not v.startswith("@")]
+        _write_nc_patch(os.path.join(root, name), os.path.join(root, patch),
+                        changed_vars)
+        patches.append(patch)
 
     manifest_name = f"{label}.manifest.json"
     manifest = {
@@ -5999,13 +6370,355 @@ def write_level_manifest(
         "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "files": {"added": added, "updated": updated, "removed": removed},
     }
+    if variables:
+        manifest["files"]["variables"] = variables
+    if addon is not None:
+        manifest["addon"] = addon
+    if kind != "addon":
+        grid_id = _dir_grid_id(root)
+    if grid_id is not None:
+        manifest["grid_id"] = grid_id
     manifest["id"] = manifest_id(manifest)
     manifest_path = os.path.join(root, manifest_name)
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    changed_paths = list(added) + list(updated) + [manifest_name]
+    changed_paths = list(added) + list(updated) + patches + [manifest_name]
     return manifest_path, changed_paths
+
+
+# Add-ons: optional data (e.g. a velocity product, or thickness observations)
+# for any glacier directory on the same grid, whatever chain it was built
+# from. An add-on ships gridded_data variables (merged into gridded_data.nc,
+# so from L1 to L4) and/or whole files. Each add-on is published in its own
+# tree, laid out as the level trees, with an index per region of the
+# glaciers it has data for:
+# {base_url}/RGI{v}/b_{border:03d}/{region}/{region}.{xxx}.tar
+# {base_url}/RGI{v}/b_{border:03d}/index/{region}.csv
+
+# The published add-ons, by name. Pass `base_url` to `apply_addon` for the
+# others.
+ADDON_URLS = {}
+
+# Add-on manifests sit beside the level manifests in a glacier directory, so
+# their labels must not look like a level's
+_LEVEL_LABEL = regexp.compile(r"L\d+[a-z]?$")
+
+# The columns of the add-on indexes
+_ADDON_INDEX_COLUMNS = ["rgi_id", "grid_id", "variables", "files"]
+
+
+def _dataset_keys(gdir: GlacierDirectory) -> tuple[str, int]:
+    """The RGI version and map border of a glacier directory.
+
+    Read from its level manifests, or from ``cfg.PARAMS`` for a directory
+    without any (e.g. one built locally).
+    """
+    for fp in sorted(glob.glob(os.path.join(gdir.dir, "*.manifest.json"))):
+        with open(fp) as f:
+            m = json.load(f)
+        if m.get("kind") != "addon":
+            return str(m["rgi_version"]), int(m["border"])
+    return str(cfg.PARAMS["rgi_version"]), int(cfg.PARAMS["border"])
+
+
+@entity_task(log)
+def write_addon(
+    gdir: GlacierDirectory,
+    label: str,
+    output_dir: str,
+    variables: list | None = None,
+    files: list | None = None,
+    source: str | None = None,
+    version: str | None = None,
+    preserve_totals: bool | list = True,
+) -> str:
+    """Packs data of a glacier as an add-on.
+
+    An add-on is optional data, e.g. a velocity product or thickness
+    observations, that any glacier directory on the same grid can take
+    with :func:`apply_addon`, whatever chain it was built from. It holds
+    variables of ``gridded_data`` (as a netCDF patch) and/or whole files,
+    and an ``'addon'`` manifest holding the :func:`grid_id`. Writes them to
+    ``{output_dir}/RGI{v}/b_{border:03d}/{region}/{rid[:-3]}/{rid}.tar.gz``.
+    Bundle them, and write the index of the add-on, with
+    :func:`bundle_addon`.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory holding the data.
+    label : str
+        The add-on's name, e.g. ``"itslive"``. It names the add-on
+        manifest in the glacier directories it is applied to, so it can't
+        look like a level (``"L2"``).
+    output_dir : str
+        Root of the add-on tree.
+    variables : list of str, optional
+        Variables of ``gridded_data`` to ship.
+    files : list of str, optional
+        Files of the glacier directory to ship, e.g.
+        ``["glathida_data.csv"]``.
+    source : str, optional
+        Where the data comes from, recorded in the manifest.
+    version : str, optional
+        The version of the data, recorded in the manifest.
+    preserve_totals : bool or list of bool, default True
+        For each variable, whether binning it onto the flowlines (see
+        :func:`apply_addon`) preserves its total over the glacier. True
+        for extensive quantities (e.g. a thickness, whose total is the
+        volume), False for intensive ones (e.g. a velocity).
+
+    Returns
+    -------
+    str
+        The path to the glacier's add-on tar file.
+    """
+    if _LEVEL_LABEL.match(label):
+        raise InvalidParamsError(f"An add-on can't be named like a level: "
+                                 f"{label!r}.")
+    variables = tolist(variables) if variables else []
+    files = tolist(files) if files else []
+    if not (variables or files):
+        raise InvalidParamsError("An add-on needs variables or files.")
+    bad = [f for f in files if "/" in f or f in _PATCHED_NC
+           or f.endswith((".manifest.json", ".patch.nc"))]
+    if bad:
+        raise InvalidParamsError(f"These can't be add-on files: {bad}. Use "
+                                 "`variables` for gridded_data.")
+
+    rgi_version, border = _dataset_keys(gdir)
+    rid = gdir.rgi_id
+    root = os.path.join(output_dir, f"RGI{rgi_version}", f"b_{border:03d}",
+                        rid[:-6], rid[:-3], rid)
+    mkdir(root, reset=True)
+    meta = {}
+    if variables:
+        _write_nc_patch(gdir.get_filepath("gridded_data"),
+                        os.path.join(root, f"{label}.nc"), variables)
+        preserve_totals = tolist(preserve_totals, length=len(variables))
+        meta["variables"] = variables
+        meta["preserve_totals"] = dict(zip(variables,
+                                           map(bool, preserve_totals)))
+    for name in files:
+        shutil.copyfile(os.path.join(gdir.dir, name), os.path.join(root, name))
+    if files:
+        meta["files"] = files
+    if source is not None:
+        meta["source"] = source
+    if version is not None:
+        meta["version"] = version
+    gid = grid_id(gdir.grid)
+    write_level_manifest(
+        root, label, {}, kind="addon", grid_id=gid,
+        border=border, rgi_version=rgi_version, addon=meta,
+    )
+    opath = root + ".tar.gz"
+    with tarfile.open(opath, "w:gz") as tar:
+        tar.add(root, arcname=rid)
+    shutil.rmtree(root)
+
+    # This glacier's row of the add-on index, gathered by `bundle_addon`
+    with open(root + ".index.json", "w") as f:
+        json.dump({"rgi_id": rid, "grid_id": gid,
+                   "variables": ";".join(variables),
+                   "files": ";".join(files)}, f)
+    return opath
+
+
+def bundle_addon(output_dir: str, regions: list | None = None) -> None:
+    """Bundles an add-on tree and writes its index.
+
+    Groups the glacier tars written by :func:`write_addon` into bundles
+    (see :func:`base_dir_to_tar`), and writes the index of the glaciers
+    the add-on has data for, one file per region:
+    ``RGI{v}/b_{border:03d}/index/{region}.csv``. :func:`apply_addon`
+    reads it first, so that a glacier without data is skipped.
+
+    Parameters
+    ----------
+    output_dir : str
+        Root of the add-on tree (the ``output_dir`` of
+        :func:`write_addon`).
+    regions : list of str, optional
+        The regions processed, e.g. ``["RGI60-11"]``. A region without
+        any glacier with data then gets an empty index, which tells
+        :func:`apply_addon` that the add-on has no data there (and not
+        that it was not made for this region).
+    """
+    rows = {}
+    pattern = os.path.join(output_dir, "RGI*", "b_*", "*", "*", "*.index.json")
+    for fp in sorted(glob.glob(pattern)):
+        with open(fp) as f:
+            row = json.load(f)
+        # .../RGI62/b_080/{region}/{subregion}/{rid}.index.json
+        tree, region = fp.rsplit(os.sep, 3)[:2]
+        rows.setdefault((tree, region), []).append(row)
+        os.remove(fp)
+    for region in regions or []:
+        for tree in glob.glob(os.path.join(output_dir, "RGI*", "b_*")):
+            rows.setdefault((tree, region), [])
+
+    for (tree, region), rr in rows.items():
+        index_dir = os.path.join(tree, "index")
+        mkdir(index_dir)
+        fp = os.path.join(index_dir, f"{region}.csv")
+        df = pd.DataFrame(rr, columns=_ADDON_INDEX_COLUMNS)
+        if os.path.exists(fp):
+            # A region made in several runs (e.g. chunks)
+            old = pd.read_csv(fp, dtype=str, keep_default_na=False)
+            df = pd.concat([old, df]).drop_duplicates("rgi_id", keep="last")
+        df.sort_values("rgi_id").to_csv(fp, index=False)
+
+    base_dir_to_tar(output_dir)
+
+
+def _addon_path(base_url: str, rel: str) -> str:
+    """A file of an add-on tree, downloaded if needed, or None."""
+    from oggm.utils import _downloads  # module lookup, so tests can patch
+
+    if os.path.isdir(base_url):
+        fp = os.path.join(base_url, rel)
+        return fp if os.path.exists(fp) else None
+    return _downloads.file_downloader(base_url.rstrip("/") + "/" + rel)
+
+
+@entity_task(log, writes=["gridded_data"], name_kwarg="addon")
+def apply_addon(
+    gdir: GlacierDirectory,
+    addon: str,
+    base_url: str | None = None,
+    bin: bool = True,
+) -> None:
+    """Adds an add-on's data to a glacier directory.
+
+    The add-on's variables are added to ``gridded_data.nc``, so they can
+    only be added from L1 to L4 (L5 directories have no gridded data). Its
+    files are copied to the glacier directory. A glacier for which the
+    add-on has no data (it is not in the add-on's index) is skipped.
+    Refuses an add-on built on another grid: matching ``dx`` and border is
+    not enough, since the grid origin also depends on the outlines and the
+    projection.
+
+    The add-on's manifest is copied into the glacier directory as a record
+    of what was applied (with ``fetched_from``). Applying it twice
+    overwrites its own data. Add-on data is never shipped by the levels
+    built on this glacier directory.
+
+    Parameters
+    ----------
+    gdir : GlacierDirectory
+        The glacier directory to add the data to.
+    addon : str
+        The add-on's name, e.g. ``"itslive"``.
+    base_url : str, optional
+        URL of the add-on tree, i.e. the folder holding the ``RGI{v}``
+        folders. This also accepts local paths. Defaults to the published
+        add-on (see ``ADDON_URLS``).
+    bin : bool, default True
+        Also bin the variables onto the elevation band flowline, if the
+        directory has one (see :func:`bin_gridded_variables`).
+
+    Raises
+    ------
+    InvalidWorkflowError
+        If the add-on tree has no index for this glacier's region, if the
+        add-on was made on another grid, or if it has variables and the
+        glacier directory has no gridded data.
+    """
+    from oggm.core.centerlines import bin_gridded_variables
+
+    rid = gdir.rgi_id
+    if base_url is None:
+        base_url = ADDON_URLS.get(addon)
+        if base_url is None:
+            raise InvalidParamsError(
+                f"No published add-on named {addon!r}: pass its `base_url`."
+            )
+    base_url = os.fspath(base_url)
+    rgi_version, border = _dataset_keys(gdir)
+    tree = f"RGI{rgi_version}/b_{border:03d}"
+
+    # The index: is there data for this glacier, and on which grid?
+    fp = _addon_path(base_url, f"{tree}/index/{rid[:-6]}.csv")
+    if fp is None:
+        raise InvalidWorkflowError(
+            f"({rid}) no {tree}/index/{rid[:-6]}.csv at {base_url}: this is "
+            f"not a {addon!r} add-on tree, or it was not made for this "
+            "region, RGI version or border."
+        )
+    df = pd.read_csv(fp, dtype=str, keep_default_na=False)
+    row = df.loc[df["rgi_id"] == rid]
+    if row.empty:
+        log.info("(%s) the %s add-on has no data for this glacier.", rid,
+                 addon)
+        return
+    row = row.iloc[0]
+    want = grid_id(gdir.grid)
+    if row["grid_id"] != want:
+        raise InvalidWorkflowError(
+            f"({rid}) the {addon} add-on at {base_url} was made on grid "
+            f"{row['grid_id'][:8]}, but this glacier directory has grid "
+            f"{want[:8]}."
+        )
+    target = gdir.get_filepath("gridded_data")
+    if row["variables"] and not os.path.exists(target):
+        raise InvalidWorkflowError(
+            f"({rid}) has no gridded_data.nc: add-on variables can be added "
+            "to glacier directories from L1 to L4 (L5 has no gridded data)."
+        )
+
+    tar_base = _addon_path(base_url,
+                           f"{tree}/{rid[:-6]}/{rid[:-6]}.{rid[-5:-2]}.tar")
+    if tar_base is None:
+        raise RuntimeError(f"({rid}) the {addon} add-on bundle listed in its "
+                           f"index is missing at {base_url}.")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = os.path.join(tmp, rid)
+        robust_tar_extract(os.path.join(tar_base[:-4], rid + ".tar.gz"), tmp)
+        mf = os.path.join(tmp, f"{addon}.manifest.json")
+        if not os.path.exists(mf):
+            raise InvalidWorkflowError(
+                f"({rid}) the tar at {base_url} holds no {addon!r} add-on."
+            )
+        with open(mf) as f:
+            m = json.load(f)
+        if (m["kind"], m["rgi_id"], m.get("grid_id")) != ("addon", rid, want):
+            raise InvalidWorkflowError(
+                f"({rid}) {m['label']} at {base_url} is a {m['kind']} for "
+                f"{m['rgi_id']} on grid {str(m.get('grid_id'))[:8]}, but "
+                f"this glacier directory has grid {want[:8]}."
+            )
+        meta = m.get("addon") or {}
+        for name in meta.get("files", []):
+            with open(os.path.join(tmp, name), "rb") as f:
+                digest = hashlib.file_digest(f, "sha256").hexdigest()
+            if digest != m["files"]["added"].get(name):
+                raise InvalidWorkflowError(
+                    f"({rid}) {name} of the {addon} add-on does not match "
+                    "its manifest. Clear the download cache."
+                )
+        if meta.get("variables"):
+            _apply_nc_patch(target, os.path.join(tmp, f"{addon}.nc"))
+        for name in meta.get("files", []):
+            shutil.copyfile(os.path.join(tmp, name),
+                            os.path.join(gdir.dir, name))
+        m["fetched_from"] = base_url
+        with open(os.path.join(gdir.dir, f"{addon}.manifest.json"), "w") as f:
+            json.dump(m, f, indent=2)
+
+    variables = meta.get("variables", [])
+    if not (bin and variables):
+        return
+    if gdir.get_diagnostics().get("flowline_type") == "elevation_band":
+        preserve = meta.get("preserve_totals", {})
+        bin_gridded_variables(
+            gdir, bin_variables=variables,
+            preserve_totals=[preserve.get(v, True) for v in variables])
+    else:
+        log.info("(%s) %s: no elevation band flowline, the variables are "
+                 "not binned.", rid, addon)
 
 
 def _tar_add_unstamped(tar: tarfile.TarFile, path: str, arcname: str):
@@ -6079,8 +6792,11 @@ def gdir_to_tar(
     arcbase = os.path.basename(source_dir)
 
     def skip_manifests(ti):
+        # the manifests are added below; level patches are never shipped
+        # whole, since their level's tar holds them
         top = ti.name.count("/") == 1
-        return None if top and ti.name.endswith(".manifest.json") else ti
+        skip = ti.name.endswith((".manifest.json", ".patch.nc"))
+        return None if top and skip else ti
 
     with tarfile.open(opath, "w:gz") as tar:
         if include is None:

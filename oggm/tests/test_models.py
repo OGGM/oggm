@@ -168,6 +168,85 @@ class TestInitPresentDayFlowline:
         with pytest.raises(InvalidParamsError):
             init_present_time_glacier(gdir)
 
+    def test_bin_gridded_variables(
+        self, hef_elev_gdir, rgi62_itmix_df, monkeypatch
+    ):
+        """Binning after the calibration gives the build-time values and
+        leaves the flowlines alone."""
+
+        gdir = hef_elev_gdir
+        gdir.rgi_id = 'RGI60-11.00897'  # for the consensus file
+
+        ft = utils.get_demo_file('RGI60-11.00897_thickness.tif')
+        monkeypatch.setattr(utils, 'file_downloader', lambda x: ft)
+        bedtopo.add_consensus_thickness(gdir)
+        vn = 'consensus_ice_thickness'
+        cdf = pd.read_parquet(rgi62_itmix_df, engine='pyarrow')
+        ref_vol = cdf.loc[gdir.rgi_id].vol_itmix_m3
+
+        fp = gdir.get_filepath('elevation_band_flowline')
+        fp_fdx = gdir.get_filepath('elevation_band_flowline',
+                                   filesuffix='_fixed_dx')
+        fp_fls = gdir.get_store_filepath('inversion_flowlines')
+        if os.path.exists(fp_fdx):
+            os.remove(fp_fdx)
+        with open(fp_fls, 'rb') as f:
+            fls_before = f.read()
+        diag_before = gdir.get_diagnostics()
+        df_before = pd.read_csv(fp, index_col=0, float_precision='round_trip')
+
+        tasks.bin_gridded_variables(gdir, bin_variables=[vn, 'foo'])
+
+        # Nothing else changed
+        with open(fp_fls, 'rb') as f:
+            assert f.read() == fls_before
+        assert gdir.get_diagnostics() == diag_before
+        df = pd.read_csv(fp, index_col=0, float_precision='round_trip')
+        pd.testing.assert_frame_equal(df[df_before.columns], df_before)
+        assert 'foo' not in df
+
+        # Volumes preserved, and the fixed dx table fits the flowline
+        assert_allclose((df[vn] * df['area']).sum(), ref_vol)
+        fdf = pd.read_csv(fp_fdx, index_col=0)
+        assert_allclose((fdf[vn] * fdf['area_m2']).sum(), ref_vol)
+        fl = gdir.read_store('inversion_flowlines')[0]
+        assert_allclose(fdf['widths_m'], fl.widths_m)
+        assert_allclose(fdf.index, np.arange(fl.nx) * fl.dx_meter)
+
+        # Running it twice changes nothing. The totals follow their
+        # variable when one is missing
+        tasks.bin_gridded_variables(gdir, bin_variables=['foo', vn],
+                                    preserve_totals=[False, True])
+        pd.testing.assert_frame_equal(
+            pd.read_csv(fp, index_col=0, float_precision='round_trip'), df)
+
+        # The model can be initialised from it
+        tasks.init_present_time_glacier(gdir, output_filesuffix='_binned',
+                                        use_binned_thickness_data=vn)
+        fl_binned = gdir.read_store('model_flowlines', filesuffix='_binned')[0]
+        assert_allclose(fl_binned.volume_m3, ref_vol)
+
+        # Same values as when binning while computing the flowlines
+        centerlines.elevation_band_flowline(gdir, bin_variables=[vn])
+        centerlines.fixed_dx_elevation_band_flowline(gdir, bin_variables=[vn])
+        df_build = pd.read_csv(fp, index_col=0)
+        assert_allclose(df_build[vn], df[vn])
+        assert_allclose(pd.read_csv(fp_fdx, index_col=0)[vn], fdf[vn])
+
+        # Bins which don't match the flowline
+        monkeypatch.setitem(cfg.PARAMS, 'elevation_band_flowline_binsize', 20)
+        with pytest.raises(InvalidWorkflowError, match='does not match'):
+            tasks.bin_gridded_variables(gdir, bin_variables=vn)
+        monkeypatch.undo()
+
+        # Centerlines
+        gdir.add_to_diagnostics('flowline_type', 'centerlines')
+        try:
+            with pytest.raises(InvalidWorkflowError, match='elevation band'):
+                tasks.bin_gridded_variables(gdir, bin_variables=vn)
+        finally:
+            gdir.add_to_diagnostics('flowline_type', 'elevation_band')
+
     def test_init_present_time_glacier_obs_thick(
         self, hef_elev_gdir, rgi62_itmix_df, monkeypatch
     ):
