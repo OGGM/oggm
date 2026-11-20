@@ -920,12 +920,6 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         if start_level == 0:
             intersects = intersects_file
 
-    if not cfg.PARAMS['use_intersects']:
-        intersects = None
-    elif isinstance(intersects, (str, os.PathLike)):
-        # Read once: it can be used more than once below
-        intersects = gpd.read_file(intersects)
-
     if is_test:
         if test_ids is not None:
             try:

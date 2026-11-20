@@ -520,11 +520,11 @@ Breaking changes
   :py:func:`workflow.init_glacier_directories` (or
   :py:class:`GlacierDirectory`) gets RGI outlines: the outlines are only
   used to find the directories, exactly as if their RGI ids were given.
-  Since :pull:`983`, the outlines (and the intersects) were written
-  again each time, which nothing needed. If you change the outlines of existing
-  directories (or parameters like ``use_rgi_area`` and ``map_proj``), use
-  ``reset=True`` to create them anew: without it, the outlines in the
-  directories are kept (:issue:`1981`).
+  Since :pull:`983`, the outlines (and the intersects) were written again
+  each time. If you change the outlines of existing directories (or
+  parameters like ``use_rgi_area`` and ``map_proj``), use ``reset=True``
+  to create them anew: without it, the outlines in the directories are
+  kept (:issue:`1981`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - The temperature-bias prior file of the `informed_threestep` calibration
   now always has to given explicitly. There is no
