@@ -2712,6 +2712,107 @@ class TestInversion:
         np.testing.assert_allclose(glen_a_target, out['glen_a'],
                                    rtol=2e-3)
 
+    def test_invert_hef_fs_fallback(self, hef_entity):
+
+        gdir = self._hef_inversion_ready(self.testdir, hef_entity,
+                                         downstream=True)
+        def_a = cfg.PARAMS['inversion_glen_a']
+        fs_max = workflow.FALLBACK_INVERSION_FS
+        a_bounds = (0.1, 10)
+
+        def reset_settings():
+            # the inversion writes the A and fs it used to the settings
+            gdir.settings['inversion_glen_a'] = def_a
+            gdir.settings['inversion_fs'] = 0
+
+        def get_vol(a_fac, fs):
+            workflow.inversion_tasks([gdir], glen_a=a_fac * def_a, fs=fs)
+            return tasks.get_inversion_volume(gdir)
+
+        vol_min_a = get_vol(a_bounds[0], 0)
+        vol_max_a = get_vol(a_bounds[1], 0)
+        vol_max_a_fs = get_vol(a_bounds[1], fs_max)
+        assert vol_min_a > vol_max_a > vol_max_a_fs
+
+        # Too thick at the highest A, but not with the strongest sliding:
+        # A stays at the upper bound and fs is calibrated
+        ref_vol = (vol_max_a + vol_max_a_fs) / 2
+        reset_settings()
+        df = workflow.calibrate_inversion_from_ref_table(
+            gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+            apply_fs_on_mismatch=True)
+        assert df.attrs['glen_a_factor'] == a_bounds[1]
+        assert 0 < df.attrs['fs'] < fs_max
+        np.testing.assert_allclose(df.vol_oggm_m3.sum(), ref_vol, rtol=1e-2)
+        # The factor and A are relative to the same (original) default A,
+        # and they are what the glacier directory stores
+        np.testing.assert_allclose(df.attrs['glen_a'], a_bounds[1] * def_a)
+        np.testing.assert_allclose(gdir.settings['inversion_glen_a'],
+                                   df.attrs['glen_a'])
+        assert gdir.settings['inversion_fs'] == df.attrs['fs']
+
+        # The reported factor and fs reproduce the calibration
+        reset_settings()
+        df_rep = workflow.calibrate_inversion_from_ref_table(
+            gdir, ref_volume_m3=ref_vol,
+            glen_a_factor=df.attrs['glen_a_factor'], fs=df.attrs['fs'])
+        np.testing.assert_allclose(df_rep.vol_oggm_m3, df.vol_oggm_m3)
+        np.testing.assert_allclose(gdir.settings['inversion_glen_a'],
+                                   df.attrs['glen_a'])
+        assert gdir.settings['inversion_fs'] == df.attrs['fs']
+
+        # Same for a single glacier
+        reset_settings()
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+            apply_fs_on_mismatch=True)
+        assert out['a_factor'] == a_bounds[1]
+        np.testing.assert_allclose(out['glen_a'], a_bounds[1] * def_a)
+        np.testing.assert_allclose(out['fs'], df.attrs['fs'], rtol=1e-2)
+        np.testing.assert_allclose(out['vol_oggm_m3'], ref_vol, rtol=1e-2)
+        np.testing.assert_allclose(gdir.settings['inversion_glen_a'],
+                                   out['glen_a'])
+        assert gdir.settings['inversion_fs'] == out['fs']
+
+        # Too thick even with the strongest sliding: error, or the closest
+        # setting (highest A, strongest sliding)
+        ref_vol = vol_max_a_fs * 0.8
+        reset_settings()
+        with pytest.raises(ValueError, match='still larger'):
+            workflow.calibrate_inversion_from_ref_table(
+                gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+                apply_fs_on_mismatch=True)
+        reset_settings()
+        df = workflow.calibrate_inversion_from_ref_table(
+            gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+            apply_fs_on_mismatch=True, error_on_mismatch=False)
+        assert df.attrs['glen_a_factor'] == a_bounds[1]
+        assert df.attrs['fs'] == fs_max
+        np.testing.assert_allclose(df.vol_oggm_m3.sum(), vol_max_a_fs)
+        reset_settings()
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+            apply_fs_on_mismatch=True, error_on_mismatch=False)
+        assert out['a_factor'] == a_bounds[1]
+        assert out['fs'] == fs_max
+
+        # Too thin even at the lowest A: sliding would only make it worse
+        ref_vol = vol_min_a * 1.2
+        reset_settings()
+        df = workflow.calibrate_inversion_from_ref_table(
+            gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+            apply_fs_on_mismatch=True, error_on_mismatch=False)
+        assert df.attrs['glen_a_factor'] == a_bounds[0]
+        assert df.attrs['fs'] == 0
+        np.testing.assert_allclose(gdir.settings['inversion_glen_a'],
+                                   a_bounds[0] * def_a)
+        reset_settings()
+        out = workflow.calibrate_inversion_from_volume(
+            gdir, ref_volume_m3=ref_vol, a_bounds=a_bounds,
+            apply_fs_on_mismatch=True, error_on_mismatch=False)
+        assert out['a_factor'] == a_bounds[0]
+        assert out['fs'] == 0
+
     def test_trapezoid_min_bottom_width(self):
 
         slope = np.deg2rad(5.)

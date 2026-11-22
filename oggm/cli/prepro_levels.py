@@ -600,8 +600,10 @@ def run_prepro_levels(rgi_version=None, rgi_reg=None, border=None,
         to `L3/summary/inversion_glen_a_{rgi_reg}.json` by the run which did
         it, so they can be given back here.
     inversion_fs : float
-        the sliding parameter to use together with `glen_a_factor`. Ignored if
-        `glen_a_factor` is not set.
+        the sliding parameter to use together with `glen_a_factor` (the `fs`
+        of the same json file: the calibration may have used sliding). Without
+        `glen_a_factor`, the calibration uses this fs: leave it to 0 (the
+        default) to let the calibration add sliding only when needed.
     skip_inversion : bool
          do not run the inversion (level 3 files). This is a temporary
          workaround for workflows that wont run that far into level 3.
@@ -1749,7 +1751,8 @@ def parse_args(args):
     parser.add_argument('--inversion-fs', type=float, default=0,
                         help='the sliding parameter for the inversion. Mostly '
                              'useful together with --inversion-glen-a-factor, '
-                             'to reproduce a calibration which needed it.')
+                             'to reproduce a calibration which needed it (the '
+                             'fs value of inversion_glen_a_{rgi_reg}.json).')
     parser.add_argument('--working-dir', type=str,
                         help='path to the directory where to write the '
                              'output. Defaults to current directory or '
