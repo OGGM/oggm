@@ -9,6 +9,16 @@ v1.x (unreleased)
 Enhancements
 ~~~~~~~~~~~~
 
+- Optional precipitation gradient with elevation in the TI models
+  (``MonthlyTIModel``, ``DailyTIModel`` and ``SfcTypeTIModel``), following
+  GloGEM (Huss and Hock, 2015): relative to the precipitation at the
+  reference height of the climate data, with a lower bound
+  (``prcp_gradient_min_fac``, default 0.8) and a reduction over the top 25%
+  of the elevation range of large glaciers. Switched off by default
+  (``prcp_default_gradient = 0``). The new parameters are in
+  ``MB_GLOBAL_PARAMS`` and checked at run time against the calibration. The
+  TI models also accept ``temp_default_gradient`` as argument.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - New shop module ``oggm.shop.iceboost``: ``iceboost_to_gdir`` adds the
   IceBoost v2.0 ice thickness (and optionally its uncertainty) of a glacier
   to its gridded data, for RGI6, RGI7 glaciers and RGI7 glacier complexes.

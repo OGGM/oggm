@@ -42,7 +42,13 @@ _MB_SERIES_CHUNK_SIZE = 2_000_000
 MB_GLOBAL_PARAMS = ['temp_default_gradient',
                     'temp_all_solid',
                     'temp_all_liq',
-                    'temp_melt']
+                    'temp_melt',
+                    'prcp_default_gradient',
+                    'prcp_gradient_min_fac',
+                    'prcp_top_reduction_zfrac',
+                    'prcp_top_reduction_fac',
+                    'prcp_top_reduction_min_zrange',
+                    ]
 
 
 class MassBalanceModel(object, metaclass=SuperclassMeta):
@@ -635,6 +641,10 @@ class MonthlyTIModel(MassBalanceModel):
         check_calib_params: bool = True,
         check_climate_data: bool = True,
         use_leap_years: bool = False,
+        temp_default_gradient: float = None,
+        prcp_default_gradient: float = None,
+        prcp_gradient_min_fac: float = None,
+        prcp_top_reduction_zrange: tuple = None,
     ):
         """Monthly temperature index model.
 
@@ -696,6 +706,29 @@ class MonthlyTIModel(MassBalanceModel):
             years and that the length matches.
         use_leap_years : bool, default False
             If the calendar should use leap years
+        temp_default_gradient : float, optional
+            The temperature lapse rate (K m-1). If None,
+            settings['temp_default_gradient'] is used.
+        prcp_default_gradient : float, optional
+            The precipitation gradient with elevation, relative to the
+            precipitation at the reference height of the climate data
+            (m-1, e.g. 1.5e-4 for 1.5% per 100 m). 0 switches off all
+            elevation dependence of the precipitation (including
+            ``prcp_gradient_min_fac`` and the top reduction). If None,
+            settings['prcp_default_gradient'] is used (default: 0). See
+            ``params.cfg`` for the details.
+        prcp_gradient_min_fac : float, optional
+            Lower bound of the precipitation elevation factor: the
+            precipitation never goes below this fraction of the
+            (``prcp_fac`` corrected) precipitation at the reference
+            height. If None, settings['prcp_gradient_min_fac'] is used.
+        prcp_top_reduction_zrange : tuple of float, optional
+            The (min, max) elevation of the glacier used for the reduction
+            of the precipitation at the top of the glacier (see the
+            ``prcp_top_reduction_*`` parameters in ``params.cfg``). If
+            None, these are read from the inversion flowlines (or from the
+            DEM in the glacier outline if these are not available) when
+            first needed. They do not change during a run.
         """
 
         self.settings_filesuffix = settings_filesuffix
@@ -723,7 +756,19 @@ class MonthlyTIModel(MassBalanceModel):
         if temp_melt is None:
             temp_melt = gdir.settings['temp_melt']
         self.temp_melt = temp_melt
-        self.temp_default_gradient = gdir.settings['temp_default_gradient']
+        if temp_default_gradient is None:
+            temp_default_gradient = gdir.settings['temp_default_gradient']
+        self.temp_default_gradient = temp_default_gradient
+        if prcp_default_gradient is None:
+            prcp_default_gradient = gdir.settings['prcp_default_gradient']
+        self.prcp_default_gradient = prcp_default_gradient
+        if prcp_gradient_min_fac is None:
+            prcp_gradient_min_fac = gdir.settings['prcp_gradient_min_fac']
+        self.prcp_gradient_min_fac = prcp_gradient_min_fac
+        for k in ['prcp_top_reduction_zfrac', 'prcp_top_reduction_fac',
+                  'prcp_top_reduction_min_zrange']:
+            setattr(self, k, gdir.settings[k])
+        self._prcp_top_reduction_zrange = prcp_top_reduction_zrange
 
         # Check the climate related params to the GlacierDir to make sure
         if check_calib_params:
@@ -944,6 +989,64 @@ class MonthlyTIModel(MassBalanceModel):
         fac = 1 - (temp - self.temp_all_solid) / (self.temp_all_liq - self.temp_all_solid)
         return prcp * clip_array(fac, 0, 1)
 
+    @property
+    def prcp_top_reduction_zrange(self):
+        """(min, max) glacier elevation used for the top prcp reduction.
+
+        Read from the inversion flowlines (all of them, i.e. the whole
+        glacier) or, if not available, from the DEM in the glacier outline,
+        when first needed.
+        """
+        if self._prcp_top_reduction_zrange is None:
+            gdir = self.gdir
+            if gdir.has_file('inversion_flowlines'):
+                fls = gdir.read_store('inversion_flowlines')
+                z = np.concatenate([fl.surface_h for fl in fls])
+            elif gdir.has_file('gridded_data'):
+                with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+                    z = ds.topo_smoothed.data[ds.glacier_mask.data == 1]
+            else:
+                raise InvalidWorkflowError(
+                    'The precipitation reduction at the top of the glacier '
+                    'needs the glacier elevation range, but there are no '
+                    'inversion flowlines or gridded data in the glacier '
+                    'directory. Provide `prcp_top_reduction_zrange` or set '
+                    '`prcp_top_reduction_fac=1`.')
+            self._prcp_top_reduction_zrange = (float(np.min(z)),
+                                               float(np.max(z)))
+        return self._prcp_top_reduction_zrange
+
+    @prcp_top_reduction_zrange.setter
+    def prcp_top_reduction_zrange(self, value):
+        self._prcp_top_reduction_zrange = value
+
+    def _get_prcp_height_factor(self, heights):
+        """Precipitation elevation factor at the given heights.
+
+        The precipitation at height z is the climate precipitation (corrected
+        with prcp_fac) times this factor. Returns None if the precipitation
+        gradient is off (prcp_default_gradient == 0).
+        """
+        grad = self.prcp_default_gradient
+        if grad == 0:
+            return None
+        min_fac = max(self.prcp_gradient_min_fac, 0)
+
+        def _fac(z):
+            return clip_min(1 + grad * (z - self.ref_hgt), min_fac)
+
+        fac = _fac(heights)
+
+        top_fac = self.prcp_top_reduction_fac
+        if top_fac != 1:
+            zmin, zmax = self.prcp_top_reduction_zrange
+            if (zmax - zmin) > self.prcp_top_reduction_min_zrange:
+                z_thr = zmin + self.prcp_top_reduction_zfrac * (zmax - zmin)
+                x = clip_array((heights - z_thr) / (zmax - z_thr), 0, 1)
+                top = _fac(z_thr) * (1 - (1 - top_fac) * x ** 2)
+                fac = np.where(heights > z_thr, clip_min(top, min_fac), fac)
+        return fac
+
     def _get_climate_for_index(self, heights: ArrayLike, pok: ArrayLike
                                ) -> tuple:
         """Returns climate information at provided heights and time indexes.
@@ -972,6 +1075,7 @@ class MonthlyTIModel(MassBalanceModel):
         # For each height pixel:
         heights = np.asarray(heights)  # sometimes heights are passed as lists
         npix = len(heights)
+        prcp_fac_z = self._get_prcp_height_factor(heights)
 
         if np.size(pok) == 1:
             # fast path for 1D data (one time index)
@@ -981,6 +1085,8 @@ class MonthlyTIModel(MassBalanceModel):
 
             # Compute solid precipitation from total precipitation
             prcp = np.ones(npix) * iprcp
+            if prcp_fac_z is not None:
+                prcp *= prcp_fac_z
             prcpsol = self._get_prcpsol(prcp, temp)
 
             return temp, tempformelt, prcp, prcpsol
@@ -995,6 +1101,8 @@ class MonthlyTIModel(MassBalanceModel):
 
         # Compute solid precipitation from total precipitation
         prcp = np.atleast_2d(iprcp).repeat(npix, 0)
+        if prcp_fac_z is not None:
+            prcp *= prcp_fac_z[:, np.newaxis]
         prcpsol = self._get_prcpsol(prcp, temp2d)
 
         return temp2d, temp2dformelt, prcp, prcpsol
@@ -1267,6 +1375,10 @@ class DailyTIModel(MonthlyTIModel):
         check_calib_params: bool = True,
         check_climate_data: bool = True,
         use_leap_years: bool = True,
+        temp_default_gradient: float = None,
+        prcp_default_gradient: float = None,
+        prcp_gradient_min_fac: float = None,
+        prcp_top_reduction_zrange: tuple = None,
     ):
         """Inherits from MonthlyTIModel.
 
@@ -1327,6 +1439,9 @@ class DailyTIModel(MonthlyTIModel):
             years and that the length matches.
         use_leap_years : bool, default True
             If the calendar should use leap years.
+        temp_default_gradient, prcp_default_gradient, prcp_gradient_min_fac,
+        prcp_top_reduction_zrange : optional
+            See :py:class:`MonthlyTIModel`.
         """
 
         self.settings_filesuffix = settings_filesuffix
@@ -1349,6 +1464,10 @@ class DailyTIModel(MonthlyTIModel):
             check_calib_params=check_calib_params,
             check_climate_data=check_climate_data,
             use_leap_years=use_leap_years,
+            temp_default_gradient=temp_default_gradient,
+            prcp_default_gradient=prcp_default_gradient,
+            prcp_gradient_min_fac=prcp_gradient_min_fac,
+            prcp_top_reduction_zrange=prcp_top_reduction_zrange,
         )
 
     def _check_for_full_years(self):
