@@ -22,6 +22,7 @@ from pathlib import Path
 
 # External modules
 import geopandas as gpd
+import numpy as np
 
 # Locals
 import oggm.cfg as cfg
@@ -110,12 +111,14 @@ def _write_product_addon(gdir, label=None, variables=None, files=None,
     directory as an add-on.
 
     A glacier without any of them (e.g. outside the product's coverage)
-    gets no add-on.
+    gets no add-on. Variables without any finite value are left out.
     """
     found = []
     if variables:
         with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
-            found = [v for v in variables if v in nc.variables]
+            found = [v for v in variables if v in nc.variables and
+                     np.isfinite(np.ma.filled(nc.variables[v][:],
+                                              np.nan)).any()]
     found_files = [f for f in files or []
                    if os.path.exists(os.path.join(gdir.dir, f))]
     if not (found or found_files):

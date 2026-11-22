@@ -364,6 +364,11 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- The gridded shop tasks (ITS_LIVE, Millan thickness and velocity,
+  Hugonnet, BedMachine, IceBoost) now raise an ``InvalidWorkflowError``
+  when the product covers the region but has no valid value on the glacier
+  grid, like they do when no file is found. (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - With ``SfcTypeTIModel``, the volume calibration of the inversion now
   matches ice + snow/firn to the reference volume. Before, only the ice was
   matched, and the dynamical model then added the snow/firn buckets on top

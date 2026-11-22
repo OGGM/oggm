@@ -24,6 +24,7 @@ except ImportError:
 
 from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
+from oggm.shop import _raise_if_no_data
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ def millan_thickness_to_gdir(gdir, add_error=False):
                                    f'glacier: {gdir.rgi_id}')
 
     total_thick, files_used, _ = _filter_and_reproj(gdir, 'thickness', sel)
+    _raise_if_no_data(gdir, total_thick, 'Millan thickness')
 
     if add_error:
         total_err, _, _ = _filter_and_reproj(gdir, 'err', sel)
@@ -203,8 +205,7 @@ def millan_velocity_to_gdir(gdir, add_error=False):
                                    f'glacier: {gdir.rgi_id}')
 
     vel, files, grids = _filter_and_reproj(gdir, 'v', sel)
-    if len(grids) == 0:
-        raise RuntimeError('There is no velocity data for this glacier')
+    _raise_if_no_data(gdir, vel, 'Millan velocity')
 
     all_vx = None
     all_vy = None

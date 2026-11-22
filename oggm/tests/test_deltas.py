@@ -1482,6 +1482,34 @@ class TestAddons:
                               files=["gridded_data.nc"],
                               output_dir=str(tmp_path / "bad"))
 
+    def test_write_product_addon_skips_empty(self, addon, tmp_path):
+        """All-NaN variables (product without data on this glacier) are
+        left out of the add-on, and no add-on is written without data."""
+        from oggm.cli.prepro_addons import _write_product_addon
+
+        src = addon.src
+        rid = src.rgi_id
+        fp = src.get_filepath("gridded_data")
+        _add_nc_var(fp, "itslive_vx", np.nan)
+        _add_nc_var(fp, "millan_ice_thickness", np.nan)
+
+        out = tmp_path / "prod_itslive"
+        _write_product_addon(src, label="itslive", output_dir=str(out),
+                             variables=["itslive_v", "itslive_vx",
+                                        "itslive_vy"],
+                             source="test", version="1")
+        utils.bundle_addon(str(out))
+        index = pd.read_csv(out / addon.keys / "index" / f"{rid[:-6]}.csv",
+                            keep_default_na=False)
+        assert index.variables.iloc[0] == "itslive_v"
+
+        out = tmp_path / "prod_millan"
+        _write_product_addon(src, label="millan_thickness",
+                             output_dir=str(out),
+                             variables=["millan_ice_thickness"],
+                             source="test", version="1")
+        assert not out.exists() or not any(out.rglob("*.tar*"))
+
     def test_apply_addon_from_local_dir(self, addon):
         fp = addon.dst.get_filepath("gridded_data")
         before = utils._workflow._nc_var_digests(fp)

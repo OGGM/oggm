@@ -21,6 +21,7 @@ except ImportError:
 
 
 from oggm import utils, cfg
+from oggm.shop import _raise_if_no_data
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -179,6 +180,8 @@ def hugonnet_to_gdir(gdir, add_error=False):
 
     for dem_ds in dem_dss:
         dem_ds.close()
+
+    _raise_if_no_data(gdir, dst_array, 'Hugonnet dhdt')
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:

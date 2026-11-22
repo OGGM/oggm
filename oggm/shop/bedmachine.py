@@ -21,6 +21,7 @@ except ImportError:
 
 
 from oggm import utils, cfg
+from oggm.shop import _raise_if_no_data
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ def bedmachine_to_gdir(gdir):
                                            grid=dsroi.salem.grid,
                                            interp='linear')
         thick[thick <= 0] = np.NaN
+    _raise_if_no_data(gdir, thick, 'BedMachine')
 
     # Write
     with utils.ncDataset(gdir.get_filepath('gridded_data'), 'a') as nc:
