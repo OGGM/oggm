@@ -156,10 +156,10 @@ def run_prepro_addons(rgi_version=None, rgi_reg=None, border=None,
         the number of pixels at the maps border
     products : str or list of str
         the products to make, keys of ``ADDON_PRODUCTS``, or ``'all'``.
-        With ``'all'``, every product gets an index for the region, even
-        an empty one where it has no data (e.g. BedMachine outside
-        Greenland and Antarctica): ``apply_addon`` then skips these
-        glaciers instead of raising an error.
+        Each product made gets an index for the region, even an empty one
+        where it has no data (e.g. BedMachine outside Greenland and
+        Antarctica): ``apply_addon`` then skips these glaciers instead of
+        raising an error.
     output_folder : str
         path to the output folder (where to put the add-on trees)
     working_dir : str
@@ -308,9 +308,9 @@ def parse_args(args):
                              'output. Defaults to current directory or '
                              '$OGGM_OUTDIR.')
     parser.add_argument('--working-dir', type=str,
-                        help='path to the directory where to write the '
-                             'output. Defaults to current directory or '
-                             '$OGGM_WORKDIR.')
+                        help='path to the OGGM working directory, where '
+                             'the L1 directories are extracted. Defaults to '
+                             'current directory or $OGGM_WORKDIR.')
     parser.add_argument('--params-file', type=str,
                         help='path to the OGGM parameter file to use in place '
                              'of the default one.')

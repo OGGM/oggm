@@ -149,7 +149,9 @@ gridded data), and by default binned onto the elevation band flowlines (see
 :py:func:`tasks.bin_gridded_variables`), without touching the flowlines or
 their calibration. The GlaThiDa add-on is a file (``glathida_data.csv``),
 which can be added at any level. Glaciers without data in an add-on are
-skipped:
+skipped. Here ``itslive_url`` and ``millan_url`` are the URLs (or local
+paths) of the add-on trees, i.e. the folders holding their ``RGI{version}``
+folders:
 
 .. code-block:: python
 

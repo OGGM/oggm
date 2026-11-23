@@ -1512,6 +1512,9 @@ class TestAddons:
 
     def test_apply_addon_from_local_dir(self, addon):
         fp = addon.dst.get_filepath("gridded_data")
+        # The global attributes are the target's, not the add-on's
+        with utils.ncDataset(fp, "a") as nc:
+            nc.max_h_glacier = 9999.0
         before = utils._workflow._nc_var_digests(fp)
         assert "itslive_v" not in before
 
@@ -1519,7 +1522,7 @@ class TestAddons:
 
         after = utils._workflow._nc_var_digests(fp)
         assert set(after) - set(before) == {"itslive_v"}
-        assert all(after[k] == before[k] for k in before if k != "@attrs")
+        assert all(after[k] == before[k] for k in before)
         with xr.open_dataset(fp) as ds:
             np.testing.assert_array_equal(ds["itslive_v"], 3.5)
         m = _manifest(Path(addon.dst.dir) / "itslive.manifest.json")
@@ -1607,6 +1610,43 @@ class TestAddons:
             assert "millan_v" in ds
         assert addon.dst.get_task_status("apply_addon_itslive") == "SUCCESS"
         assert addon.dst.get_task_status("apply_addon_millan") == "SUCCESS"
+
+    def test_write_two_addons_with_auto_skip(self, addon, tmp_path,
+                                             monkeypatch):
+        monkeypatch.setitem(cfg.PARAMS, "auto_skip_task", True)
+        # Labels which the fixture did not write yet
+        for label, var in [("vel_a", "itslive_v"), ("vel_b", "millan_v")]:
+            utils.write_addon(addon.src, label=label, variables=[var],
+                              output_dir=str(tmp_path / "skip" / label))
+            assert list((tmp_path / "skip" / label).rglob("*.tar.gz"))
+
+    def test_bundle_addon_in_several_runs(self, tmp_path):
+        """The index only lists the glaciers which are in the bundles."""
+        tree = tmp_path / "RGI62" / "b_080"
+
+        def run(rids):
+            for rid in rids:
+                d = tree / rid[:-6] / rid[:-3]
+                d.mkdir(parents=True, exist_ok=True)
+                with tarfile.open(d / f"{rid}.tar.gz", "w:gz"):
+                    pass
+                (d / f"{rid}.index.json").write_text(json.dumps(
+                    {"rgi_id": rid, "grid_id": "g", "variables": "v",
+                     "files": ""}))
+            utils.bundle_addon(str(tmp_path))
+            index = pd.read_csv(tree / "index" / "RGI60-11.csv")
+            members = []
+            for fp in sorted((tree / "RGI60-11").glob("*.tar")):
+                with tarfile.open(fp) as tar:
+                    members += [os.path.basename(n)[:-7]
+                                for n in tar.getnames()]
+            assert sorted(index.rgi_id) == sorted(members)
+            return sorted(members)
+
+        run(["RGI60-11.00001", "RGI60-11.00002", "RGI60-11.00897"])
+        # The 000 bundle is written again, the 008 one is left alone
+        assert run(["RGI60-11.00002", "RGI60-11.00003"]) == [
+            "RGI60-11.00002", "RGI60-11.00003", "RGI60-11.00897"]
 
     def test_levels_leave_addons_out(self, addon):
         """A level built on a gdir with an add-on applied doesn't ship it."""

@@ -2612,9 +2612,11 @@ def bin_gridded_variables(gdir, bin_variables, preserve_totals=True):
     the same values as the ``bin_variables`` argument of
     :py:func:`elevation_band_flowline` and
     :py:func:`fixed_dx_elevation_band_flowline`, but it doesn't touch
-    anything else: the flowline geometry, the inversion flowlines and
-    their calibration stay as they are. Use it for data added after the
-    flowlines were computed, e.g. with an add-on.
+    the flowlines: the flowline geometry, the inversion flowlines and
+    their calibration stay as they are. In the ``_fixed_dx`` table,
+    ``widths_m`` and ``area_m2`` are written again from the inversion
+    flowline. Use it for data added after the flowlines were computed,
+    e.g. with an add-on.
 
     Variables already in the tables are overwritten.
 
