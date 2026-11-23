@@ -1585,6 +1585,8 @@ class TestMassBalanceModels:
                         0.875 * (1 + g * (z_thr - mb.ref_hgt)))
         mb.prcp_top_reduction_min_zrange = 1000
         mb.prcp_top_reduction_zrange = (zmin, zmax)
+        # without the floor (and without the top reduction)
+        mb.prcp_top_reduction_fac = 1
         mb.prcp_gradient_min_fac = 0
         assert_allclose(mb._get_prcp_height_factor(heights),
                         np.clip(lin, 0, None))
