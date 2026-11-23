@@ -2629,7 +2629,10 @@ def bin_gridded_variables(gdir, bin_variables, preserve_totals=True):
         gridded_data are skipped with a warning.
     preserve_totals : bool or list of bool
         whether or not to preserve the variables totals (e.g. volume). Use
-        False for intensive quantities like velocities.
+        False for intensive quantities like velocities, and for variables
+        with positive and negative values like elevation changes: the
+        total is preserved by scaling all values, and only if it is
+        positive.
 
     Raises
     ------

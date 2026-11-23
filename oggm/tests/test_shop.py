@@ -208,12 +208,15 @@ class Test_millan22:
         assert np.nanmax(vy) > 400
 
         # Stats
-        df = millan22.compile_millan_statistics([gdir]).iloc[0]
+        df = millan22.compile_millan_velocity_statistics([gdir]).iloc[0]
         assert df['millan_avg_vel'] > 180
         assert df['millan_max_vel'] > 2000
-        assert df['millan_perc_cov'] > 0.95
         assert df['millan_vel_perc_cov'] > 0.92
+        assert 'millan_vol_km3' not in df
+        df = millan22.compile_millan_thickness_statistics([gdir]).iloc[0]
+        assert df['millan_perc_cov'] > 0.95
         assert df['millan_vol_km3'] > 174
+        assert 'millan_avg_vel' not in df
 
         # reuse vx/vy because the test server doesn't have error files
         lookup = millan22._get_lookup_velocity().copy()
@@ -264,8 +267,10 @@ class Test_millan22:
             assert 'millan_ice_thickness' not in ds
             assert 'millan_v' not in ds
 
-        df = millan22.compile_millan_statistics([gdir]).iloc[0]
+        df = millan22.compile_millan_thickness_statistics([gdir]).iloc[0]
         assert df['millan_perc_cov'] == 0
+        df = millan22.compile_millan_velocity_statistics([gdir]).iloc[0]
+        assert 'millan_avg_vel' not in df
 
 
 class Test_cook23:

@@ -36,8 +36,9 @@ log = logging.getLogger(__name__)
 # The add-on products: the shop task adding them to gridded_data, the
 # variables it writes, the task compiling their statistics (optional), where
 # the data comes from, and whether binning preserves their totals (True by
-# default, for thicknesses and elevation changes, but meaningless for
-# velocities)
+# default, for the thicknesses). It is False for the velocities, for which a
+# total means nothing, and for the elevation changes: the total is preserved
+# by scaling all values, which is only sound for a variable of one sign
 ADDON_PRODUCTS = {
     'iceboost': dict(
         task='oggm.shop.iceboost:iceboost_to_gdir',
@@ -58,19 +59,20 @@ ADDON_PRODUCTS = {
     'millan_thickness': dict(
         task='oggm.shop.millan22:millan_thickness_to_gdir',
         variables=['millan_ice_thickness'],
-        statistics='oggm.shop.millan22:compile_millan_statistics',
+        statistics='oggm.shop.millan22:compile_millan_thickness_statistics',
         source='Millan et al. (2022), doi:10.1038/s41561-021-00885-z'),
     'millan_velocity': dict(
         task='oggm.shop.millan22:millan_velocity_to_gdir',
         variables=['millan_v', 'millan_vx', 'millan_vy'],
-        statistics='oggm.shop.millan22:compile_millan_statistics',
+        statistics='oggm.shop.millan22:compile_millan_velocity_statistics',
         source='Millan et al. (2022), doi:10.1038/s41561-021-00885-z',
         preserve_totals=False),
     'hugonnet': dict(
         task='oggm.shop.hugonnet_maps:hugonnet_to_gdir',
         variables=['hugonnet_dhdt'],
         statistics='oggm.shop.hugonnet_maps:compile_hugonnet_statistics',
-        source='Hugonnet et al. (2021), doi:10.1038/s41586-021-03436-z'),
+        source='Hugonnet et al. (2021), doi:10.1038/s41586-021-03436-z',
+        preserve_totals=False),
     'bedmachine': dict(
         task='oggm.shop.bedmachine:bedmachine_to_gdir',
         variables=['bedmachine_ice_thickness'],

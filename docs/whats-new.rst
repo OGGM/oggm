@@ -494,6 +494,11 @@ Breaking changes
   the L2 directories don't hold these products or their binned values
   anymore (:pull:`2011`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``shop.millan22.compile_millan_statistics`` is replaced by
+  ``compile_millan_thickness_statistics`` and
+  ``compile_millan_velocity_statistics``, one table per product, like the
+  other shop products (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - The geometry of the elevation band flowlines no longer depends on the
   ``bin_variables`` of :py:func:`tasks.elevation_band_flowline`: an elevation
   band without data for these variables is kept (with NaN values), where it

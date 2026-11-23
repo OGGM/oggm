@@ -929,8 +929,7 @@ class TestParentChain:
             "rm", "L4", wdir, level(wdir, "L4", "L3", write={"l2.txt": "back"})
         )
 
-        # gridded_data.nc changes: patches, and whole files when the grid
-        # changes (here, after or before a patch)
+        # gridded_data.nc changes: patches
         def add_v(fp):
             _add_nc_var(fp, "itslive_v", 3.5)
 
@@ -943,13 +942,7 @@ class TestParentChain:
             _apply_nc_removal(fp, "itslive_v")
             _add_nc_var(fp, "millan_v", 2.0)
 
-        def shift_x(fp):
-            with utils.ncDataset(fp, "a") as nc:
-                nc.variables["x"][:] = nc.variables["x"][:] + 0.5
-
-        for tree, l3, l4 in [("grid", [add_v, edit_ext], [swap_v]),
-                             ("whole_then_patch", [shift_x], [add_v]),
-                             ("patch_then_whole", [add_v], [shift_x])]:
+        for tree, l3, l4 in [("grid", [add_v, edit_ext], [swap_v])]:
             wdir = fork("base", tree)
 
             def run(funcs):
@@ -1081,19 +1074,16 @@ class TestParentChain:
             assert (ds.itslive_v == 3.5).all()
             assert "millan_v" not in ds
 
-    @pytest.mark.parametrize("tree", ["whole_then_patch", "patch_then_whole"])
-    def test_gridded_data_new_grid(self, chain, tree):
-        """A level changing the grid ships the whole file, and the
-        patches of the levels below it are not applied on top."""
-        built = chain.workdir(tree)
-        whole = "L3" if tree == "whole_then_patch" else "L4"
-        files = _manifest(built / f"{whole}.manifest.json")["files"]
-        assert "gridded_data.nc" in files["updated"]
-        assert "variables" not in files
-
-        gdir = self.load(chain, tree, 4)
-        _assert_matches_build(gdir.dir, built)
-        assert not list(Path(gdir.dir).glob("*.patch.nc"))
+    def test_gridded_data_new_grid_raises(self, chain, tmp_path):
+        """A level can't change the glacier grid."""
+        wdir = tmp_path / "new_grid"
+        shutil.copytree(chain.workdir("base"), wdir)
+        prev = utils.snapshot_gdir_state(wdir)
+        with utils.ncDataset(wdir / "gridded_data.nc", "a") as nc:
+            nc.variables["x"][:] = nc.variables["x"][:] + 0.5
+        with pytest.raises(InvalidWorkflowError, match="glacier grid"):
+            utils.write_level_manifest(wdir, "L3", prev, parent="L2", **_DS)
+        assert not (wdir / "L3.manifest.json").exists()
 
     def test_regenerated_parent_raises(self, chain):
         wdir = chain.workdir("base_l1")

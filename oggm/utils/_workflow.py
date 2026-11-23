@@ -6080,7 +6080,9 @@ def _finalize_merged_dir(dirpath: str):
 
     # The netCDF patches, in chain order. The tars were extracted on top of
     # each other, so a level which ships the whole file replaced it: only
-    # the patches of the levels after it apply.
+    # the patches of the levels after it apply. This is the level creating
+    # the file, or the levels made before the patches (schema 1.0), which
+    # ship the whole file each time they change it.
     ordered = chain[::-1]
     for name in _PATCHED_NC:
         start = 0
@@ -6261,7 +6263,7 @@ def write_level_manifest(
     Notes
     -----
     ``gridded_data.nc`` is diffed variable by variable. When a delta
-    changes some of its variables (and not its grid), the manifest lists
+    changes some of its variables, the manifest lists
     them under ``files["variables"]`` and only these variables are written
     to a ``gridded_data.{label}.patch.nc`` file, which is shipped instead
     of the whole file and applied when the levels are layered.
@@ -6269,8 +6271,8 @@ def write_level_manifest(
     The variables and files of the add-ons applied to the glacier
     directory (see :func:`apply_addon`) are optional data, and a delta
     leaves them out. This does not cover everything: an artefact shipping
-    the whole of ``gridded_data.nc`` (a standalone, or a delta after a
-    change of grid) ships the add-on variables in it, and the columns
+    the whole of ``gridded_data.nc`` (a standalone, or the delta which
+    creates the file) ships the add-on variables in it, and the columns
     which :func:`bin_gridded_variables` adds to the elevation band tables
     are shipped with these tables.
     """
@@ -6347,20 +6349,21 @@ def write_level_manifest(
     )
 
     # The netCDF files: patches of the changed variables, unless the file
-    # is new or its grid changed
+    # is new. A level never changes the grid
     variables, patches = {}, []
     for name in sorted(set(ncs) | set(prev_ncs)):
         now, prev = ncs.get(name, {}), prev_ncs.get(name, {})
         if not now:
             removed = sorted(removed + [name])
             continue
-        if not prev or prev["@dims"] != now["@dims"]:
-            digest = _nc_meta_digest(now)
-            if not prev:
-                added[name] = digest
-            elif _nc_meta_digest(prev) != digest:
-                updated[name] = digest
+        if not prev:
+            added[name] = _nc_meta_digest(now)
             continue
+        if prev["@dims"] != now["@dims"]:
+            raise InvalidWorkflowError(
+                f"({rgi_id}) {label} changed the dimensions or coordinates "
+                f"of {name}: a level can't change the glacier grid."
+            )
         sec = {
             "added": {v: d for v, d in sorted(now.items()) if v not in prev},
             "updated": {v: d for v, d in sorted(now.items())
