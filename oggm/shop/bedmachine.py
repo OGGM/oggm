@@ -64,7 +64,7 @@ def bedmachine_to_gdir(gdir):
         thick = gdir.grid.map_gridded_data(dsroi['thickness'].data,
                                            grid=dsroi.salem.grid,
                                            interp='linear')
-        thick[thick <= 0] = np.NaN
+        thick[thick <= 0] = np.nan
     _raise_if_no_data(gdir, thick, 'BedMachine')
 
     # Write
