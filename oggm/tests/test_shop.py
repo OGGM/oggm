@@ -1027,7 +1027,7 @@ class Test_bedtopo:
         np.testing.assert_allclose(my_area, gdir.rgi_area_m2, rtol=0.07)
 
         rio_area = np.sum(ref.data > 0) * gdir.grid.dx**2
-        np.testing.assert_allclose(rio_area, gdir.rgi_area_m2, rtol=0.17)
+        np.testing.assert_allclose(rio_area, gdir.rgi_area_m2, rtol=0.2)
         np.testing.assert_allclose(my_area, rio_area, rtol=0.17)
 
         # They are not same:

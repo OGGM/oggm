@@ -114,8 +114,10 @@ some other datasets available in RGITOPO.
 These data are downloaded only when needed (i.e. during an OGGM run)
 and they are stored in the ``dl_cache_dir``
 directory. The gridded topography is then reprojected and resampled to the local
-glacier map. The local grid is defined on a Transverse Mercator projection centered over
-the glacier, and has a spatial resolution depending on the glacier size. The
+glacier map. The local grid is defined on the UTM projection of the glacier
+location (or on a Transverse Mercator projection centered over the glacier
+if ``cfg.PARAMS['map_proj'] = 'tmerc'``), and has a spatial resolution
+depending on the glacier size. The
 default in OGGM is to use the following rule:
 
 .. math::

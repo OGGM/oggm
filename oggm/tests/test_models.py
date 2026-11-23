@@ -481,7 +481,7 @@ class TestInitFlowlineOtherGlacier:
 
         fls = gdir.read_store('model_flowlines')
         if cfg.PARAMS['grid_dx_method'] == 'square':
-            assert len(fls) == 3
+            assert len(fls) == 4
         vol = 0.
         area = 0.
         for fl in fls:

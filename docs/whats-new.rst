@@ -499,6 +499,15 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The default map projection of the glacier directories
+  (``cfg.PARAMS['map_proj']``) is now ``'utm'`` instead of ``'tmerc'``.
+  This is what the preprocessed directories have been using for a while.
+  UTM zones are only defined between 80°S and 84°N, which includes all
+  RGI6 and RGI7 glaciers. For custom outlines outside this band, set
+  ``map_proj`` back to ``'tmerc'``. Many tests still use ``'tmerc'`` so
+  that their reference values stay the same.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+
 - The shop products are not part of the prepro levels anymore: they are
   add-ons (see above). The ``--add-consensus-thickness``,
   ``--add-itslive-velocity``, ``--add-millan-thickness``,
