@@ -357,6 +357,20 @@ Bug fixes
   The ``ref_volume_m3`` observation is ice + firn. Results with other mass
   balance models are unchanged.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- The sliding fallback of ``calibrate_inversion_from_ref_table`` and
+  ``calibrate_inversion_from_volume`` (``apply_fs_on_mismatch=True``) is
+  fixed and changed. Before, it read the default Glen A from settings
+  that the first pass had overwritten with 10 times the default, so it
+  searched A in a wrong range and reported a Glen A factor that did not
+  match the A in use. It also used a fixed ``fs=5.7e-20``, and kept it
+  even when that made the glaciers too thin at the lowest A. Now, when the
+  glaciers are still too thick at the highest A, A stays at that value
+  and fs is calibrated between 0 and 5.7e-20. The calibrated fs is reported
+  (``df.attrs['fs']``, and ``inversion_glen_a_{rgi_reg}.json`` in the
+  preprocessing), so the calibration can be reproduced with
+  ``glen_a_factor`` and ``fs``. ``calibrate_inversion_from_volume`` now
+  also includes the firn volume when it decides to use sliding.
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
   in the same order as the input list of RGI ids. They were previously
   sorted by RGI region and by their order in the RGI files (:issue:`1005`).

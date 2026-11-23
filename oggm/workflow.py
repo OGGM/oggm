@@ -34,6 +34,10 @@ except ImportError:
 # Module logger
 log = logging.getLogger(__name__)
 
+# Highest sliding parameter tried by the Glen A calibrations when the
+# glaciers are too thick even at the highest A (Oerlemans, 1997)
+FALLBACK_INVERSION_FS = 5.7e-20
+
 # Default reference volume tables ("IceBoost v2") used by
 # calibrate_inversion_from_ref_table, one parquet file per RGI version /
 # subtype (RGI6, RGI7 glaciers '7G', RGI7 complexes '7C')
@@ -1153,9 +1157,12 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         in several independent jobs: calibrate once, then pass the resulting
         factor here. Everything else (including what is written to the
         observations file) is unchanged.
-    apply_fs_on_mismatch: false
-        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
-        Oerlemans) and try to optimize A again.
+    apply_fs_on_mismatch: bool
+        if the glaciers are still too thick at the highest A factor (and
+        `fs` is 0), keep that A factor and calibrate the sliding parameter
+        fs between 0 and 5.7e-20 (Oerlemans, 1997) instead. Sliding can only
+        make the glaciers thinner, so it is not used when the glaciers are
+        too thin.
     error_on_mismatch: bool
         sometimes the given bounds do not allow to find a zero mismatch:
         this will normally raise an error, but you can switch this off,
@@ -1248,15 +1255,17 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
     firn_vol = pd.Series([_get_inversion_firn_volume(gdir, settings_filesuffix)
                           for gdir in gdirs], index=rids)
 
-    # Optimize the diff to ref, using the settings of the first gdir
+    # Optimize the diff to ref, using the settings of the first gdir.
+    # Read the default A only once, here: the inversion writes each A it
+    # tries back into the settings.
     gdirs_use[0].settings_filesuffix = settings_filesuffix
     def_a = gdirs_use[0].settings['inversion_glen_a']
 
-    def compute_vol(x):
+    def compute_vol(x, fs_x):
         inversion_tasks(gdirs_use, settings_filesuffix=settings_filesuffix,
                         input_filesuffix=input_filesuffix,
                         output_filesuffix=output_filesuffix,
-                        glen_a=x*def_a, fs=fs,
+                        glen_a=x*def_a, fs=fs_x,
                         filter_inversion_output=filter_inversion_output,
                         add_to_log_file=add_to_log_file)
         odf = df.copy()
@@ -1288,18 +1297,18 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
             filter_inversion_output=filter_inversion_output,
             add_to_log_file=add_to_log_file)
 
-    def to_minimize(x):
+    def to_minimize(x, fs_x):
         log.workflow('Reference volume optimisation with '
-                     'A factor: {} and fs: {}'.format(x, fs))
-        odf = compute_vol(x)
+                     'A factor: {} and fs: {}'.format(x, fs_x))
+        odf = compute_vol(x, fs_x)
         if ref_volume_m3 is None:
             return odf[ref_col].sum() - odf.oggm.sum()
         else:
             return ref_volume_m3 - odf.oggm.sum()
 
     try:
-        out_fac, r = optimization.brentq(to_minimize, *a_bounds, rtol=1e-2,
-                                         full_output=True)
+        out_fac, r = optimization.brentq(to_minimize, *a_bounds, args=(fs,),
+                                         rtol=1e-2, full_output=True)
         if r.converged:
             log.workflow('calibrate_inversion_from_ref_table '
                          'converged after {} iterations and fs={}. The '
@@ -1309,8 +1318,8 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
             raise ValueError('Unexpected error in optimization.brentq')
     except ValueError:
         # Ok can't find an A. Log for debug:
-        odf1 = compute_vol(a_bounds[0]).sum() * 1e-9
-        odf2 = compute_vol(a_bounds[1]).sum() * 1e-9
+        odf1 = compute_vol(a_bounds[0], fs).sum() * 1e-9
+        odf2 = compute_vol(a_bounds[1], fs).sum() * 1e-9
         if ref_volume_m3 is None:
             ref_vol_1 = odf1[ref_col]
             ref_vol_2 = odf2[ref_col]
@@ -1323,33 +1332,21 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
                ''.format(fs,
                          ref_vol_1, odf1.oggm, a_bounds[0],
                          ref_vol_2, odf2.oggm, a_bounds[1]))
-        if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
-            do_filter = filter_inversion_output
-            return calibrate_inversion_from_ref_table(
-                gdirs,
-                settings_filesuffix=settings_filesuffix,
-                observations_filesuffix=observations_filesuffix,
-                overwrite_observations=overwrite_observations,
-                ref_volume_m3=ref_volume_m3,
-                ref_volume_year=ref_volume_year,
-                rgi_ids_in_ref_volume=rgi_ids_in_ref_volume,
-                input_filesuffix=input_filesuffix,
-                output_filesuffix=output_filesuffix,
-                ref_table=ref_table,
-                ignore_missing=ignore_missing,
-                fs=5.7e-20, a_bounds=a_bounds,
-                apply_fs_on_mismatch=False,
-                error_on_mismatch=error_on_mismatch,
-                filter_inversion_output=do_filter,
-                add_to_log_file=add_to_log_file)
-        if error_on_mismatch:
-            raise ValueError(msg)
-
-        out_fac = a_bounds[int(abs(ref_vol_1 - odf1.oggm) >
-                               abs(ref_vol_2 - odf2.oggm))]
         log.workflow(msg)
-        log.workflow('We use A factor = {} and fs = {} and move on.'
-                     ''.format(out_fac, fs))
+        if apply_fs_on_mismatch and fs == 0 and odf2.oggm > ref_vol_2:
+            # Too thick even at the highest A: only sliding can make the
+            # glaciers thinner. Keep A there and calibrate fs instead.
+            out_fac = a_bounds[1]
+            fs = _calibrate_fs_at_a_factor(to_minimize, out_fac,
+                                           error_on_mismatch=error_on_mismatch,
+                                           log_func=log.workflow)
+        else:
+            if error_on_mismatch:
+                raise ValueError(msg)
+            out_fac = a_bounds[int(abs(ref_vol_1 - odf1.oggm) >
+                                   abs(ref_vol_2 - odf2.oggm))]
+            log.workflow('We use A factor = {} and fs = {} and move on.'
+                         ''.format(out_fac, fs))
 
     return _apply_inversion_a_factor(
         gdirs, df, out_fac, def_a, fs, firn_vol,
@@ -1361,6 +1358,60 @@ def calibrate_inversion_from_ref_table(gdirs, settings_filesuffix='',
         rids=rids, rids_use=rids_use,
         filter_inversion_output=filter_inversion_output,
         add_to_log_file=add_to_log_file)
+
+
+def _calibrate_fs_at_a_factor(to_minimize, a_factor, *, error_on_mismatch,
+                              log_func):
+    """Calibrate the sliding parameter fs for a fixed Glen A factor.
+
+    The fallback of the Glen A calibrations, when the volume without sliding
+    is still larger than the reference at the highest A factor. Sliding can
+    only make the glaciers thinner, so we keep this A factor and look for
+    the fs in [0, FALLBACK_INVERSION_FS] which matches the reference.
+
+    Parameters
+    ----------
+    to_minimize : callable
+        ``to_minimize(a_factor, fs)`` returns the reference volume minus the
+        modelled volume (negative when the glaciers are too thick).
+    a_factor : float
+        the A factor to keep (the upper bound of the A calibration)
+    error_on_mismatch : bool
+        raise an error if the glaciers are still too thick with
+        ``fs=FALLBACK_INVERSION_FS``, instead of using that value and moving
+        on.
+    log_func : callable
+        the logging function to use
+
+    Returns
+    -------
+    the calibrated fs
+    """
+
+    fs_max = FALLBACK_INVERSION_FS
+    mismatch = to_minimize(a_factor, fs_max)
+    if mismatch < 0:
+        msg = ('Glen A calibration: the volume is still larger than the '
+               'reference with A factor {} and fs={} ({:.3g} m3 too much).'
+               ''.format(a_factor, fs_max, -mismatch))
+        if error_on_mismatch:
+            raise ValueError(msg)
+        log_func(msg)
+        log_func('We use A factor = {} and fs = {} and move on.'
+                 ''.format(a_factor, fs_max))
+        return fs_max
+
+    # Optimise the fraction of fs_max, not fs itself: fs (~1e-20) is far
+    # below the absolute tolerance of brentq
+    frac, r = optimization.brentq(lambda f: to_minimize(a_factor, f * fs_max),
+                                  0, 1, rtol=1e-2, full_output=True)
+    if not r.converged:
+        raise RuntimeError('Unexpected error in optimization.brentq')
+    fs = frac * fs_max
+    log_func('Glen A calibration with sliding converged after {} iterations '
+             'with A factor {}. The resulting fs is {}.'
+             ''.format(r.iterations, a_factor, fs))
+    return fs
 
 
 def _apply_inversion_a_factor(gdirs, df, out_fac, def_a, fs, firn_vol, *,
@@ -1471,9 +1522,12 @@ def calibrate_inversion_from_consensus(gdirs, settings_filesuffix='',
         invert with sliding (default: no)
     a_bounds: tuple
         factor to apply to default A
-    apply_fs_on_mismatch: false
-        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
-        Oerlemans) and try to optimize A again.
+    apply_fs_on_mismatch: bool
+        if the glaciers are still too thick at the highest A factor (and
+        `fs` is 0), keep that A factor and calibrate the sliding parameter
+        fs between 0 and 5.7e-20 (Oerlemans, 1997) instead. Sliding can only
+        make the glaciers thinner, so it is not used when the glaciers are
+        too thin.
     error_on_mismatch: bool
         sometimes the given bounds do not allow to find a zero mismatch:
         this will normally raise an error, but you can switch this off,
@@ -1576,8 +1630,11 @@ def calibrate_inversion_from_volume(gdir,
     a_bounds: tuple
         factor to apply to default A
     apply_fs_on_mismatch: bool
-        on mismatch, try to apply an arbitrary value of fs (fs = 5.7e-20 from
-        Oerlemans) and try to optimize A again.
+        if the glaciers are still too thick at the highest A factor (and
+        `fs` is 0), keep that A factor and calibrate the sliding parameter
+        fs between 0 and 5.7e-20 (Oerlemans, 1997) instead. Sliding can only
+        make the glaciers thinner, so it is not used when the glaciers are
+        too thin.
     error_on_mismatch: bool
         sometimes the given bounds do not allow to find a zero mismatch:
         this will normally raise an error, but you can switch this off,
@@ -1622,13 +1679,14 @@ def calibrate_inversion_from_volume(gdir,
     if ref_volume_m3 is None:
         raise InvalidParamsError('vol_ref_m3 must be provided (float or Series).')
 
-    # Optimize the diff to ref
+    # Optimize the diff to ref. Read the default A only once, here: the
+    # inversion writes each A it tries back into the settings.
     def_a = gdir.settings['inversion_glen_a']
 
     if gdir.settings['use_kcalving_for_inversion']:
         raise NotImplementedError('Calving not implemented yet')
 
-    def compute_vol(x):
+    def compute_vol(x, fs_x):
         # Run inversion tasks for this glacier
         tasks.prepare_for_inversion(gdir,
                                     settings_filesuffix=settings_filesuffix,
@@ -1642,7 +1700,7 @@ def calibrate_inversion_from_volume(gdir,
                                           settings_filesuffix=settings_filesuffix,
                                           input_filesuffix=output_filesuffix,
                                           output_filesuffix=output_filesuffix,
-                                          glen_a=x*def_a, fs=fs,
+                                          glen_a=x*def_a, fs=fs_x,
                                           add_to_log_file=False)
         if filter_inversion_output:
             tasks.filter_inversion_output(gdir,
@@ -1660,15 +1718,15 @@ def calibrate_inversion_from_volume(gdir,
     # volume (e.g. from GPR measurements) includes it, so we match ice + firn
     firn_vol = _get_inversion_firn_volume(gdir, settings_filesuffix)
 
-    def to_minimize(x):
+    def to_minimize(x, fs_x):
         log.info(f'Volume calibration for {gdir.rgi_id} with '
-                 f'A factor: {x} and fs: {fs}')
-        vol = compute_vol(x)
+                 f'A factor: {x} and fs: {fs_x}')
+        vol = compute_vol(x, fs_x)
         return ref_volume_m3 - (vol + firn_vol)
 
     try:
         out_fac, r = optimization.brentq(to_minimize, *a_bounds,
-                                         rtol=1e-2,
+                                         args=(fs,), rtol=1e-2,
                                          full_output=True)
         if r.converged:
             log.info(f'calibrate_inversion_from_volume for {gdir.rgi_id} '
@@ -1677,32 +1735,26 @@ def calibrate_inversion_from_volume(gdir,
         else:
             raise ValueError('Unexpected error in optimization.brentq')
     except ValueError:
-        # Ok can't find an A. Log for debug:
-        vol1 = compute_vol(a_bounds[0])
-        vol2 = compute_vol(a_bounds[1])
+        # Ok can't find an A. Log for debug (ice + firn volumes):
+        vol1 = compute_vol(a_bounds[0], fs) + firn_vol
+        vol2 = compute_vol(a_bounds[1], fs) + firn_vol
         msg = (f'calibration from volume CAN\'T converge for {gdir.rgi_id} with fs={fs}.\n'
                f'Bound values (m3):\nRef={ref_volume_m3:.0f} OGGM={vol1:.0f} for A factor {a_bounds[0]}\n'
                f'Ref={ref_volume_m3:.0f} OGGM={vol2:.0f} for A factor {a_bounds[1]}')
-        if apply_fs_on_mismatch and fs == 0 and vol2 > ref_volume_m3:
-            return calibrate_inversion_from_volume(
-                gdir,
-                settings_filesuffix=settings_filesuffix,
-                observations_filesuffix=observations_filesuffix,
-                overwrite_observations=overwrite_observations,
-                input_filesuffix=input_filesuffix,
-                output_filesuffix=output_filesuffix,
-                ref_volume_m3=ref_volume_m3,
-                ref_volume_year=ref_volume_year,
-                fs=5.7e-20, a_bounds=a_bounds,
-                apply_fs_on_mismatch=False, error_on_mismatch=error_on_mismatch,
-                filter_inversion_output=filter_inversion_output)
-        if error_on_mismatch:
-            raise ValueError(msg)
-
-        out_fac = a_bounds[int(abs(ref_volume_m3 - vol1 - firn_vol) >
-                               abs(ref_volume_m3 - vol2 - firn_vol))]
         log.info(msg)
-        log.info(f'We use A factor = {out_fac} and fs = {fs} and move on.')
+        if apply_fs_on_mismatch and fs == 0 and vol2 > ref_volume_m3:
+            # Too thick even at the highest A: only sliding can make the
+            # glacier thinner. Keep A there and calibrate fs instead.
+            out_fac = a_bounds[1]
+            fs = _calibrate_fs_at_a_factor(to_minimize, out_fac,
+                                           error_on_mismatch=error_on_mismatch,
+                                           log_func=log.info)
+        else:
+            if error_on_mismatch:
+                raise ValueError(msg)
+            out_fac = a_bounds[int(abs(ref_volume_m3 - vol1) >
+                                   abs(ref_volume_m3 - vol2))]
+            log.info(f'We use A factor = {out_fac} and fs = {fs} and move on.')
 
     # Compute the final volume with the correct A
     tasks.prepare_for_inversion(gdir,
