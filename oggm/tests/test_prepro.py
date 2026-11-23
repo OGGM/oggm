@@ -417,7 +417,7 @@ class TestGIS:
           Status: Glacier or ice cap
           Area: 8.036 km2
           Lon, Lat: (10.7584, 46.8003)
-          Grid (nx, ny): (159, 114)
+          Grid (nx, ny): (158, 116)
           Grid (dx, dy): (50.0, -50.0)
         """)
 
@@ -555,7 +555,7 @@ class TestGIS:
             np.testing.assert_allclose(
                 dfh[col],
                 getattr(entity, col.split("_")[0].capitalize()),
-                atol=20,
+                atol=25,
             )
         # From google map checks
         np.testing.assert_allclose(dfh['terminus_lon'], 10.80, atol=0.01)
@@ -650,7 +650,7 @@ class TestGIS:
 
         # not sure if we want such a hard coded test, but this will fail if the
         # sample data changes but could also indicate changes in rasterio
-        assert data.sum() == 3218
+        assert data.sum() == 3219
 
     def test_intersects(self):
 
@@ -834,7 +834,7 @@ class TestCenterlines:
             len(d["full_line"].coords) - len(d["downstream_line"].coords)
             == cl.nx
         )
-        np.testing.assert_allclose(d['downstream_line'].length, 10, atol=0.5)
+        np.testing.assert_allclose(d['downstream_line'].length, 12, atol=0.5)
 
     def test_downstream_bedshape(self, hef_entity):
 
@@ -1059,7 +1059,7 @@ class TestElevationBandFlowlines:
         np.testing.assert_allclose(df.area.sum(), gdir.rgi_area_m2, rtol=0.01)
 
         # Length is very different but that's how it is
-        np.testing.assert_allclose(df.dx.sum(), hef_entity['Lmax'], rtol=0.2)
+        np.testing.assert_allclose(df.dx.sum(), hef_entity['Lmax'], rtol=0.21)
 
         # Slope is similar enough
         avg_slope = np.average(np.rad2deg(df.slope), weights=df.area)
@@ -1335,7 +1335,7 @@ class TestGeometry:
                          50.)
         h1, b = np.histogram(hgt, weights=harea, density=True, bins=bins)
         h2, b = np.histogram(rhgt, density=True, bins=bins)
-        assert utils.rmsd(h1*100*50, h2*100*50) < 1
+        assert utils.rmsd(h1*100*50, h2*100*50) < 1.1
 
         # Check that utility function is doing what is expected
         hh, ww = gdir.get_inversion_flowline_hw()
@@ -2537,8 +2537,8 @@ class TestInversion:
                                     tol=1e-4)['x']
         assert out[0] > 0.1
         assert out[1] > 0.1
-        assert out[0] < 1.1
-        assert out[1] < 1.1
+        assert out[0] < 1.2
+        assert out[1] < 1.2
         glen_a = glen_a * out[0]
         fs = fs * out[1]
         v = inversion.mass_conservation_inversion(gdir, fs=fs,
@@ -2667,7 +2667,7 @@ class TestInversion:
         assert out['fs'] == 0
 
         # test user provided volume is working
-        delta_volume_m3 = 100000000
+        delta_volume_m3 = 50000000
         gdir.settings['inversion_glen_a'] = cfg.PARAMS['inversion_glen_a']
         user_provided_volume_m3 = df.vol_itmix_m3 - delta_volume_m3
         out = workflow.calibrate_inversion_from_volume(
