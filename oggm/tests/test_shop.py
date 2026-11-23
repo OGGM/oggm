@@ -1017,10 +1017,10 @@ class Test_bedtopo:
         gis.rasterio_to_gdir(gdir, ft, 'consensus', resampling='bilinear')
 
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
-            mine = ds.consensus_ice_thickness
+            mine = ds.consensus_ice_thickness.load()
 
         with rioxr.open_rasterio(gdir.get_filepath('consensus')) as ds:
-            ref = ds.isel(band=0)
+            ref = ds.isel(band=0).load()
 
         # Check area
         my_area = np.sum(np.isfinite(mine.data)) * gdir.grid.dx**2
