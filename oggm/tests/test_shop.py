@@ -24,6 +24,19 @@ pytestmark = pytest.mark.test_env("utils")
 DO_PLOT = False
 
 
+def test_raise_if_no_data():
+    from types import SimpleNamespace
+    from oggm.shop import _raise_if_no_data
+    gdir = SimpleNamespace(rgi_id='RGI60-11.00000')
+    data = np.full((3, 4), np.nan)
+    for bad in [None, data, np.ma.masked_array(data + 1, mask=True)]:
+        with pytest.raises(InvalidWorkflowError, match='no valid prod data'):
+            _raise_if_no_data(gdir, bad, 'prod')
+    data[1, 2] = 0.
+    _raise_if_no_data(gdir, data, 'prod')
+    _raise_if_no_data(gdir, np.ma.masked_invalid(data), 'prod')
+
+
 class Test_its_live:
 
     @pytest.mark.slow
@@ -112,6 +125,40 @@ class Test_its_live:
             ax.quiver(xx, yy, vx, vy)
             plt.show()
 
+    @pytest.mark.slow
+    def test_no_data_raises(self, tmp_path, monkeypatch):
+
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = str(tmp_path)
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        base_url = ('https://cluster.klima.uni-bremen.de/~oggm/test_files/'
+                    'itslive_v2/ITS_LIVE_velocity_120m_')
+        monkeypatch.setattr(its_live, 'base_url', base_url)
+        monkeypatch.setattr(its_live, 'region_files', {})
+
+        # The mosaic covers the region, but has no valid data here
+        get_vardata = salem.GeoTiff.get_vardata
+        monkeypatch.setattr(salem.GeoTiff, 'get_vardata',
+                            lambda self, *args, **kwargs: np.full_like(
+                                get_vardata(self, *args, **kwargs), np.nan,
+                                dtype=np.float64))
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            with pytest.raises(InvalidWorkflowError, match='ITS_LIVE'):
+                its_live.itslive_velocity_to_gdir(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            assert 'itslive_v' not in ds
+
 
 class Test_millan22:
 
@@ -161,12 +208,15 @@ class Test_millan22:
         assert np.nanmax(vy) > 400
 
         # Stats
-        df = millan22.compile_millan_statistics([gdir]).iloc[0]
+        df = millan22.compile_millan_velocity_statistics([gdir]).iloc[0]
         assert df['millan_avg_vel'] > 180
         assert df['millan_max_vel'] > 2000
-        assert df['millan_perc_cov'] > 0.95
         assert df['millan_vel_perc_cov'] > 0.92
+        assert 'millan_vol_km3' not in df
+        df = millan22.compile_millan_thickness_statistics([gdir]).iloc[0]
+        assert df['millan_perc_cov'] > 0.95
         assert df['millan_vol_km3'] > 174
+        assert 'millan_avg_vel' not in df
 
         # reuse vx/vy because the test server doesn't have error files
         lookup = millan22._get_lookup_velocity().copy()
@@ -185,6 +235,42 @@ class Test_millan22:
 
         assert np.isfinite(err_vx).sum() / mask.sum() > 0.9
         assert np.isfinite(err_vy).sum() / mask.sum() > 0.9
+
+    @pytest.mark.slow
+    def test_no_data_raises(self, tmp_path, monkeypatch):
+
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = str(tmp_path)
+        cfg.PARAMS['use_intersects'] = False
+        cfg.PATHS['dem_file'] = get_demo_file('dem_Columbia.tif')
+        cfg.PARAMS['border'] = 10
+
+        entity = gpd.read_file(get_demo_file('RGI60-01.10689.shp')).iloc[0]
+        gdir = oggm.GlacierDirectory(entity)
+        tasks.define_glacier_region(gdir)
+        tasks.glacier_masks(gdir)
+
+        base_url = 'https://cluster.klima.uni-bremen.de/~oggm/test_files/millan22/'
+        monkeypatch.setattr(millan22, 'default_base_url', base_url)
+
+        # The tiles cover the glacier, but have no valid data here
+        _filter = millan22._filter
+        monkeypatch.setattr(millan22, '_filter',
+                            lambda ds: np.full_like(_filter(ds), np.nan))
+
+        with pytest.raises(InvalidWorkflowError, match='Millan thickness'):
+            millan22.millan_thickness_to_gdir(gdir)
+        with pytest.raises(InvalidWorkflowError, match='Millan velocity'):
+            millan22.millan_velocity_to_gdir(gdir)
+
+        with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
+            assert 'millan_ice_thickness' not in ds
+            assert 'millan_v' not in ds
+
+        df = millan22.compile_millan_thickness_statistics([gdir]).iloc[0]
+        assert df['millan_perc_cov'] == 0
+        df = millan22.compile_millan_velocity_statistics([gdir]).iloc[0]
+        assert 'millan_avg_vel' not in df
 
 
 class Test_cook23:

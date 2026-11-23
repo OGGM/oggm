@@ -27,6 +27,7 @@ Tools to set-up and run OGGM.
     cfg.reset_working_dir
     cfg.add_to_basenames
     workflow.init_glacier_directories
+    workflow.apply_addons
     workflow.execute_entity_task
     workflow.gis_prepro_tasks
     workflow.inversion_tasks
@@ -65,6 +66,9 @@ Input/Output
     utils.copy_to_basedir
     utils.gdir_to_tar
     utils.base_dir_to_tar
+    utils.write_addon
+    utils.bundle_addon
+    utils.apply_addon
     utils.cook_rgidf
     utils.compute_temp_bias_dataframe
     global_tasks.write_centerlines_to_shape
@@ -129,7 +133,8 @@ OGGM Shop
     shop.its_live.compile_itslive_statistics
     shop.millan22.millan_thickness_to_gdir
     shop.millan22.millan_velocity_to_gdir
-    shop.millan22.compile_millan_statistics
+    shop.millan22.compile_millan_thickness_statistics
+    shop.millan22.compile_millan_velocity_statistics
     shop.bedmachine.bedmachine_to_gdir
     shop.bedmachine.compile_bedmachine_statistics
     shop.rgitopo.init_glacier_directories_from_rgitopo
@@ -178,6 +183,7 @@ the majority of OGGM's tasks). They are parallelizable.
     tasks.terminus_width_correction
     tasks.elevation_band_flowline
     tasks.fixed_dx_elevation_band_flowline
+    tasks.bin_gridded_variables
     tasks.process_climate_data
     tasks.process_custom_climate_data
     tasks.historical_delta_method

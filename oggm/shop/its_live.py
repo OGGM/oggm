@@ -17,6 +17,7 @@ except ImportError:
 
 from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
+from oggm.shop import _raise_if_no_data
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -152,6 +153,7 @@ def _reproject_and_scale(gdir, do_error=False):
 
     # And transform to local map
     vv = grid_gla.map_gridded_data(vel, grid=grid_vel, interp='linear')
+    _raise_if_no_data(gdir, vv, 'ITS_LIVE')
     vx = grid_gla.map_gridded_data(vx, grid=grid_vel, interp='linear')
     vy = grid_gla.map_gridded_data(vy, grid=grid_vel, interp='linear')
 

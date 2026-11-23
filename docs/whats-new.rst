@@ -337,6 +337,26 @@ Enhancements
   scratch when no ``--start-level`` is given (``--start-level 0`` is no
   longer accepted) (:pull:`1951`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
+- Add-ons: optional data (e.g. velocity or thickness products such as
+  IceBoost, GlaThiDa thickness observations) can be added to the glacier directories with
+  :py:func:`workflow.apply_addons`, whatever chain they were built from. An
+  add-on is matched to a glacier directory by its grid. Its variables are
+  added to ``gridded_data.nc`` (at any level from L1 to L4) and binned onto
+  the elevation band flowlines, and its files (e.g. the GlaThiDa points)
+  are copied to the glacier directory. Each add-on tree has an index of the
+  glaciers it has data for, so the others are skipped. The add-on trees are
+  made from the L1 directories with the new ``oggm_prepro_addons`` command
+  (:pull:`2011`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_ and
+  `Fabien Maussion <https://github.com/fmaussion>`_
+- New task :py:func:`tasks.bin_gridded_variables`, which bins gridded_data
+  variables onto existing elevation band flowlines, at any level from L2 on,
+  without touching the flowlines or their calibration (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The prepro levels now ship ``gridded_data.nc`` variable by variable: a
+  level which adds or changes some variables (e.g. the centerline glacier
+  masks) ships only these, instead of the whole file (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - Documentation changes in ``docs/`` no longer trigger the entire test
   suite if the previous commit passed its tests (:pull:`2028`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
@@ -344,6 +364,11 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- The gridded shop tasks (ITS_LIVE, Millan thickness and velocity,
+  Hugonnet, BedMachine, IceBoost) now raise an ``InvalidWorkflowError``
+  when the product covers the region but has no valid value on the glacier
+  grid, like they do when no file is found. (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - With ``SfcTypeTIModel``, the volume calibration of the inversion now
   matches ice + snow/firn to the reference volume. Before, only the ice was
   matched, and the dynamical model then added the snow/firn buckets on top
@@ -474,6 +499,26 @@ Bug fixes
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
+- The shop products are not part of the prepro levels anymore: they are
+  add-ons (see above). The ``--add-consensus-thickness``,
+  ``--add-itslive-velocity``, ``--add-millan-thickness``,
+  ``--add-millan-velocity``, ``--add-hugonnet-dhdt``, ``--add-bedmachine``
+  and ``--add-glathida`` flags of ``oggm_prepro`` (and the corresponding
+  ``run_prepro_levels`` kwargs) are replaced by ``oggm_prepro_addons``, and
+  the L2 directories don't hold these products or their binned values
+  anymore (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``shop.millan22.compile_millan_statistics`` is replaced by
+  ``compile_millan_thickness_statistics`` and
+  ``compile_millan_velocity_statistics``, one table per product, like the
+  other shop products (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
+- The geometry of the elevation band flowlines no longer depends on the
+  ``bin_variables`` of :py:func:`tasks.elevation_band_flowline`: an elevation
+  band without data for these variables is kept (with NaN values), where it
+  was dropped before. This changes the flowlines of a few glaciers computed
+  with ``bin_variables`` (:pull:`2011`).
+  By `Fabien Maussion <https://github.com/fmaussion>`_
 - ``mb_calibration_to_rmsd`` now compares the reference MB to the modelled
   MB of hydrological years (October to September in the northern
   hemisphere, April to March in the southern hemisphere, from

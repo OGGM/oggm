@@ -24,6 +24,7 @@ except ImportError:
 
 from oggm import utils, cfg
 from oggm.exceptions import InvalidWorkflowError
+from oggm.shop import _raise_if_no_data
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ def millan_thickness_to_gdir(gdir, add_error=False):
                                    f'glacier: {gdir.rgi_id}')
 
     total_thick, files_used, _ = _filter_and_reproj(gdir, 'thickness', sel)
+    _raise_if_no_data(gdir, total_thick, 'Millan thickness')
 
     if add_error:
         total_err, _, _ = _filter_and_reproj(gdir, 'err', sel)
@@ -203,8 +205,7 @@ def millan_velocity_to_gdir(gdir, add_error=False):
                                    f'glacier: {gdir.rgi_id}')
 
     vel, files, grids = _filter_and_reproj(gdir, 'v', sel)
-    if len(grids) == 0:
-        raise RuntimeError('There is no velocity data for this glacier')
+    _raise_if_no_data(gdir, vel, 'Millan velocity')
 
     all_vx = None
     all_vy = None
@@ -338,18 +339,21 @@ def millan_velocity_to_gdir(gdir, add_error=False):
             v[:] = all_err_vy.astype(np.float32)
 
 
+def _base_statistics(gdir):
+    """The columns shared by the Millan statistics."""
+    return {'rgi_id': gdir.rgi_id,
+            'rgi_region': gdir.rgi_region,
+            'rgi_subregion': gdir.rgi_subregion,
+            'rgi_area_km2': gdir.rgi_area_km2}
+
+
 @utils.entity_task(log)
-def millan_statistics(gdir):
-    """Gather statistics about the Millan data interpolated to this glacier.
+def millan_thickness_statistics(gdir):
+    """Gather statistics about the Millan thickness interpolated to this
+    glacier.
     """
 
-    d = dict()
-
-    # Easy stats - this should always be possible
-    d['rgi_id'] = gdir.rgi_id
-    d['rgi_region'] = gdir.rgi_region
-    d['rgi_subregion'] = gdir.rgi_subregion
-    d['rgi_area_km2'] = gdir.rgi_area_km2
+    d = _base_statistics(gdir)
     d['millan_vol_km3'] = 0
     d['millan_area_km2'] = 0
     d['millan_perc_cov'] = 0
@@ -370,6 +374,17 @@ def millan_statistics(gdir):
                     d['millan_vol_err_km3'] = float(err.sum() * gdir.grid.dx ** 2 * 1e-9)
     except (FileNotFoundError, AttributeError, KeyError):
         pass
+
+    return d
+
+
+@utils.entity_task(log)
+def millan_velocity_statistics(gdir):
+    """Gather statistics about the Millan velocity interpolated to this
+    glacier.
+    """
+
+    d = _base_statistics(gdir)
 
     try:
         with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
@@ -394,13 +409,29 @@ def millan_statistics(gdir):
     return d
 
 
-@utils.global_task(log)
-def compile_millan_statistics(gdirs, filesuffix='', path=True):
-    """Gather as much statistics as possible about a list of glaciers.
+def _compile_statistics(gdirs, task, name, filesuffix, path):
+    """Run a statistics task on the glaciers and write the table."""
+    from oggm.workflow import execute_entity_task
 
-    It can be used to do result diagnostics and other stuffs. If the data
-    necessary for a statistic is not available (e.g.: flowlines length) it
-    will simply be ignored.
+    out_df = execute_entity_task(task, gdirs)
+
+    out = pd.DataFrame(out_df).set_index('rgi_id')
+
+    if path:
+        if path is True:
+            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
+                                    name + filesuffix + '.csv'))
+        else:
+            out.to_csv(path)
+
+    return out
+
+
+@utils.global_task(log)
+def compile_millan_thickness_statistics(gdirs, filesuffix='', path=True):
+    """Gather statistics about the Millan thickness of a list of glaciers.
+
+    Glaciers without Millan thickness get a volume, area and coverage of 0.
 
     Parameters
     ----------
@@ -410,20 +441,32 @@ def compile_millan_statistics(gdirs, filesuffix='', path=True):
         add suffix to output file
     path : str, bool
         Set to "True" in order  to store the info in the working directory
+        (``millan_thickness_statistics.csv``).
         Set to a path to store the file to your chosen location
     """
-    from oggm.workflow import execute_entity_task
+    return _compile_statistics(gdirs, millan_thickness_statistics,
+                               'millan_thickness_statistics', filesuffix,
+                               path)
 
-    out_df = execute_entity_task(millan_statistics, gdirs)
 
-    out = pd.DataFrame(out_df).set_index('rgi_id')
+@utils.global_task(log)
+def compile_millan_velocity_statistics(gdirs, filesuffix='', path=True):
+    """Gather statistics about the Millan velocity of a list of glaciers.
 
-    if path:
-        if path is True:
-            out.to_csv(os.path.join(cfg.PATHS['working_dir'],
-                                    ('millan_statistics' +
-                                     filesuffix + '.csv')))
-        else:
-            out.to_csv(path)
+    Glaciers without Millan velocity have no value (NaN) in the velocity
+    columns.
 
-    return out
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    filesuffix : str
+        add suffix to output file
+    path : str, bool
+        Set to "True" in order  to store the info in the working directory
+        (``millan_velocity_statistics.csv``).
+        Set to a path to store the file to your chosen location
+    """
+    return _compile_statistics(gdirs, millan_velocity_statistics,
+                               'millan_velocity_statistics', filesuffix,
+                               path)

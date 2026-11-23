@@ -21,6 +21,7 @@ except ImportError:
 
 from oggm import utils
 from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
+from oggm.shop import _raise_if_no_data
 
 # Module logger
 log = logging.getLogger(__name__)
@@ -113,6 +114,8 @@ def iceboost_to_gdir(gdir, add_error=False, interp='linear',
                 r_data = gdir.grid.map_gridded_data(data, dsb.grid,
                                                     interp=interp)
             r_data = r_data.filled(np.nan)
+            if var == 'thickness':
+                _raise_if_no_data(gdir, r_data, 'IceBoost')
 
             vn = 'iceboost_ice_thickness'
             ln = 'Ice thickness from IceBoost v2.0'
