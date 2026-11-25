@@ -1,4 +1,3 @@
-import unittest
 from functools import partial
 from types import SimpleNamespace
 import pytest
@@ -46,9 +45,10 @@ pytest.importorskip('rasterio')
 pytest.importorskip('salem')
 
 
-class TestIdealisedCases(unittest.TestCase):
+class TestIdealisedCases:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         N = 3
         cfg.initialize()
         # these idealised cases compare length to the raw geometry
@@ -58,9 +58,6 @@ class TestIdealisedCases(unittest.TestCase):
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
         self.fs = 0  # set sliding
         self.fs_old = 5.7e-20  # outdated value
-
-    def tearDown(self):
-        pass
 
     @pytest.mark.slow
     def test_constant_bed(self):
@@ -1500,9 +1497,10 @@ class TestIdealisedCases(unittest.TestCase):
             plt.show()
 
 
-class TestFluxGate(unittest.TestCase):
+class TestFluxGate:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         cfg.initialize()
 
     def test_find_flux_from_thickness(self):
@@ -1820,15 +1818,13 @@ class TestKCalving():
         assert_allclose(ds_1.calving_m3, ds_2.calving_m3)
 
 
-class TestSia2d(unittest.TestCase):
+class TestSia2d:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         cfg.initialize()
         # this idealised case compares length to the raw geometry
         cfg.PARAMS['min_ice_thick_for_length'] = 0
-
-    def tearDown(self):
-        pass
 
     @pytest.mark.slow
     def test_flat_2d_bed(self):

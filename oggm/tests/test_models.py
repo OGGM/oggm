@@ -26,7 +26,6 @@ from oggm.utils import (get_demo_file, file_downloader, ModelSettings,
                         floatyear_to_date, date_to_floatyear)
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 
-from oggm.tests.funcs import get_test_dir
 from oggm.tests.funcs import (dummy_bumpy_bed, dummy_constant_bed,
                               dummy_constant_bed_cliff,
                               dummy_mixed_bed, bu_tidewater_bed,
@@ -1267,7 +1266,6 @@ class TestMassBalanceModels:
 
             plt.plot(mb_annual_d, h, label='daily')
             plt.plot(mb_annual_m, h, label='monthly')
-            plt.plot(mb_annual_oggm_v16, h, label='monthly, OGGM v1.6')
             plt.title(f'annual mb for {yr}')
             plt.legend()
             plt.show()
@@ -1305,7 +1303,6 @@ class TestMassBalanceModels:
 
             plt.plot(mb_monthly_d, h, label='daily')
             plt.plot(mb_monthly_m, h, label='monthly')
-            plt.plot(mb_monthly_oggm_v16, h, label='monthly, OGGM v1.6')
             plt.title(f'monthly mb for {m:02d}.{yr}')
             plt.legend()
             plt.show()
@@ -2441,7 +2438,10 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(smb.mean(), 0, atol=1e-6)
 
     @pytest.mark.slow
-    def test_sfc_type_mb_model_calib_dynamics(self):
+    def test_sfc_type_mb_model_calib_dynamics(self, tmp_path):
+
+        cfg.initialize()
+        cfg.PATHS['working_dir'] = str(tmp_path)
 
         # sfc tracking only works with a single flowline
         gdir = workflow.init_glacier_directories(
@@ -5205,9 +5205,8 @@ class TestIdealisedInversion():
 
 
 @pytest.fixture(scope='class')
-def gdir_sh(request, test_dir, hef_gdir):
-    dir_sh = os.path.join(test_dir, request.cls.__name__ + '_sh')
-    utils.mkdir(dir_sh, reset=True)
+def gdir_sh(request, tmp_path_factory, hef_gdir):
+    dir_sh = str(tmp_path_factory.mktemp(request.cls.__name__ + '_sh'))
     gdir_sh = tasks.copy_to_basedir(hef_gdir, base_dir=dir_sh,
                                     setup='all')
     gdir_sh.hemisphere = 'sh'
@@ -5218,9 +5217,8 @@ def gdir_sh(request, test_dir, hef_gdir):
 
 
 @pytest.fixture(scope='class')
-def gdir_calving(request, test_dir, hef_gdir):
-    dir_sh = os.path.join(test_dir, request.cls.__name__ + '_calving')
-    utils.mkdir(dir_sh, reset=True)
+def gdir_calving(request, tmp_path_factory, hef_gdir):
+    dir_sh = str(tmp_path_factory.mktemp(request.cls.__name__ + '_calving'))
     gdir_sh = tasks.copy_to_basedir(hef_gdir, base_dir=dir_sh,
                                     setup='all')
     gdir_sh.is_tidewater = True
@@ -5231,15 +5229,29 @@ def gdir_calving(request, test_dir, hef_gdir):
 
 
 @pytest.fixture(scope='class')
-def with_class_wd(request, test_dir, hef_gdir):
+def with_class_wd(request, tmp_path_factory, hef_gdir):
     # dependency on hef_gdir to ensure proper initialization order
     prev_wd = cfg.PATHS['working_dir']
-    cfg.PATHS['working_dir'] = os.path.join(
-        test_dir, request.cls.__name__ + '_wd')
-    utils.mkdir(cfg.PATHS['working_dir'], reset=True)
+    cfg.PATHS["working_dir"] = str(
+        tmp_path_factory.mktemp(request.cls.__name__ + '_wd')
+    )
     yield
     # teardown
     cfg.PATHS['working_dir'] = prev_wd
+
+
+@pytest.mark.usefixtures('with_class_wd')
+class TestClassFixtureDirs:
+    """Tests that the class fixtures write to temporary directories."""
+
+    def test_dirs_are_temporary(self, gdir_sh, gdir_calving, tmp_path_factory):
+        basetemp = str(tmp_path_factory.getbasetemp())
+        for d in (
+            gdir_sh.base_dir,
+            gdir_calving.base_dir,
+            cfg.PATHS['working_dir'],
+        ):
+            assert d.startswith(basetemp)
 
 
 @pytest.fixture(scope='class')

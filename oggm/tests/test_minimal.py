@@ -4,7 +4,6 @@ pytestmark = pytest.mark.test_env("minimal")
 import os
 import shutil
 import tempfile
-import unittest
 from functools import partial
 
 import numpy as np
@@ -40,9 +39,10 @@ def teardown_module(module):
     utils._downloads.download_oggm_files = module._patched_download_oggm_files
 
 
-class TestIdealisedCases(unittest.TestCase):
+class TestIdealisedCases:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         N = 3
         cfg.initialize_minimal()
         self.glen_a = 2.4e-24    # Modern style Glen parameter A
@@ -50,9 +50,6 @@ class TestIdealisedCases(unittest.TestCase):
         self.fd = 2. * self.glen_a / (N + 2.)  # equivalent to glen_a
         self.fs = 0             # set slidin
         self.fs_old = 5.7e-20  # outdated value
-
-    def tearDown(self):
-        pass
 
     def test_constant_bed(self):
 
@@ -170,15 +167,13 @@ class TestIdealisedCases(unittest.TestCase):
             shutil.rmtree(tmpdir)
 
 
-class TestSia2d(unittest.TestCase):
+class TestSia2d:
 
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def _setup(self):
         cfg.initialize_minimal()
         # this idealised case compares length to the raw geometry
         cfg.PARAMS['min_ice_thick_for_length'] = 0
-
-    def tearDown(self):
-        pass
 
     def test_constant_bed(self):
 
