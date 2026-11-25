@@ -360,9 +360,6 @@ Enhancements
 - Documentation changes in ``docs/`` no longer trigger the entire test
   suite if the previous commit passed its tests (:pull:`2028`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
-- Adds support for pytest-xdist to run tests in parallel (:pull:`2022`).
-  By `Nicolas Gampierakis <https://github.com/gampnico>`_
-  and `Patrick Schmitt <https://github.com/pat-schmitt>`_.
 
 Bug fixes
 ~~~~~~~~~
