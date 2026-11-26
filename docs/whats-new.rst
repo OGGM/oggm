@@ -496,8 +496,8 @@ Bug fixes
   kept, the first file still winning on the keys they share (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
 - Tests no longer write to a shared file, test directories are no longer
-  persistent. This affects the test fixtures `hef_gdir`, `class_case_dir` and
-  `class_case_gdir` (:pull:`2022`).
+  persistent. This affects the test fixtures `hef_gdir`, `case_dir` and
+  `class_case_dir` (:pull:`2022`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes

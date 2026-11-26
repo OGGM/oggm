@@ -45,11 +45,7 @@ def _init_cfg(working_dir, params_file=None, round_smoothed_dem=True):
     cfg.PARAMS['round_smoothed_dem'] = round_smoothed_dem
 
     # Use multiprocessing
-    use_mp = False
-    if use_mp is None:
-        cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
-    else:
-        cfg.PARAMS['use_multiprocessing'] = use_mp
+    cfg.PARAMS['use_multiprocessing'] = use_multiprocessing()
 
     # Working dir
     cfg.PATHS['working_dir'] = str(working_dir)
@@ -769,6 +765,26 @@ def test_rgi7_complex_glacier_dirs(tmp_path):
     with xr.open_dataset(gdir.get_filepath('gridded_data')) as ds:
         assert ds.sub_entities.max().item() == (len(rgi7c_to_g_links[gdir.rgi_id]) - 1)
 
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "rgi_version, rgi_id, ref_vol_km3",
+    [
+        ("62", "RGI60-11.00897", 0.4216),
+        ("70G", "RGI2000-v7.0-G-11-03116", 0.3901),
+        ("70C", "RGI2000-v7.0-C-11-02192", 4.8165),
+    ],
+)
+def test_iceboost_ref_tables(rgi_version, rgi_id, ref_vol_km3):
+    # The default reference table is picked from the RGI version
+    from types import SimpleNamespace
+
+    gdirs = [SimpleNamespace(rgi_version=rgi_version)]
+    df, ref_col = workflow._resolve_ref_volume_table(gdirs, "iceboost")
+    assert ref_col == "vol_ref_m3"
+    assert df.index.is_unique
+    for c in ["vol_km3", "vol_err_km3", "vol_bsl_km3", "vol_bsl_err_km3", "area_km2"]:
+        assert c in df
+    assert_allclose(df.loc[rgi_id, "vol_ref_m3"], ref_vol_km3 * 1e9, rtol=1e-3)
 
 @pytest.fixture(scope='class')
 def with_class_wd(request, tmp_path_factory, hef_gdir):
