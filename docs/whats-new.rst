@@ -280,8 +280,25 @@ Enhancements
   end of a dynamic run. In particular, these files can be used to initialize the
   buckets again to continue a dynamic run (e.g. to run multiple projections, all
   starting from the same model state). It is also possible to store a
-  ``MultipleFlowlineMassBalance``, when working with multiple flowlines
-  (:pull:`1899`).
+  ``MultipleFlowlineMassBalance``, when working with multiple flowlines.
+  The files only store what is needed to continue a run (the bucket state
+  and the model parameters), not the history of the run: a model loaded with
+  ``load_from_file`` starts at the date of the saved buckets.
+  ``run_from_climate_data`` selects the file automatically when a
+  ``SfcTypeTIModel`` run is restarted with ``init_model_filesuffix``:
+  ``mb_diagnostics{init_model_filesuffix}.nc`` is used if it exists and if
+  its bucket state is valid for the start year of the run, otherwise the
+  buckets are rebuilt with a fresh spinup and a warning is logged (set
+  ``mb_diagnostics_filesuffix=False`` to switch this off). The file provides
+  the state of the buckets and the model options, while the mass balance
+  parameters (``melt_f``, ``temp_bias``, ``prcp_fac``, ``temp_melt``) are the
+  ones of the settings of the run (``settings_filesuffix``), which allows
+  sensitivity experiments which all start from the same state (see also the
+  ``settings_filesuffix`` kwarg of ``load_from_file``). To avoid restarts
+  from an outdated state, a run which replaces
+  ``model_geometry{output_filesuffix}.nc`` also deletes an existing
+  ``mb_diagnostics{output_filesuffix}.nc``
+  (:pull:`1899`, :issue:`2045`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - New model output variable ``mass_kg``, the total glacier mass. When using
   ``SfcTypeTIModel``, volume, mass and thickness diagnostics are further
