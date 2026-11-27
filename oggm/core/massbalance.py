@@ -1787,6 +1787,9 @@ class SfcTypeTIModel(MassBalanceModel):
         self.spinup_buckets = spinup_buckets
         if isinstance(self.spinup_buckets, pd.core.frame.DataFrame):
             self.spinup_buckets = self.spinup_buckets.values
+        # for models loaded from a file (see load_from_file): the full state
+        # (buckets incl. ice, date) to which reset_state has to go back
+        self._restart_state = None
 
         if self.ys is not None:
             self._validate_spinup_climate_data()
@@ -1985,6 +1988,15 @@ class SfcTypeTIModel(MassBalanceModel):
             self.mb_buckets_np = self._empty_mb_buckets_np.copy()
             self.mb_buckets_np[:, :-1] = self.spinup_buckets.copy()
             self.mb_buckets_year = self.ys
+
+            if self._restart_state is not None:
+                # the model was loaded from a file: the state also has an
+                # ice bucket (ice formed by the last aging step, which is
+                # only accounted for in the next climate step) and a date
+                # which is not necessarily the start of a year
+                saved_mb_buckets, saved_mb_buckets_year = self._restart_state
+                self.mb_buckets_np[:] = saved_mb_buckets
+                self.mb_buckets_year = saved_mb_buckets_year
 
         else:
             # we need to make a spinup
@@ -2949,14 +2961,17 @@ class SfcTypeTIModel(MassBalanceModel):
                                   "currently not supported.")
 
     def _to_dataset(self):
-        """Build and return the xr.Dataset representing the full model state.
+        """Build and return the xr.Dataset representing the model state.
+
+        Only what is needed to continue from the current bucket date is
+        included: the bucket state and the model parameters. The history of
+        the run (the mass balance and melt of each timestep, the snowline) is
+        not included.
 
         Used by :meth:`save_to_file` and by
         :meth:`MultipleFlowlineMassBalance.save_to_file` (which writes each
         flowline as a separate nc group in one shared file).
         """
-        current_index = self._current_index
-
         n_pts = self.mb_buckets_np.shape[0]
         n_buckets = self.mb_buckets_np.shape[1]  # snow + firn + ice
 
@@ -2972,11 +2987,6 @@ class SfcTypeTIModel(MassBalanceModel):
                 dims=['bucket'],
                 attrs={'description': 'buckets per grid point '
                                       '(snow, firn_1 … firn_N, ice)'},
-            ),
-            'time': xr.DataArray(
-                np.array(list(self._year_to_index.keys()), dtype=float),
-                dims=['time'],
-                attrs={'description': 'Floating year'},
             ),
         }
 
@@ -3017,58 +3027,7 @@ class SfcTypeTIModel(MassBalanceModel):
                 dims=['grid_point'],
                 attrs={'units': 'm', 'long_name': 'heights used during spinup'},
             ),
-            # computed MB output arrays (only filled portion);
-            # 'time' coordinate carries the float-year values
-            'climatic_mb': xr.DataArray(
-                self._climatic_mb[:current_index],
-                dims=['time', 'grid_point'],
-                attrs={'units': 'kg m-2',
-                       'long_name': 'climatic mass balance per timestep'},
-            ),
-            'ice_mb': xr.DataArray(
-                self._ice_mb[:current_index],
-                dims=['time', 'grid_point'],
-                attrs={'units': 'kg m-2',
-                       'long_name': 'ice mass balance per timestep'},
-            ),
-            'mb_heights_stored': xr.DataArray(
-                self._mb_heights[:current_index],
-                dims=['time', 'grid_point'],
-                attrs={'units': 'm',
-                       'long_name': 'heights used per timestep'},
-            ),
-            'snow_melt': xr.DataArray(
-                self._snow_melt[:current_index],
-                dims=['time', 'grid_point'],
-                attrs={'units': 'kg m-2',
-                       'long_name': 'snow melt per timestep'},
-            ),
-            'firn_melt': xr.DataArray(
-                self._firn_melt[:current_index],
-                dims=['time', 'grid_point'],
-                attrs={'units': 'kg m-2',
-                       'long_name': 'firn melt per timestep'},
-            ),
-            'ice_melt': xr.DataArray(
-                self._ice_melt[:current_index],
-                dims=['time', 'grid_point'],
-                attrs={'units': 'kg m-2',
-                       'long_name': 'gross ice melt per timestep'},
-            ),
         }
-
-        # conditional data variables
-        if self.store_snowline and len(self._snowline) > 0:
-            data_vars['snowline'] = xr.DataArray(
-                np.array(self._snowline),
-                dims=['snowline_step'],
-                attrs={'units': 'm', 'long_name': 'snowline elevation'},
-            )
-            data_vars['snowline_year'] = xr.DataArray(
-                np.array(self._snowline_year),
-                dims=['snowline_step'],
-                attrs={'long_name': 'float year of snowline record'},
-            )
 
         if self.store_buckets_dates is not None:
             data_vars['store_buckets_dates_arr'] = xr.DataArray(
@@ -3131,17 +3090,18 @@ class SfcTypeTIModel(MassBalanceModel):
                       if self.mbmod.fl_id is not None else -1),
             # current runtime state
             'mb_buckets_year': float(self.mb_buckets_year),
-            'current_index': int(current_index),
         }
 
         return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
 
     def save_to_file(self, filesuffix=""):
-        """Save the complete state of this model to a NetCDF file.
+        """Save the current state of this model to a NetCDF file.
 
         The file is written to the glacier directory as
-        ``mb_diagnostics{filesuffix}.nc``.  All information required to
-        reproduce an identical model via :meth:`load_from_file` is stored.
+        ``mb_diagnostics{filesuffix}.nc``. It contains what is needed to
+        continue from the current bucket date with :meth:`load_from_file`
+        (the bucket state and the model parameters), but not the history of
+        the run (the mass balance and melt of each timestep, the snowline).
 
         Parameters
         ----------
@@ -3154,23 +3114,29 @@ class SfcTypeTIModel(MassBalanceModel):
 
     @classmethod
     def load_from_file(cls, gdir, filesuffix="", group=None,
-                       climate_filename=None, climate_input_filesuffix=None):
+                       climate_filename=None, climate_input_filesuffix=None,
+                       settings_filesuffix=None):
         """Load a previously saved :class:`SfcTypeTIModel` from a NetCDF file.
 
         Reads ``mb_diagnostics{filesuffix}.nc`` from the glacier directory and
         re-constructs the model.
 
-        **Continue** (``climate_filename`` and ``climate_input_filesuffix`` both
-        ``None``):
-        The complete runtime state (MB arrays, snowline) is
-        restored so that integration continues seamlessly using the same climate
-        input.
+        The bucket state is restored, and the model continues from the date
+        of the saved buckets (``mb_buckets_year``), either with the same
+        climate input or with a new one (scenario branching, if
+        ``climate_filename`` or ``climate_input_filesuffix`` are given).
 
-        **Scenario branching** (either climate parameter supplied):
-        Only the bucket state is restored.  The MB output arrays are freshly
-        allocated for the new climate period (from ``int(mb_buckets_year)`` to
-        the new ``ye``).  ``current_index`` is reset to zero; the historical MB
-        record is not carried over.
+        The history of the run which was saved is not stored in the file: the
+        MB output arrays of the loaded model are empty and cover the period
+        from ``int(mb_buckets_year)`` to the last year of the climate data,
+        ``ys`` is set to ``int(mb_buckets_year)``, and the mass balance of
+        timesteps before the saved state is not available (also not with
+        ``use_previous_mbs``).
+
+        Per default the model is rebuilt with the parameters stored in the
+        file. With ``settings_filesuffix`` the bucket state is combined with
+        the mass balance parameters of other settings instead (e.g. for
+        sensitivity experiments which all start from the same state).
 
         Parameters
         ----------
@@ -3187,14 +3153,22 @@ class SfcTypeTIModel(MassBalanceModel):
         climate_input_filesuffix : str, optional
             Override the stored climate input filesuffix (e.g. ``'_ssp585'``).
             If ``None``, the filesuffix from the saved file is used.
+        settings_filesuffix : str, optional
+            If ``None`` (default), the model uses the settings and the mass
+            balance parameters with which the file was saved (``melt_f``,
+            ``temp_bias``, ``prcp_fac`` and ``temp_melt`` as stored in the
+            file, i.e. including changes made to the model after it was
+            created). If provided (``''`` for the default settings), these
+            parameters are read from the settings with this filesuffix
+            instead. The bucket state and all other model options (e.g. the
+            number of buckets, ``melt_f_ratio``, ``bias``) always come from
+            the file.
 
         Returns
         -------
         SfcTypeTIModel
         """
         fp = gdir.get_filepath('mb_diagnostics', filesuffix=filesuffix)
-        new_climate = (climate_filename is not None or
-                       climate_input_filesuffix is not None)
 
         open_kw = {'group': group} if group is not None else {}
         with xr.open_dataset(fp, **open_kw) as ds:
@@ -3243,13 +3217,22 @@ class SfcTypeTIModel(MassBalanceModel):
             # saved labels (which may differ from np.arange(n_pts) when a
             # flowline was originally used).
             # spinup_buckets skips the actual spinup computation.
+            # The model starts at the date of the saved buckets: no spinup
+            # is done, and the MB output arrays only cover what comes after.
             saved_mb_buckets_year = float(attrs['mb_buckets_year'])
-            if new_climate:
-                ys_for_model = int(saved_mb_buckets_year)
-                save_spinup_mbs_for_model = False
+            ys_for_model = int(saved_mb_buckets_year)
+
+            if settings_filesuffix is None:
+                # rebuild the model as it was saved
+                settings_for_model = attrs['settings_filesuffix']
+                mb_params = dict(melt_f=float(attrs['melt_f']),
+                                 temp_bias=float(attrs['temp_bias']),
+                                 prcp_fac=float(attrs['prcp_fac']),
+                                 temp_melt=float(attrs['temp_melt']))
             else:
-                ys_for_model = int(attrs['ys'])
-                save_spinup_mbs_for_model = bool(attrs['save_spinup_mbs'])
+                # the mb_model_class reads the parameters from the settings
+                settings_for_model = settings_filesuffix
+                mb_params = {}
 
             fn_for_model = (climate_filename
                             if climate_filename is not None
@@ -3260,7 +3243,7 @@ class SfcTypeTIModel(MassBalanceModel):
 
             model = cls(
                 gdir=gdir,
-                settings_filesuffix=attrs['settings_filesuffix'],
+                settings_filesuffix=settings_for_model,
                 use_leap_years=bool(attrs['use_leap_years']),
                 mb_model_class=mb_model_class,
                 climate_resolution=attrs['climate_resolution'],
@@ -3270,7 +3253,7 @@ class SfcTypeTIModel(MassBalanceModel):
                 tau_e=float(attrs['tau_e']),
                 ys=ys_for_model,
                 spinup_years=int(attrs['spinup_years']),
-                save_spinup_mbs=save_spinup_mbs_for_model,
+                save_spinup_mbs=False,
                 spinup_buckets=saved_mb_buckets[:, :-1],
                 hbins=saved_spinup_heights,
                 store_buckets=store_buckets_val,
@@ -3281,14 +3264,11 @@ class SfcTypeTIModel(MassBalanceModel):
                 snow_density=float(attrs['snow_density']),
                 density_change=attrs['density_change'],
                 # mbmod kwargs (passed through **kwargs to mb_model_class)
-                melt_f=float(attrs['melt_f']),
-                temp_bias=float(attrs['temp_bias']),
-                prcp_fac=float(attrs['prcp_fac']),
                 bias=float(attrs['bias']),
                 filename=fn_for_model,
                 input_filesuffix=isuf_for_model,
-                temp_melt=float(attrs['temp_melt']),
                 repeat=bool(attrs['repeat']),
+                **mb_params,
                 fl_id=fl_id,
                 check_calib_params=False,
             )
@@ -3299,49 +3279,11 @@ class SfcTypeTIModel(MassBalanceModel):
             # _init_buckets already placed saved_mb_buckets[:,:-1] into
             # mb_buckets_np via spinup_buckets and set mb_buckets_year = ys.
             # Override with the full saved array (ice column included).
+            # Also after a reset_state, e.g. when a parameter is changed.
+            model._restart_state = (saved_mb_buckets.copy(),
+                                    saved_mb_buckets_year)
             model.mb_buckets_np[:] = saved_mb_buckets
             model.mb_buckets_year = saved_mb_buckets_year
-
-            if new_climate:
-                # start fresh, no historical MB to restore
-                pass
-            else:
-                # restore full MB history
-                current_index = int(attrs['current_index'])
-                model._current_index = current_index
-
-                if current_index > 0:
-                    model._climatic_mb[:current_index] = (
-                        ds['climatic_mb'].values)
-                    model._ice_mb[:current_index] = ds['ice_mb'].values
-                    model._mb_heights[:current_index] = (
-                        ds['mb_heights_stored'].values)
-                    # melt split by surface type (files saved before its
-                    # introduction do not contain it -> set to NaN)
-                    for attr_name, var_name in [('_snow_melt', 'snow_melt'),
-                                                ('_firn_melt', 'firn_melt'),
-                                                ('_ice_melt', 'ice_melt')]:
-                        arr = getattr(model, attr_name)
-                        if var_name in ds:
-                            arr[:current_index] = ds[var_name].values
-                        else:
-                            arr[:current_index] = np.nan
-
-                    # 'time' coordinate holds the float-year keys; array
-                    # indices are simply 0…N-1
-                    y2i_keys = ds.coords['time'].values
-                    model._year_to_index = {
-                        float(k): int(i)
-                        for i, k in enumerate(y2i_keys)
-                    }
-
-                # snowline state
-                if bool(attrs['store_snowline']) and 'snowline' in ds:
-                    model._snowline = list(ds['snowline'].values.tolist())
-                    model._snowline_year = list(
-                        ds['snowline_year'].values.tolist())
-                    # snowline_inf_values is repopulated automatically on the
-                    # next climate step
 
         return model
 
@@ -4206,6 +4148,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         file carries a ``n_flowlines`` attribute so that :meth:`load_from_file`
         knows how many groups to expect.
 
+        The file contains what is needed to continue from the current bucket
+        date (the bucket state and the model parameters), but not the history
+        of the run (the mass balance and melt of each timestep, the snowline).
+
         Only supported when all ``flowline_mb_models`` are instances of
         :class:`SfcTypeTIModel`.
 
@@ -4229,7 +4175,8 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
 
     @classmethod
     def load_from_file(cls, gdir, filesuffix="", climate_filename=None,
-                       climate_input_filesuffix=None):
+                       climate_input_filesuffix=None,
+                       settings_filesuffix=None):
         """Load a :class:`MultipleFlowlineMassBalance` from a saved nc file.
 
         Reads ``mb_diagnostics{filesuffix}.nc``, reconstructs one
@@ -4239,8 +4186,10 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
         To continue with same climate input leave ``climate_filename`` and
         ``climate_input_filesuffix`` as ``None``. For scenario branching
         (switch to a new climate file while keeping the bucket state), supply
-        the new climate parameters. The MB history is then reset and the
-        output arrays are sized for the new climate period.
+        the new climate parameters. In both cases the models continue from
+        the date of the saved buckets: the MB history of the run which was
+        saved is not stored in the file (see
+        :meth:`SfcTypeTIModel.load_from_file`).
 
         Parameters
         ----------
@@ -4250,6 +4199,12 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
             Override the stored climate filename (e.g. ``'gcm_data'``).
         climate_input_filesuffix : str, optional
             Override the stored climate input filesuffix (e.g. ``'_ssp585'``).
+        settings_filesuffix : str, optional
+            If ``None`` (default), the models use the settings and the mass
+            balance parameters with which the file was saved. If provided,
+            the bucket state is combined with the mass balance parameters of
+            the settings with this filesuffix instead (see
+            :meth:`SfcTypeTIModel.load_from_file`).
 
         Returns
         -------
@@ -4267,6 +4222,7 @@ class MultipleFlowlineMassBalance(MassBalanceModel):
                 group=f'fl_{i}',
                 climate_filename=climate_filename,
                 climate_input_filesuffix=climate_input_filesuffix,
+                settings_filesuffix=settings_filesuffix,
             )
             for i in range(n_fls)
         ]

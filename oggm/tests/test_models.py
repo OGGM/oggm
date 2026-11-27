@@ -2157,30 +2157,10 @@ class TestMassBalanceModels:
         init_present_time_glacier(gdir)
         h = gdir.read_store('inversion_flowlines')[-1].surface_h
 
-        # Helper: verify that two model instances have identical state
-        def assert_models_equal(m1, m2, check_snowline=False):
+        # Helper: verify that two model instances have an identical state
+        def assert_models_equal(m1, m2):
             np.testing.assert_allclose(m1.mb_buckets_np, m2.mb_buckets_np)
             assert m1.mb_buckets_year == m2.mb_buckets_year
-            assert m1._current_index == m2._current_index
-            assert m1._year_to_index == m2._year_to_index
-            np.testing.assert_allclose(
-                m1._climatic_mb[:m1._current_index],
-                m2._climatic_mb[:m2._current_index])
-            np.testing.assert_allclose(
-                m1._ice_mb[:m1._current_index],
-                m2._ice_mb[:m2._current_index])
-            np.testing.assert_allclose(
-                m1._mb_heights[:m1._current_index],
-                m2._mb_heights[:m2._current_index])
-            np.testing.assert_allclose(
-                m1._snow_melt[:m1._current_index],
-                m2._snow_melt[:m2._current_index])
-            np.testing.assert_allclose(
-                m1._firn_melt[:m1._current_index],
-                m2._firn_melt[:m2._current_index])
-            np.testing.assert_allclose(
-                m1._ice_melt[:m1._current_index],
-                m2._ice_melt[:m2._current_index])
             assert m1.buckets == m2.buckets
             np.testing.assert_allclose(
                 list(m1.melt_f_buckets.values()),
@@ -2191,9 +2171,33 @@ class TestMassBalanceModels:
             np.testing.assert_allclose(m1.spinup_heights, m2.spinup_heights)
             np.testing.assert_allclose(
                 m1.buckets_grid_point_label, m2.buckets_grid_point_label)
-            if check_snowline:
-                np.testing.assert_allclose(m1.snowline, m2.snowline)
-                np.testing.assert_allclose(m1.snowline_year, m2.snowline_year)
+
+        # Helper: a loaded model has no history, and starts at the date of
+        # the saved buckets
+        def assert_no_history(m_loaded, m_saved):
+            assert m_loaded._current_index == 0
+            assert m_loaded._year_to_index == {}
+            assert m_loaded.ys == int(m_saved.mb_buckets_year)
+            assert not m_loaded.save_spinup_mbs
+            if m_loaded.store_snowline:
+                assert len(m_loaded.snowline) == 0
+                assert len(m_loaded.snowline_year) == 0
+
+        # Helper: only the state is stored in the file, no history
+        def assert_file_state_only(filesuffix, group=None):
+            fp = gdir.get_filepath('mb_diagnostics', filesuffix=filesuffix)
+            with xr.open_dataset(fp, group=group) as ds:
+                assert 'time' not in ds.dims
+                assert 'current_index' not in ds.attrs
+                for vn in ['climatic_mb', 'ice_mb', 'mb_heights_stored',
+                           'snow_melt', 'firn_melt', 'ice_melt',
+                           'snowline', 'snowline_year']:
+                    assert vn not in ds.variables
+                for vn in ['mb_buckets', 'melt_f_buckets', 'density_buckets',
+                           'buckets_grid_point_label', 'spinup_heights']:
+                    assert vn in ds.variables
+                assert set(ds['mb_buckets'].dims) == {'grid_point', 'bucket'}
+                assert 'mb_buckets_year' in ds.attrs
 
         # Test 1: annual climate / annual aging
 
@@ -2206,24 +2210,52 @@ class TestMassBalanceModels:
         mb_loaded = massbalance.SfcTypeTIModel.load_from_file(
             gdir, filesuffix='_test_annual')
         assert_models_equal(mb_mod, mb_loaded)
+        assert_no_history(mb_loaded, mb_mod)
+        assert_file_state_only('_test_annual')
 
         # 1b: continue on both models; results must match exactly
         mb1 = mb_mod.get_annual_mb(h, year=1996)
         mb2 = mb_loaded.get_annual_mb(h, year=1996)
         np.testing.assert_allclose(mb1, mb2)
         assert_models_equal(mb_mod, mb_loaded)
+        # no spinup was done for the loaded model, so here both have the
+        # same history (the default spinup mbs are not saved for ys=1990)
 
         # 1c: save after computation and reload
         mb_mod.save_to_file(filesuffix='_test_annual_mid')
         mb_loaded_mid = massbalance.SfcTypeTIModel.load_from_file(
             gdir, filesuffix='_test_annual_mid')
         assert_models_equal(mb_mod, mb_loaded_mid)
+        # the history of the saved model is not in the file
+        assert mb_mod._current_index > 0
+        assert_no_history(mb_loaded_mid, mb_mod)
+        assert mb_loaded_mid.ys == 1997
+        assert_file_state_only('_test_annual_mid')
+        # the output arrays only cover what comes after the saved state
+        assert (mb_loaded_mid._climatic_mb.shape[0] ==
+                mb_loaded_mid.ye + 1 - 1997)
+        assert (mb_loaded_mid._climatic_mb.shape[0] <
+                mb_mod._climatic_mb.shape[0])
+        # values before the saved state can not be computed anymore
+        with pytest.raises(InvalidWorkflowError):
+            mb_loaded_mid.get_annual_mb(h, year=1995)
 
         # 1d: continue from loaded mid-state; must give identical output
         for yr in range(1997, 2000):
             mb_orig = mb_mod.get_annual_mb(h, year=yr)
             mb_file = mb_loaded_mid.get_annual_mb(h, year=yr)
             np.testing.assert_allclose(mb_orig, mb_file)
+        assert_models_equal(mb_mod, mb_loaded_mid)
+        # the new history of the loaded model is the end of the original one
+        n_new = mb_loaded_mid._current_index
+        assert n_new == 3
+        assert list(mb_loaded_mid._year_to_index) == [1997, 1998, 1999]
+        for vn in ['_climatic_mb', '_ice_mb', '_mb_heights', '_snow_melt',
+                   '_firn_melt', '_ice_melt']:
+            np.testing.assert_allclose(
+                getattr(mb_loaded_mid, vn)[:n_new],
+                getattr(mb_mod, vn)[mb_mod._current_index - n_new:
+                                    mb_mod._current_index])
 
         # 1e: custom fl behaves identically (spinup_heights and
         #     buckets_grid_point_label are restored, no fl object needed)
@@ -2258,17 +2290,41 @@ class TestMassBalanceModels:
         mb_loaded_m = massbalance.SfcTypeTIModel.load_from_file(
             gdir, filesuffix='_test_monthly')
         assert_models_equal(mb_mod_m, mb_loaded_m)
+        assert_no_history(mb_loaded_m, mb_mod_m)
+        assert mb_loaded_m.use_previous_mbs
 
-        # previously computed year can be retrieved from both after load
-        mb_prev_orig = mb_mod_m.get_annual_mb(h, year=1992)
-        mb_prev_loaded = mb_loaded_m.get_annual_mb(h, year=1992)
-        np.testing.assert_allclose(mb_prev_orig, mb_prev_loaded)
+        # a previously computed year can be retrieved from the original
+        # model, but not from the loaded one: the history is not stored
+        mb_mod_m.get_annual_mb(h, year=1992)
+        with pytest.raises(InvalidWorkflowError,
+                           match='No stored mass balance available'):
+            mb_loaded_m.get_annual_mb(h, year=1992)
 
         # continue forward
         for yr in range(1994, 2000):
             mb_orig = mb_mod_m.get_annual_mb(h, year=yr)
             mb_file = mb_loaded_m.get_annual_mb(h, year=yr)
             np.testing.assert_allclose(mb_orig, mb_file)
+        assert_models_equal(mb_mod_m, mb_loaded_m)
+        # years computed after the load can be retrieved from both
+        np.testing.assert_allclose(mb_mod_m.get_annual_mb(h, year=1996),
+                                   mb_loaded_m.get_annual_mb(h, year=1996))
+
+        # 2b: save in the middle of a year, and continue monthly
+        mb_mod_m.get_monthly_mb(h, year=utils.date_to_floatyear(2000, 5))
+        assert mb_mod_m.mb_buckets_year == utils.date_to_floatyear(2000, 6)
+        mb_mod_m.save_to_file(filesuffix='_test_monthly_mid')
+        mb_loaded_m = massbalance.SfcTypeTIModel.load_from_file(
+            gdir, filesuffix='_test_monthly_mid')
+        assert_models_equal(mb_mod_m, mb_loaded_m)
+        assert_no_history(mb_loaded_m, mb_mod_m)
+        assert mb_loaded_m.ys == 2000
+        for mth in range(6, 13):
+            fyr = utils.date_to_floatyear(2000, mth)
+            np.testing.assert_allclose(mb_mod_m.get_monthly_mb(h, year=fyr),
+                                       mb_loaded_m.get_monthly_mb(h, year=fyr))
+        np.testing.assert_allclose(mb_mod_m.get_annual_mb(h, year=2001),
+                                   mb_loaded_m.get_annual_mb(h, year=2001))
         assert_models_equal(mb_mod_m, mb_loaded_m)
 
         # Test 3: store_snowline
@@ -2283,14 +2339,21 @@ class TestMassBalanceModels:
         mb_mod_sl.save_to_file(filesuffix='_test_snowline')
         mb_loaded_sl = massbalance.SfcTypeTIModel.load_from_file(
             gdir, filesuffix='_test_snowline')
-        assert_models_equal(mb_mod_sl, mb_loaded_sl, check_snowline=True)
+        assert_models_equal(mb_mod_sl, mb_loaded_sl)
+        # the snowline is history too: it is not stored, but the settings are
+        assert_file_state_only('_test_snowline')
+        assert_no_history(mb_loaded_sl, mb_mod_sl)
+        assert mb_loaded_sl.store_snowline
+        n_sl_saved = len(mb_mod_sl.snowline)
 
-        # snowline continues to accumulate correctly after load
+        # the snowline is computed again after the load, with the same values
         mb_mod_sl.get_annual_mb(h, year=2000)
         mb_loaded_sl.get_annual_mb(h, year=2000)
-        np.testing.assert_allclose(mb_mod_sl.snowline, mb_loaded_sl.snowline)
-        np.testing.assert_allclose(
-            mb_mod_sl.snowline_year, mb_loaded_sl.snowline_year)
+        assert len(mb_loaded_sl.snowline) > 0
+        np.testing.assert_allclose(mb_mod_sl.snowline[n_sl_saved:],
+                                   mb_loaded_sl.snowline)
+        np.testing.assert_allclose(mb_mod_sl.snowline_year[n_sl_saved:],
+                                   mb_loaded_sl.snowline_year)
 
         # Test 4: filesuffix parameter is respected
         mb_mod.save_to_file(filesuffix='_suffix_check')
@@ -2298,8 +2361,8 @@ class TestMassBalanceModels:
             gdir, filesuffix='_suffix_check')
         assert_models_equal(mb_mod, mb_loaded_suffix)
 
-        # Test 5: scenario branch: new climate_input_filesuffix resets MB
-        #         history but preserves bucket state
+        # Test 5: scenario branch: new climate_input_filesuffix preserves
+        #         the bucket state (as for the same climate, no MB history)
         mb_mod_branch = massbalance.SfcTypeTIModel(
             gdir, mb_model_class=massbalance.MonthlyTIModel,
             climate_resolution='annual', aging_frequency='annual',
@@ -2307,9 +2370,8 @@ class TestMassBalanceModels:
         mb_mod_branch.get_annual_mb(h, year=1995)
         mb_mod_branch.save_to_file(filesuffix='_test_branch')
 
-        # Passing climate_input_filesuffix (even if identical, default is None)
-        # triggers the scenario-branch path: bucket state is kept, MB history is
-        # reset.
+        # Passing climate_input_filesuffix (here identical, default is None)
+        # is the scenario-branch: bucket state is kept, no MB history.
         mb_loaded_branch = massbalance.SfcTypeTIModel.load_from_file(
             gdir, filesuffix='_test_branch',
             climate_input_filesuffix='')
@@ -2348,6 +2410,9 @@ class TestMassBalanceModels:
         for i, fl in enumerate(fls):
             assert_models_equal(mb_multi.flowline_mb_models[i],
                                 mb_multi_loaded.flowline_mb_models[i])
+            assert_no_history(mb_multi_loaded.flowline_mb_models[i],
+                              mb_multi.flowline_mb_models[i])
+            assert_file_state_only('_test_multi', group=f'fl_{i}')
 
         # load with new climate, scenario branch (bucket state kept, history reset)
         mb_multi_branch = massbalance.MultipleFlowlineMassBalance.load_from_file(
@@ -2357,6 +2422,13 @@ class TestMassBalanceModels:
                 mb_multi.flowline_mb_models[i].mb_buckets_np,
                 mb_multi_branch.flowline_mb_models[i].mb_buckets_np)
             assert mb_multi_branch.flowline_mb_models[i]._current_index == 0
+
+        # continue on both; results must match
+        for i, fl in enumerate(fls):
+            np.testing.assert_allclose(
+                mb_multi.get_annual_mb(fl.surface_h, year=1999, fl_id=i),
+                mb_multi_loaded.get_annual_mb(fl.surface_h, year=1999,
+                                              fl_id=i))
 
         # Test 7: test with dynamic run and multiple flowlines
         continues_run = tasks.run_from_climate_data(
@@ -2393,6 +2465,11 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(continues_run.volume_m3, part2_run.volume_m3,
                                    rtol=1e-5)
 
+        # the files of the dynamic runs only store the state
+        for i, fl in enumerate(fls):
+            assert_file_state_only('continues_run', group=f'fl_{i}')
+            assert_file_state_only('part2_run', group=f'fl_{i}')
+
         continues_mb = massbalance.MultipleFlowlineMassBalance.load_from_file(
             gdir, filesuffix='continues_run')
         part2_mb = massbalance.MultipleFlowlineMassBalance.load_from_file(
@@ -2403,6 +2480,480 @@ class TestMassBalanceModels:
                 continues_mb.flowline_mb_models[i].mb_buckets_np,
                 part2_mb.flowline_mb_models[i].mb_buckets_np,
                 atol=1e-2)
+
+    def test_sfc_type_restart_selects_mb_diagnostics(self, hef_gdir, caplog):
+        """A restart with init_model_filesuffix uses the bucket state of the
+        previous run automatically, if there is one for the restart date."""
+        import logging
+        from oggm.core.flowline import _select_mb_diagnostics_filesuffix
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+
+        sfc_class = partial(massbalance.SfcTypeTIModel,
+                            mb_model_class=massbalance.MonthlyTIModel)
+        msg_loaded = 'is loaded from the mb_diagnostics file'
+        msg_rebuild = 'rebuilt with a fresh spinup'
+
+        def restart(**kwargs):
+            caplog.clear()
+            with caplog.at_level(logging.INFO, logger='oggm.core.flowline'):
+                return tasks.run_from_climate_data(
+                    gdir, ye=1996, mb_elev_feedback='monthly', **kwargs)
+
+        # the reference: one run from 1990 to 1996
+        ref_run = tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=1990, ye=1996,
+            mb_elev_feedback='monthly')
+
+        # the first part, with and without the state of the buckets
+        tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=1990, ye=1993,
+            mb_elev_feedback='monthly', store_model_geometry=True,
+            output_filesuffix='_part1',
+            save_mb_diagnostics_filesuffix='_part1')
+        tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=1990, ye=1993,
+            mb_elev_feedback='monthly', store_model_geometry=True,
+            output_filesuffix='_part1_no_state')
+        assert gdir.has_file('mb_diagnostics', filesuffix='_part1')
+        assert not gdir.has_file('mb_diagnostics',
+                                 filesuffix='_part1_no_state')
+
+        # (a) the file is selected automatically: same as the reference
+        auto_run = restart(mb_model_class=sfc_class,
+                           init_model_filesuffix='_part1')
+        assert msg_loaded in caplog.text
+        assert msg_rebuild not in caplog.text
+        assert auto_run.yr == 1996
+        for mb_mod in auto_run.mb_model.flowline_mb_models:
+            assert isinstance(mb_mod, massbalance.SfcTypeTIModel)
+            # the buckets were not rebuilt, the model starts from the state
+            assert mb_mod.ys == 1993
+        np.testing.assert_allclose(auto_run.volume_m3, ref_run.volume_m3,
+                                   rtol=1e-5)
+
+        # and it is the same as giving the file explicitly
+        explicit_run = restart(mb_model_class=sfc_class,
+                               init_model_filesuffix='_part1',
+                               mb_diagnostics_filesuffix='_part1')
+        assert msg_loaded not in caplog.text
+        assert msg_rebuild not in caplog.text
+        np.testing.assert_allclose(auto_run.volume_m3,
+                                   explicit_run.volume_m3)
+        for mb_auto, mb_explicit in zip(
+                auto_run.mb_model.flowline_mb_models,
+                explicit_run.mb_model.flowline_mb_models):
+            np.testing.assert_allclose(mb_auto.mb_buckets_np,
+                                       mb_explicit.mb_buckets_np)
+
+        # changing a parameter resets a model: a loaded one goes back to the
+        # complete saved state, incl. the ice formed by the last aging step
+        # (in the ice bucket until the next climate step)
+        mb_loaded = massbalance.MultipleFlowlineMassBalance.load_from_file(
+            gdir, filesuffix='_part1')
+        saved_buckets = [m.mb_buckets_np.copy()
+                         for m in mb_loaded.flowline_mb_models]
+        assert np.any([np.any(b[:, -1] > 0) for b in saved_buckets])
+        mb_loaded.temp_bias += 0.
+        mb_loaded.prcp_fac *= 1.
+        for m, b in zip(mb_loaded.flowline_mb_models, saved_buckets):
+            np.testing.assert_allclose(m.mb_buckets_np, b)
+            assert m.mb_buckets_year == 1993
+        # so run kwargs which change parameters do not change the start
+        for kwargs in [dict(temperature_bias=0.),
+                       dict(precipitation_factor=1.)]:
+            kwarg_run = restart(mb_model_class=sfc_class,
+                                init_model_filesuffix='_part1', **kwargs)
+            assert msg_loaded in caplog.text
+            np.testing.assert_allclose(kwarg_run.volume_m3,
+                                       auto_run.volume_m3, rtol=1e-12)
+            np.testing.assert_allclose(kwarg_run.mass_kg, auto_run.mass_kg,
+                                       rtol=1e-12)
+
+        # also with a "new" climate (scenario branching)
+        branch_run = restart(mb_model_class=sfc_class,
+                             init_model_filesuffix='_part1',
+                             climate_input_filesuffix='')
+        assert msg_loaded in caplog.text
+        np.testing.assert_allclose(auto_run.volume_m3, branch_run.volume_m3)
+
+        # (b) this can be switched off: the buckets are rebuilt (6 years of
+        # spinup before the restart, which are stored per default)
+        fresh_run = restart(mb_model_class=sfc_class,
+                            init_model_filesuffix='_part1',
+                            mb_diagnostics_filesuffix=False)
+        assert msg_loaded not in caplog.text
+        fresh_mb = fresh_run.mb_model.flowline_mb_models[-1]
+        auto_mb = auto_run.mb_model.flowline_mb_models[-1]
+        assert fresh_mb.save_spinup_mbs
+        assert fresh_mb._current_index > auto_mb._current_index
+        # close to the exact restart, but not the same
+        assert fresh_run.volume_m3 != auto_run.volume_m3
+        np.testing.assert_allclose(fresh_run.volume_m3, auto_run.volume_m3,
+                                   rtol=0.01)
+
+        # (c) no state for the restart date: fresh spinup, and we say it
+        other_yr_run = restart(mb_model_class=sfc_class,
+                               init_model_filesuffix='_part1',
+                               init_model_yr=1992)
+        assert msg_loaded not in caplog.text
+        assert msg_rebuild in caplog.text
+        assert 'are valid for 1993.0, but the run starts in 1992' in caplog.text
+        assert 'WARNING' in [r.levelname for r in caplog.records]
+        assert other_yr_run.yr == 1996
+        assert other_yr_run.mb_model.flowline_mb_models[-1].save_spinup_mbs
+
+        # (d) no file for this run: fresh spinup, and we say it
+        no_state_run = restart(mb_model_class=sfc_class,
+                               init_model_filesuffix='_part1_no_state')
+        assert msg_loaded not in caplog.text
+        assert msg_rebuild in caplog.text
+        assert 'no mb_diagnostics file' in caplog.text
+        np.testing.assert_allclose(no_state_run.volume_m3,
+                                   fresh_run.volume_m3)
+
+        # (e) other MB models are not concerned
+        monthly_run = restart(init_model_filesuffix='_part1')
+        assert msg_loaded not in caplog.text
+        assert msg_rebuild not in caplog.text
+        for mb_mod in monthly_run.mb_model.flowline_mb_models:
+            assert isinstance(mb_mod, massbalance.MonthlyTIModel)
+
+        # (f) the selection itself
+        kwargs = dict(ys=1993, init_model_yr=1993)
+        for mb_class in [massbalance.SfcTypeTIModel, sfc_class,
+                         partial(sfc_class, spinup_years=3)]:
+            assert _select_mb_diagnostics_filesuffix(
+                gdir, '_part1', mb_model_class=mb_class, **kwargs) == '_part1'
+        for mb_class in [massbalance.MonthlyTIModel,
+                         partial(massbalance.DailyTIModel, bias=0)]:
+            assert _select_mb_diagnostics_filesuffix(
+                gdir, '_part1', mb_model_class=mb_class, **kwargs) is None
+        assert _select_mb_diagnostics_filesuffix(
+            gdir, '_part1_no_state', mb_model_class=sfc_class,
+            **kwargs) is None
+        # (g) no stale state: when a run replaces the geometry of a previous
+        # one, the state of the previous run is deleted with it
+        def first_part(filesuffix, save=True, **kwargs):
+            tasks.run_from_climate_data(
+                gdir, mb_model_class=sfc_class, ys=1990, ye=1993,
+                mb_elev_feedback='monthly', output_filesuffix=filesuffix,
+                save_mb_diagnostics_filesuffix=filesuffix if save else None,
+                **kwargs)
+
+        first_part('_stale', store_model_geometry=True)
+        assert gdir.has_file('mb_diagnostics', filesuffix='_stale')
+        # a run which does not write a new geometry keeps the pair of files
+        first_part('_stale', save=False, store_model_geometry=False)
+        assert gdir.has_file('model_geometry', filesuffix='_stale')
+        assert gdir.has_file('mb_diagnostics', filesuffix='_stale')
+        # a run which writes a new geometry but no state deletes the old one
+        first_part('_stale', save=False, store_model_geometry=True)
+        assert gdir.has_file('model_geometry', filesuffix='_stale')
+        assert not gdir.has_file('mb_diagnostics', filesuffix='_stale')
+        stale_run = restart(mb_model_class=sfc_class,
+                            init_model_filesuffix='_stale')
+        assert msg_loaded not in caplog.text
+        assert 'no mb_diagnostics file' in caplog.text
+        np.testing.assert_allclose(stale_run.volume_m3, fresh_run.volume_m3)
+        # other files are not concerned
+        assert gdir.has_file('mb_diagnostics', filesuffix='_part1')
+
+        # a run can continue "in place": the state is read before the files
+        # are replaced, and a new one is written
+        first_part('_inplace', store_model_geometry=True)
+        inplace_run = restart(mb_model_class=sfc_class,
+                              init_model_filesuffix='_inplace',
+                              output_filesuffix='_inplace',
+                              store_model_geometry=True,
+                              save_mb_diagnostics_filesuffix='_inplace')
+        assert msg_loaded in caplog.text
+        np.testing.assert_allclose(inplace_run.volume_m3, auto_run.volume_m3)
+        mb_inplace = massbalance.MultipleFlowlineMassBalance.load_from_file(
+            gdir, filesuffix='_inplace')
+        for m in mb_inplace.flowline_mb_models:
+            assert m.mb_buckets_year == 1996
+
+        # a file with the state of a single model can not be used
+        mb_single = massbalance.SfcTypeTIModel(
+            gdir, mb_model_class=massbalance.MonthlyTIModel, ys=1993,
+            check_calib_params=False)
+        mb_single.save_to_file(filesuffix='_single')
+        caplog.clear()
+        assert _select_mb_diagnostics_filesuffix(
+            gdir, '_single', mb_model_class=sfc_class, **kwargs) is None
+        assert 'not saved by a MultipleFlowlineMassBalance' in caplog.text
+        # run start different from the state or from the geometry
+        for ys, init_model_yr in [(1994, 1994), (1993, 1992), (1994, 1993)]:
+            assert _select_mb_diagnostics_filesuffix(
+                gdir, '_part1', mb_model_class=sfc_class, ys=ys,
+                init_model_yr=init_model_yr) is None
+
+    def test_sfc_type_restart_with_other_settings(self, hef_gdir):
+        """The saved bucket state can be combined with other settings, e.g.
+        for sensitivity experiments which all start from the same state."""
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        sfc_class = partial(massbalance.SfcTypeTIModel,
+                            mb_model_class=massbalance.MonthlyTIModel)
+
+        # the default settings, and other ones with a larger melt factor
+        melt_f = gdir.settings['melt_f']
+        temp_bias = gdir.settings['temp_bias']
+        gdir.create_new_settings(filesuffix='_sens', parent_filesuffix='',
+                                 data={'melt_f': melt_f * 1.2})
+        assert gdir.settings_filesuffix == ''
+        assert gdir.settings['melt_f'] == melt_f
+
+        # the common start: a run with the default settings
+        hist_run = tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=1990, ye=1993,
+            store_model_geometry=True, output_filesuffix='_hist',
+            save_mb_diagnostics_filesuffix='_hist')
+        hist_mb = hist_run.mb_model
+
+        # --- load_from_file
+        load = massbalance.MultipleFlowlineMassBalance.load_from_file
+        # default: the model as it was saved
+        mb_file = load(gdir, filesuffix='_hist')
+        # the state with the parameters of other settings
+        mb_sens = load(gdir, filesuffix='_hist', settings_filesuffix='_sens')
+        # and explicitly with the default settings
+        mb_default = load(gdir, filesuffix='_hist', settings_filesuffix='')
+        assert gdir.settings_filesuffix == ''
+        assert len(mb_sens.flowline_mb_models) > 1
+        for m_hist, m_file, m_sens, m_default in zip(
+                hist_mb.flowline_mb_models, mb_file.flowline_mb_models,
+                mb_sens.flowline_mb_models, mb_default.flowline_mb_models):
+            for m in [m_file, m_sens, m_default]:
+                # same state and same model options
+                np.testing.assert_allclose(m.mb_buckets_np,
+                                           m_hist.mb_buckets_np)
+                assert m.mb_buckets_year == m_hist.mb_buckets_year == 1993
+                assert m.buckets == m_hist.buckets
+                assert m.melt_f_ratio == m_hist.melt_f_ratio
+                assert m.temp_bias == temp_bias
+                assert m.prcp_fac == m_hist.prcp_fac
+            assert m_file.settings_filesuffix == ''
+            assert m_default.settings_filesuffix == ''
+            assert m_sens.settings_filesuffix == '_sens'
+            assert m_file.melt_f == m_default.melt_f == melt_f
+            np.testing.assert_allclose(m_sens.melt_f, melt_f * 1.2)
+            # the melt factors of the buckets follow
+            np.testing.assert_allclose(
+                list(m_sens.melt_f_buckets.values()),
+                np.array(list(m_file.melt_f_buckets.values())) * 1.2)
+
+        # --- run_from_climate_data: the parameters are the ones of the run
+        default_run = tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, init_model_filesuffix='_hist',
+            ye=1997, output_filesuffix='_proj')
+        sens_run = tasks.run_from_climate_data(
+            gdir, settings_filesuffix='_sens', mb_model_class=sfc_class,
+            init_model_filesuffix='_hist', ye=1997,
+            output_filesuffix='_proj_sens')
+        for m_default, m_sens in zip(default_run.mb_model.flowline_mb_models,
+                                     sens_run.mb_model.flowline_mb_models):
+            # both started from the saved state, without a new spinup
+            assert m_default.ys == m_sens.ys == 1993
+            assert m_default.melt_f == melt_f
+            np.testing.assert_allclose(m_sens.melt_f, melt_f * 1.2)
+        # more melt, less ice
+        assert sens_run.volume_m3 < default_run.volume_m3 * 0.999
+
+        # the same with the file given explicitly ...
+        sens_run_explicit = tasks.run_from_climate_data(
+            gdir, settings_filesuffix='_sens', init_model_filesuffix='_hist',
+            mb_diagnostics_filesuffix='_hist', ye=1997,
+            output_filesuffix='_proj_sens_explicit')
+        np.testing.assert_allclose(sens_run_explicit.volume_m3,
+                                   sens_run.volume_m3)
+        # ... and with the mb model loaded by hand
+        sens_run_by_hand = tasks.run_from_climate_data(
+            gdir, settings_filesuffix='_sens', init_model_filesuffix='_hist',
+            mb_model=load(gdir, filesuffix='_hist',
+                          settings_filesuffix='_sens'),
+            ye=1997, output_filesuffix='_proj_sens_by_hand')
+        np.testing.assert_allclose(sens_run_by_hand.volume_m3,
+                                   sens_run.volume_m3)
+
+        # a temperature_bias of the first run is not applied a second time
+        tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=1990, ye=1993,
+            temperature_bias=0.5, store_model_geometry=True,
+            output_filesuffix='_hist_tb',
+            save_mb_diagnostics_filesuffix='_hist_tb')
+        # (the file stores the parameters the first run has used)
+        for m in load(gdir, filesuffix='_hist_tb').flowline_mb_models:
+            np.testing.assert_allclose(m.temp_bias, temp_bias + 0.5)
+        for m in load(gdir, filesuffix='_hist_tb',
+                      settings_filesuffix='').flowline_mb_models:
+            assert m.temp_bias == temp_bias
+        tb_run = tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, init_model_filesuffix='_hist_tb',
+            temperature_bias=0.5, ye=1997, output_filesuffix='_proj_tb')
+        no_tb_run = tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, init_model_filesuffix='_hist_tb',
+            ye=1997, output_filesuffix='_proj_no_tb')
+        for m_tb, m_no_tb in zip(tb_run.mb_model.flowline_mb_models,
+                                 no_tb_run.mb_model.flowline_mb_models):
+            assert m_tb.ys == m_no_tb.ys == 1993
+            np.testing.assert_allclose(m_tb.temp_bias, temp_bias + 0.5)
+            assert m_no_tb.temp_bias == temp_bias
+
+    def test_sfc_type_projection_from_state_all_outputs(self, hef_gdir):
+        """A projection from a saved bucket state works with all the outputs
+        switched on, and is the same as a run without a restart."""
+
+        gdir = hef_gdir
+        init_present_time_glacier(gdir)
+        gdir.settings['store_model_geometry'] = True
+        n_fls = len(gdir.read_store('model_flowlines'))
+        assert n_fls > 1
+
+        # the "GCM" is a copy of the historical climate: a projection from
+        # the saved state must then give the same as a continuous run
+        shutil.copy(gdir.get_filepath('climate_historical'),
+                    gdir.get_filepath('gcm_data', filesuffix='_fake'))
+
+        ys, ym, ye = 1990, 1994, 1998
+        sfc_class = partial(massbalance.SfcTypeTIModel,
+                            mb_model_class=massbalance.MonthlyTIModel)
+        proj_kwargs = dict(climate_filename='gcm_data',
+                           climate_input_filesuffix='_fake',
+                           mb_model_class=sfc_class, ye=ye)
+
+        def read_diag(filesuffix):
+            fp = gdir.get_filepath('model_diagnostics', filesuffix=filesuffix)
+            with xr.open_dataset(fp) as ds:
+                return ds.load()
+
+        def assert_close(ds, ds_ref, vns, rtol):
+            # relative to the largest value: many values are (close to) zero
+            for vn in vns:
+                ref = ds_ref[vn].values
+                np.testing.assert_allclose(
+                    ds[vn].values, ref, rtol=rtol,
+                    atol=rtol * np.nanmax(np.abs(ref)), err_msg=vn)
+
+        geom_vars = ['volume_m3', 'volume_ice_m3', 'volume_firn_m3',
+                     'mass_kg', 'mass_ice_kg', 'mass_firn_kg', 'area_m2',
+                     'length_m']
+        hydro_vars = ['melt_on_glacier', 'liq_prcp_on_glacier',
+                      'snowfall_on_glacier', 'snow_melt_on_glacier',
+                      'firn_melt_on_glacier', 'ice_melt_on_glacier',
+                      'on_area', 'temp_on_glacier']
+
+        # --- annual mb_elev_feedback: hydro (annual and monthly) and
+        # flowline diagnostics
+        all_outputs = dict(run_task=run_from_climate_data,
+                           store_monthly_hydro=True,
+                           store_fl_diagnostics=True)
+        tasks.run_with_hydro(gdir, mb_model_class=sfc_class, ys=ys, ye=ye,
+                             output_filesuffix='_ref', **all_outputs)
+        tasks.run_with_hydro(gdir, mb_model_class=sfc_class, ys=ys, ye=ym,
+                             output_filesuffix='_hist',
+                             save_mb_diagnostics_filesuffix='_hist',
+                             **all_outputs)
+        # the state of the buckets is selected automatically
+        tasks.run_with_hydro(gdir, init_model_filesuffix='_hist',
+                             output_filesuffix='_proj', **proj_kwargs,
+                             **all_outputs)
+
+        ds_proj = read_diag('_proj')
+        ds_ref = read_diag('_ref').sel(time=ds_proj.time)
+        np.testing.assert_allclose(ds_proj.time, np.arange(ym, ye + 1))
+        assert_close(ds_proj, ds_ref, geom_vars, rtol=1e-4)
+        # the last year of the hydro output is always NaN
+        odf_proj = ds_proj.isel(time=slice(0, -1))
+        odf_ref = ds_ref.isel(time=slice(0, -1))
+        assert_close(odf_proj, odf_ref, hydro_vars, rtol=1e-3)
+        assert_close(odf_proj, odf_ref, [vn + '_monthly' for vn in hydro_vars
+                                         if vn != 'on_area'], rtol=1e-3)
+        for vn in hydro_vars:
+            assert np.all(np.isfinite(odf_proj[vn]))
+        # the projection is mass conserving and the melt components add up
+        np.testing.assert_allclose(
+            odf_proj['snowfall_on_glacier'].values -
+            odf_proj['melt_on_glacier'].values,
+            ds_proj['mass_kg'].values[1:] - ds_proj['mass_kg'].values[:-1])
+        np.testing.assert_allclose(
+            (odf_proj['snow_melt_on_glacier'] +
+             odf_proj['firn_melt_on_glacier'] +
+             odf_proj['ice_melt_on_glacier']).values,
+            odf_proj['melt_on_glacier'].values)
+        assert odf_proj['firn_melt_on_glacier'].sum() > 0
+
+        # flowline diagnostics
+        fl_vars = ['volume_m3', 'volume_ice_m3', 'volume_firn_m3',
+                   'thickness_m', 'mass_kg', 'climatic_mb', 'dhdt']
+        for fl_id in range(n_fls):
+            with xr.open_dataset(
+                    gdir.get_filepath('fl_diagnostics', filesuffix='_proj'),
+                    group=f'fl_{fl_id}') as ds:
+                ds_fl = ds.load()
+            with xr.open_dataset(
+                    gdir.get_filepath('fl_diagnostics', filesuffix='_ref'),
+                    group=f'fl_{fl_id}') as ds:
+                ds_fl_ref = ds.load().sel(time=ds_fl.time)
+            # the first step has no climatic_mb and dhdt in the projection
+            assert_close(ds_fl.isel(time=slice(1, None)),
+                         ds_fl_ref.isel(time=slice(1, None)),
+                         fl_vars, rtol=1e-3)
+            assert np.any(ds_fl['climatic_mb'].isel(time=slice(1, None)) != 0)
+
+        # --- monthly storage of the model geometry and diagnostics
+        tasks.run_from_climate_data(
+            gdir, init_model_filesuffix='_hist', store_monthly_step=True,
+            store_model_geometry=True, store_fl_diagnostics=True,
+            output_filesuffix='_proj_monthly', **proj_kwargs)
+        ds_proj_m = read_diag('_proj_monthly')
+        assert len(ds_proj_m.time) == (ye - ym) * 12 + 1
+        assert_close(ds_proj_m.isel(time=slice(0, None, 12)), ds_ref,
+                     ['volume_m3', 'mass_kg', 'mass_firn_kg'], rtol=1e-3)
+        for fn in ['model_geometry', 'fl_diagnostics']:
+            assert gdir.has_file(fn, filesuffix='_proj_monthly')
+
+        # --- monthly mb_elev_feedback (not possible with run_with_hydro)
+        # Here the flowline diagnostics revisit mass balance values of the
+        # run: this works without use_previous_mbs, with and without restart
+        ref_fb = tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=ys, ye=ye,
+            mb_elev_feedback='monthly', store_fl_diagnostics=True,
+            output_filesuffix='_ref_fb')
+        tasks.run_from_climate_data(
+            gdir, mb_model_class=sfc_class, ys=ys, ye=ym,
+            mb_elev_feedback='monthly', output_filesuffix='_hist_fb',
+            save_mb_diagnostics_filesuffix='_hist_fb')
+        proj_fb = tasks.run_from_climate_data(
+            gdir, init_model_filesuffix='_hist_fb',
+            mb_elev_feedback='monthly', store_fl_diagnostics=True,
+            output_filesuffix='_proj_fb', **proj_kwargs)
+        for run in [ref_fb, proj_fb]:
+            for mb_mod in run.mb_model.flowline_mb_models:
+                # the models still refuse to go back in time after the run
+                assert not mb_mod.use_previous_mbs
+        for mb_mod in proj_fb.mb_model.flowline_mb_models:
+            assert mb_mod.ys == ym
+        ds_proj_fb = read_diag('_proj_fb')
+        assert_close(ds_proj_fb, read_diag('_ref_fb').sel(time=ds_proj_fb.time),
+                     geom_vars, rtol=1e-4)
+        for fl_id in range(n_fls):
+            with xr.open_dataset(
+                    gdir.get_filepath('fl_diagnostics',
+                                      filesuffix='_proj_fb'),
+                    group=f'fl_{fl_id}') as ds:
+                ds_fl = ds.load()
+            with xr.open_dataset(
+                    gdir.get_filepath('fl_diagnostics', filesuffix='_ref_fb'),
+                    group=f'fl_{fl_id}') as ds:
+                ds_fl_ref = ds.load().sel(time=ds_fl.time)
+            assert_close(ds_fl.isel(time=slice(1, None)),
+                         ds_fl_ref.isel(time=slice(1, None)),
+                         ['thickness_m', 'climatic_mb', 'dhdt'], rtol=1e-3)
+            assert np.any(ds_fl['climatic_mb'].isel(time=slice(1, None)) != 0)
 
     def test_sfc_type_mb_calibration_for_multiple_flowlines(self, hef_gdir):
 
@@ -2688,12 +3239,13 @@ class TestMassBalanceModels:
         np.testing.assert_allclose(hist_mb_mod.mb_buckets_np,
                                    loaded_mb_mod.mb_buckets_np)
         assert hist_mb_mod.mb_buckets_year == loaded_mb_mod.mb_buckets_year
-        assert hist_mb_mod._current_index == loaded_mb_mod._current_index
+        # the MB history is not stored
+        assert hist_mb_mod._current_index > 0
+        assert loaded_mb_mod._current_index == 0
 
         # (c) Projection from the saved state using mb_diagnostics_filesuffix.
-        # We pass climate_input_filesuffix='_daily' (same file) to trigger the
-        # scenario-branch path: bucket state is kept, MB history is reset, and
-        # the output arrays are sized for 2010 to 2020.
+        # The bucket state is kept, there is no MB history, and the output
+        # arrays are sized for 2010 to 2020.
         dyn_model_proj = tasks.run_from_climate_data(
             gdir, settings_filesuffix='_daily_sfc',
             climate_input_filesuffix='_daily',
@@ -2703,7 +3255,7 @@ class TestMassBalanceModels:
             output_filesuffix='_daily_sfc_proj',
             mb_diagnostics_filesuffix='_hist_checkpoint')
 
-        # projection MB model is in scenario-branch state: history reset
+        # projection MB model starts from the saved state, without history
         proj_mb_mod = dyn_model_proj.mb_model.flowline_mb_models[0]
         assert proj_mb_mod.ys == int(hist_mb_mod.mb_buckets_year)
         # historical mb should cover the entire period provided

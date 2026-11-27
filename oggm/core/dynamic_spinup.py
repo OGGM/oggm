@@ -520,6 +520,11 @@ def run_dynamic_spinup(gdir, settings_filesuffix='',
         geom_path = gdir.get_filepath('model_geometry',
                                       filesuffix=output_filesuffix,
                                       delete=True)
+        # A mb_diagnostics file with the same suffix is the mass balance
+        # model state of the run which wrote the geometry we just deleted:
+        # it must not be used to restart from the new one
+        gdir.get_filepath('mb_diagnostics', filesuffix=output_filesuffix,
+                          delete=True)
     else:
         geom_path = False
 
