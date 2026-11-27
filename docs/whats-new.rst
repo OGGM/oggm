@@ -390,7 +390,7 @@ Bug fixes
   outputs are now the sum of the 12 monthly mass balances, computed on the
   surface at the start of the year. The glacier dynamics and all other
   outputs were not affected, and results with the default
-  ``mb_elev_feedback='annual'`` are unchanged.
+  ``mb_elev_feedback='annual'`` are unchanged (:pull:`2052`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - The gridded shop tasks (ITS_LIVE, Millan thickness and velocity,
   Hugonnet, BedMachine, IceBoost) now raise an ``InvalidWorkflowError``
