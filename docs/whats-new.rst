@@ -280,8 +280,25 @@ Enhancements
   end of a dynamic run. In particular, these files can be used to initialize the
   buckets again to continue a dynamic run (e.g. to run multiple projections, all
   starting from the same model state). It is also possible to store a
-  ``MultipleFlowlineMassBalance``, when working with multiple flowlines
-  (:pull:`1899`).
+  ``MultipleFlowlineMassBalance``, when working with multiple flowlines.
+  The files only store what is needed to continue a run (the bucket state
+  and the model parameters), not the history of the run: a model loaded with
+  ``load_from_file`` starts at the date of the saved buckets.
+  ``run_from_climate_data`` selects the file automatically when a
+  ``SfcTypeTIModel`` run is restarted with ``init_model_filesuffix``:
+  ``mb_diagnostics{init_model_filesuffix}.nc`` is used if it exists and if
+  its bucket state is valid for the start year of the run, otherwise the
+  buckets are rebuilt with a fresh spinup and a warning is logged (set
+  ``mb_diagnostics_filesuffix=False`` to switch this off). The file provides
+  the state of the buckets and the model options, while the mass balance
+  parameters (``melt_f``, ``temp_bias``, ``prcp_fac``, ``temp_melt``) are the
+  ones of the settings of the run (``settings_filesuffix``), which allows
+  sensitivity experiments which all start from the same state (see also the
+  ``settings_filesuffix`` kwarg of ``load_from_file``). To avoid restarts
+  from an outdated state, a run which replaces
+  ``model_geometry{output_filesuffix}.nc`` also deletes an existing
+  ``mb_diagnostics{output_filesuffix}.nc``
+  (:pull:`1899`, :issue:`2045`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - New model output variable ``mass_kg``, the total glacier mass. When using
   ``SfcTypeTIModel``, volume, mass and thickness diagnostics are further
@@ -364,6 +381,17 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- With ``mb_elev_feedback='monthly'`` (or ``'always'``) and annual storage
+  (``store_monthly_step=False``, the default), the flowline diagnostic
+  ``climatic_mb`` was the January mass balance rate multiplied by the seconds
+  of the whole year, instead of the annual mass balance. ``flux_divergence``
+  is computed from it and was wrong as well, and so was the volume of a
+  ``fixed_geometry_spinup_yr`` period in the same configuration. These
+  outputs are now the sum of the 12 monthly mass balances, computed on the
+  surface at the start of the year. The glacier dynamics and all other
+  outputs were not affected, and results with the default
+  ``mb_elev_feedback='annual'`` are unchanged (:pull:`2052`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - The gridded shop tasks (ITS_LIVE, Millan thickness and velocity,
   Hugonnet, BedMachine, IceBoost) now raise an ``InvalidWorkflowError``
   when the product covers the region but has no valid value on the glacier

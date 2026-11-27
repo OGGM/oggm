@@ -36,7 +36,8 @@ from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.core.massbalance import (MultipleFlowlineMassBalance,
                                    ConstantMassBalance,
                                    MonthlyTIModel,
-                                   RandomMassBalance)
+                                   RandomMassBalance,
+                                   SfcTypeTIModel)
 from oggm.core.centerlines import Centerline, line_order
 from oggm.core.inversion import (find_sia_flux_from_thickness,
                                  get_inversion_lambdas)
@@ -1101,6 +1102,76 @@ class FlowlineModel(object):
 
         return self._mb_current_out[fl_id]
 
+    def _get_mb_of_period(self, heights, year, fl_id=None, fls=None,
+                          monthly_period=False, past_period=False):
+        """Mass balance accumulated over one storage period (m of ice).
+
+        The period of a mass balance call follows ``mb_elev_feedback``, which
+        is independent of the period we store. Multiplying the rate of one
+        call with the seconds of the storage period is therefore only correct
+        if both agree: this method takes care of it.
+
+        Parameters
+        ----------
+        heights : ndarray
+            the surface heights at the start of the period
+        year : float
+            the start of the period (floating year convention)
+        fl_id : int
+            the flowline id
+        fls : list
+            the flowlines, handed over to the mass balance model
+        monthly_period : bool
+            if the period is the month starting at ``year``. Default is the
+            year starting at ``year``.
+        past_period : bool
+            if the model has already run through this period. MB models with
+            a memory of the past (e.g. SfcTypeTIModel) can not go back in
+            time, but they store the values they have computed: with
+            ``use_previous_mbs`` these are returned (and the heights are
+            ignored, i.e. we get the mass balance which was applied during
+            the run).
+
+        Returns
+        -------
+        ndarray
+            the mass balance of the period, in m of ice
+        """
+        if past_period:
+            fl_mb_model = self._get_fl_mb_model(fl_id)
+            if hasattr(fl_mb_model, 'use_previous_mbs'):
+                use_previous_mbs = fl_mb_model.use_previous_mbs
+                fl_mb_model.use_previous_mbs = True
+                try:
+                    return self._get_mb_of_period(
+                        heights, year, fl_id=fl_id, fls=fls,
+                        monthly_period=monthly_period)
+                finally:
+                    fl_mb_model.use_previous_mbs = use_previous_mbs
+
+        if monthly_period:
+            # With an annual feedback this is the annual rate applied during
+            # one month, which is what the dynamical model does as well
+            return (self.get_mb(heights, year=year, fl_id=fl_id, fls=fls) *
+                    self._get_sec_in_month(year))
+
+        if self.mb_elev_feedback in ['annual', 'never']:
+            return (self.get_mb(heights, year=year, fl_id=fl_id, fls=fls) *
+                    self._get_sec_in_year(year))
+
+        # The mass balance call is monthly: one call is only valid for one
+        # month, we have to add up the months of the year. We do not go
+        # through self.get_mb here, to not get a cached value which was
+        # computed for other heights.
+        yr = int(np.floor(year))
+        out = 0.
+        for month in range(1, 13):
+            yr_mo = utils.date_to_floatyear(yr, month)
+            out = out + (self._mb_call(heights, year=yr_mo, fl_id=fl_id,
+                                       fls=fls) *
+                         self._get_sec_in_month(yr_mo))
+        return out
+
     def to_geometry_netcdf(self, path):
         """Creates a netcdf group file storing the state of the model."""
 
@@ -1624,14 +1695,11 @@ class FlowlineModel(object):
                 a[fl.section <= 0] = 0
 
                 for j, yr in enumerate(monthly_time[is_spinup_time]):
-                    smb = self.get_mb(h, year=yr, fl_id=fl_id, fls=self.fls)
-                    # depening on resolution we get seconds of period -> we want
-                    # total mass not per second
-                    if store_monthly_step:
-                        seconds = self._get_sec_in_month(yr)
-                    else:
-                        seconds = self._get_sec_in_year(yr)
-                    spinup_vol[j] -= np.sum(smb * a) * seconds  # minus because backwards
+                    # total mb of the period (month or year), not per second
+                    smb = self._get_mb_of_period(
+                        h, yr, fl_id=fl_id, fls=self.fls,
+                        monthly_period=store_monthly_step)
+                    spinup_vol[j] -= np.sum(smb * a)  # minus because backwards
 
             # per unit time
             spinup_vol = np.cumsum(spinup_vol[::-1])[::-1]
@@ -1731,21 +1799,19 @@ class FlowlineModel(object):
                         if 'climatic_mb' in ovars_fl and (yr > self.y0) and (i != 0):
                             # yr - 1 to use the mb which lead to the current
                             # state, also using previous surface height
-                            val = self.get_mb(surface_h_previous[fl_id],
-                                              monthly_time[i-1],
-                                              fl_id=fl_id)
+                            val = self._get_mb_of_period(
+                                surface_h_previous[fl_id],
+                                monthly_time[i-1], fl_id=fl_id,
+                                monthly_period=store_monthly_step,
+                                past_period=True)
                             # only save climatic mb where dhdt is non zero,
                             # isclose for avoiding numeric represention artefacts
                             dhdt_zero = np.isclose(ds['dhdt'].data[i, :],
                                                    0.)
-                            if store_monthly_step:
-                                fac_sec = self._get_sec_in_month(monthly_time[i - 1])
-                            else:
-                                fac_sec = self._get_sec_in_year(monthly_time[i - 1])
                             ds['climatic_mb'].data[i, :] = np.where(
                                 dhdt_zero,
                                 0.,
-                                val * fac_sec)
+                                val)
                             surface_h_previous[fl_id] = fl.surface_h
                         if 'flux_divergence' in ovars_fl and (yr > self.y0) and (i != 0):
                             # calculated after the formula mb = dhdt + flux_div
@@ -4066,6 +4132,13 @@ def flowline_model_run(gdir, settings_filesuffix='',
         geom_path = gdir.get_filepath('model_geometry',
                                       filesuffix=output_filesuffix,
                                       delete=True)
+        # A mb_diagnostics file with the same suffix is the mass balance
+        # model state of the run which wrote the geometry we just deleted:
+        # it must not be used to restart from the new one (see
+        # run_from_climate_data, which writes a new file after the run if
+        # asked to)
+        gdir.get_filepath('mb_diagnostics', filesuffix=output_filesuffix,
+                          delete=True)
     else:
         geom_path = False
 
@@ -4408,6 +4481,67 @@ def run_constant_climate(gdir, settings_filesuffix='',
                               **kwargs)
 
 
+def _select_mb_diagnostics_filesuffix(gdir, init_model_filesuffix, ys=None,
+                                      init_model_yr=None, mb_model_class=None):
+    """Decides if the mb_diagnostics file of a previous run can be used.
+
+    This is for a restart of a run with a ``SfcTypeTIModel``: the snow and
+    firn buckets of the previous run are needed at the restart date. They are
+    in ``mb_diagnostics{init_model_filesuffix}.nc``, if the previous run was
+    asked to save them (``save_mb_diagnostics_filesuffix``), and only for the
+    date when they were saved (usually the end of the run).
+
+    Returns
+    -------
+    ``init_model_filesuffix`` if the file is there and its bucket state is
+    valid for the restart date, otherwise None (the buckets are then rebuilt
+    with a fresh spinup, which is logged as a warning).
+    """
+
+    # this only concerns SfcTypeTIModel (which can be wrapped in a partial)
+    mb_class = mb_model_class
+    while isinstance(mb_class, partial):
+        mb_class = mb_class.func
+    if not (isinstance(mb_class, type) and
+            issubclass(mb_class, SfcTypeTIModel)):
+        return None
+
+    msg_rebuild = ('The snow and firn buckets are rebuilt with a fresh '
+                   'spinup, the run is not an exact continuation of the '
+                   f'run `{init_model_filesuffix}`.')
+
+    if not gdir.has_file('mb_diagnostics', filesuffix=init_model_filesuffix):
+        log.warning(f'({gdir.rgi_id}) run_from_climate_data: no '
+                    f'mb_diagnostics file for `{init_model_filesuffix}`. '
+                    + msg_rebuild)
+        return None
+
+    fp = gdir.get_filepath('mb_diagnostics', filesuffix=init_model_filesuffix)
+    with xr.open_dataset(fp) as ds:
+        is_multi_fl_file = 'n_flowlines' in ds.attrs
+    if not is_multi_fl_file:
+        # written by SfcTypeTIModel.save_to_file for a single model
+        log.warning(f'({gdir.rgi_id}) run_from_climate_data: the '
+                    f'mb_diagnostics file of `{init_model_filesuffix}` was '
+                    'not saved by a MultipleFlowlineMassBalance. '
+                    + msg_rebuild)
+        return None
+    with xr.open_dataset(fp, group='fl_0') as ds:
+        state_yr = float(ds.attrs['mb_buckets_year'])
+
+    if state_yr != ys or init_model_yr != ys:
+        log.warning(f'({gdir.rgi_id}) run_from_climate_data: the buckets in '
+                    f'the mb_diagnostics file of `{init_model_filesuffix}` '
+                    f'are valid for {state_yr}, but the run starts in {ys} '
+                    f'(init_model_yr={init_model_yr}). ' + msg_rebuild)
+        return None
+
+    log.info(f'({gdir.rgi_id}) run_from_climate_data: the mass balance '
+             'model is loaded from the mb_diagnostics file of '
+             f'`{init_model_filesuffix}`.')
+    return init_model_filesuffix
+
+
 @entity_task(log, workflow_return_value=False)
 def run_from_climate_data(gdir, settings_filesuffix='',
                           ys=None, ye=None, min_ys=None, max_ys=None,
@@ -4503,7 +4637,7 @@ def run_from_climate_data(gdir, settings_filesuffix='',
         starting from the chosen year. The only output affected are the
         glacier wide diagnostic files - all other outputs are set
         to constants during "spinup"
-    mb_diagnostics_filesuffix : str, optional
+    mb_diagnostics_filesuffix : str or False, optional
         if provided, the mass balance model is loaded from a previously saved
         ``mb_diagnostics{mb_diagnostics_filesuffix}.nc`` file via
         :meth:`MultipleFlowlineMassBalance.load_from_file` instead of being
@@ -4511,6 +4645,21 @@ def run_from_climate_data(gdir, settings_filesuffix='',
         ``climate_input_filesuffix`` are forwarded so you can branch from a
         historical state into a new scenario.  Ignored when ``mb_model`` is
         also provided.
+        The file provides the state of the buckets and the model options
+        (e.g. the number of buckets, ``melt_f_ratio``). The mass balance
+        parameters (``melt_f``, ``temp_bias``, ``prcp_fac``, ``temp_melt``)
+        are the ones of the settings of this run (``settings_filesuffix``),
+        also if the state was saved with other settings: this allows
+        sensitivity experiments which all start from the same state.
+        Default (None) is to select the file automatically when restarting
+        a ``SfcTypeTIModel`` run from a previous one: if
+        ``init_model_filesuffix`` is set, ``mb_model_class`` is a
+        ``SfcTypeTIModel`` and ``mb_diagnostics{init_model_filesuffix}.nc``
+        exists, it is used if its bucket state is valid for the start year
+        of the run. The model options are then the ones stored in the file
+        (kwargs given with ``mb_model_class`` are ignored). Otherwise
+        the buckets are rebuilt with a fresh spinup, and a warning is logged.
+        Set to False to never load the mass balance model from a file.
     save_mb_diagnostics_filesuffix : str, optional
         if provided, the mass balance model state is saved to
         ``mb_diagnostics{save_mb_diagnostics_filesuffix}.nc`` after the run
@@ -4557,7 +4706,13 @@ def run_from_climate_data(gdir, settings_filesuffix='',
         ys = ys if ys < max_ys else max_ys
 
     if mb_model is None:
-        if mb_diagnostics_filesuffix is not None:
+        if mb_diagnostics_filesuffix is None and init_model_filesuffix is not None:
+            # restart from a previous run: use its bucket state if we can
+            mb_diagnostics_filesuffix = _select_mb_diagnostics_filesuffix(
+                gdir, init_model_filesuffix, ys=ys,
+                init_model_yr=init_model_yr, mb_model_class=mb_model_class)
+
+        if mb_diagnostics_filesuffix not in [None, False]:
             # Only forward climate params when explicitly changed from defaults
             _branch_fn = (climate_filename
                           if climate_filename != 'climate_historical' else None)
@@ -4568,6 +4723,8 @@ def run_from_climate_data(gdir, settings_filesuffix='',
                 filesuffix=mb_diagnostics_filesuffix,
                 climate_filename=_branch_fn,
                 climate_input_filesuffix=_branch_isuf,
+                # the state is from the file, the parameters from this run
+                settings_filesuffix=settings_filesuffix,
             )
         else:
             mb_model = MultipleFlowlineMassBalance(
