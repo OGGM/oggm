@@ -3232,6 +3232,22 @@ class TestCoxeCalving:
         v_new_bwl = np.sum([np.sum(fl.get('volume_bwl', 0)) for fl in cls2])
         flowline.init_present_time_glacier(gdir)
         flsg = gdir.read_store('model_flowlines')
+
+        # The surface slope diagnostic of the inversion must not overwrite
+        # the ocean floor slope parameter (GH2041)
+        cf_slope = cfg.PARAMS['calving_front_slope']
+        assert 'calving_front_slope' not in out
+        assert gdir.settings['calving_front_slope'] == cf_slope
+        surf_slope = gdir.settings['calving_front_surface_slope']
+        assert surf_slope == out['calving_front_surface_slope']
+        assert surf_slope != cf_slope
+        # The bed extension beyond the front follows the parameter
+        fl = flsg[-1]
+        n_ext = cfg.PARAMS['calving_line_extension']
+        bed_ext = fl.bed_h[-n_ext:]
+        np.testing.assert_allclose(bed_ext[0] - bed_ext[-1],
+                                   n_ext * fl.dx_meter * cf_slope)
+
         for fl in flsg:
             fl.water_level = out['calving_water_level']
         v_new_bsl_g = np.sum([np.sum(fl.volume_bsl_m3) for fl in flsg])
