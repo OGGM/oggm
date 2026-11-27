@@ -5270,6 +5270,184 @@ class TestLeapYears:
         assert mb_multi_noleap.use_leap_years is False
 
 
+class TestMBOfStoragePeriod:
+    """The period of the MB call follows mb_elev_feedback, the period of the
+    stored output follows store_monthly_step: they have to be decoupled."""
+
+    @pytest.mark.slow
+    def test_fl_diag_climatic_mb(self, hef_elev_gdir):
+
+        gdir = hef_elev_gdir
+        init_present_time_glacier(gdir)
+        mb_mod = massbalance.MultipleFlowlineMassBalance(
+            gdir, mb_model_class=massbalance.MonthlyTIModel)
+
+        def _monthly(h, yr_mo):
+            return (mb_mod.get_monthly_mb(h, year=yr_mo, fl_id=0) *
+                    mb_mod.sec_in_month(yr_mo))
+
+        def _annual(h, yr):
+            return (mb_mod.get_annual_mb(h, year=yr, fl_id=0) *
+                    mb_mod.sec_in_year(yr))
+
+        for feedback in ['annual', 'monthly', 'always']:
+            for monthly_step in [False, True]:
+                sfx = f'_{feedback}_{int(monthly_step)}'
+                with warnings.catch_warnings():
+                    # annual feedback with monthly steps warns
+                    warnings.simplefilter('ignore')
+                    run_from_climate_data(gdir, ys=1980, ye=1984,
+                                          mb_elev_feedback=feedback,
+                                          store_monthly_step=monthly_step,
+                                          store_fl_diagnostics=True,
+                                          store_model_geometry=True,
+                                          output_filesuffix=sfx)
+                fp = gdir.get_filepath('fl_diagnostics', filesuffix=sfx)
+                with xr.open_dataset(fp, group='fl_0') as ds:
+                    ds = ds.load()
+                fmod = FileModel(gdir.get_filepath('model_geometry',
+                                                   filesuffix=sfx))
+                has_ref = False
+                for i in range(1, len(ds.time)):
+                    # MB of the period before, on the surface at its start
+                    t0 = float(ds.time[i - 1])
+                    yr = int(np.floor(t0))
+                    fmod.run_until(t0)
+                    h = fmod.fls[0].surface_h
+                    if monthly_step and feedback == 'annual':
+                        # Annual rate applied during one month: the model
+                        # uses the surface of the start of the year
+                        fmod.run_until(yr)
+                        ref = (mb_mod.get_annual_mb(fmod.fls[0].surface_h,
+                                                    year=yr, fl_id=0) *
+                               mb_mod.sec_in_month(t0))
+                    elif monthly_step:
+                        ref = _monthly(h, t0)
+                    else:
+                        # The full year, whatever the feedback is
+                        ref = _annual(h, yr)
+                        ref_sum = sum(
+                            [_monthly(h, utils.date_to_floatyear(yr, m))
+                             for m in range(1, 13)])
+                        assert_allclose(ref, ref_sum, atol=1e-10)
+
+                    dhdt = ds.dhdt.data[i]
+                    pok = ~np.isclose(dhdt, 0.)
+                    has_ref = has_ref or pok.sum() > 10
+                    cmb = ds.climatic_mb.data[i]
+                    assert_allclose(cmb[pok], ref[pok], atol=1e-10)
+                    assert_allclose(cmb[~pok], 0)
+
+                    # mb = dhdt + flux divergence, which is damped where
+                    # the glacier became ice free
+                    fmod.run_until(float(ds.time[i]))
+                    fac = np.where(np.isclose(fmod.fls[0].thick, 0.) &
+                                   (dhdt < 0.), 0.1, 1.)
+                    assert_allclose(ds.flux_divergence.data[i],
+                                    (cmb - dhdt) * fac, atol=1e-10)
+                # we did test something
+                assert has_ref
+
+    @pytest.mark.slow
+    def test_fl_diag_climatic_mb_sfc_type(self, hef_elev_gdir):
+        """MB models with memory can not be asked for the past again: the
+        diagnostic is made of the values they stored during the run."""
+
+        gdir = hef_elev_gdir
+        init_present_time_glacier(gdir)
+        sfc_class = partial(massbalance.SfcTypeTIModel,
+                            mb_model_class=massbalance.MonthlyTIModel)
+        ys, ye = 1990, 1994
+
+        def _run(feedback, monthly_step):
+            sfx = f'_sfc_{feedback}_{int(monthly_step)}'
+            with warnings.catch_warnings():
+                # annual feedback with monthly steps warns
+                warnings.simplefilter('ignore')
+                model = run_from_climate_data(
+                    gdir, ys=ys, ye=ye, mb_model_class=sfc_class,
+                    mb_elev_feedback=feedback,
+                    store_monthly_step=monthly_step,
+                    store_fl_diagnostics=True, output_filesuffix=sfx)
+            fp = gdir.get_filepath('fl_diagnostics', filesuffix=sfx)
+            with xr.open_dataset(fp, group='fl_0') as ds:
+                return model, ds.load()
+
+        for feedback in ['annual', 'monthly']:
+            model, ds = _run(feedback, False)
+            mb_mod = model.mb_model.flowline_mb_models[0]
+            # the model still refuses to go back in time after the run
+            assert not mb_mod.use_previous_mbs
+
+            cmb = ds.climatic_mb.data[1:]
+            dhdt = ds.dhdt.data[1:]
+            pok = ~np.isclose(dhdt, 0.)
+            assert pok.sum() > 100
+
+            # Reference 1: the monthly values stored by the MB model during
+            # the run (the heights are ignored), added up for each year
+            mb_mod.use_previous_mbs = True
+            h = model.fls[0].surface_h
+            ref = np.zeros_like(cmb)
+            for j, yr in enumerate(range(ys, ye)):
+                for m in range(1, 13):
+                    yr_mo = utils.date_to_floatyear(yr, m)
+                    ref[j] += (mb_mod.get_monthly_mb(
+                        h, year=yr_mo, climatic_mb_or_ice_mb='ice_mb') *
+                               mb_mod.sec_in_month(yr_mo))
+            assert_allclose(cmb[pok], ref[pok], atol=1e-10)
+            assert_allclose(cmb[~pok], 0)
+
+            # Reference 2: the monthly diagnostics of the same run with
+            # monthly storage, added up for each year
+            _, ds_m = _run(feedback, True)
+            cmb_m = ds_m.climatic_mb.data[1:].reshape(ye - ys, 12, -1)
+            dhdt_m = ds_m.dhdt.data[1:].reshape(ye - ys, 12, -1)
+            pok_m = pok & np.all(~np.isclose(dhdt_m, 0.), axis=1)
+            assert pok_m.sum() > 100
+            assert_allclose(cmb[pok_m], cmb_m.sum(axis=1)[pok_m], atol=1e-10)
+
+            # mb = dhdt + flux divergence, where the glacier did not become
+            # ice free (there the flux divergence is damped). dhdt is the
+            # one of the ice, without the snow and firn on top
+            thick = ds.thickness_ice_m.data[1:]
+            pfd = ~(np.isclose(thick, 0.) & (dhdt < 0.))
+            assert_allclose(ds.flux_divergence.data[1:][pfd],
+                            (cmb - dhdt)[pfd], atol=1e-10)
+
+    @pytest.mark.slow
+    def test_fixed_geometry_spinup(self, hef_elev_gdir):
+
+        gdir = hef_elev_gdir
+        init_present_time_glacier(gdir)
+
+        # During the spinup the geometry is fixed: the volume change must not
+        # depend on the period of the MB call or of the storage
+        vols = {}
+        for feedback in ['annual', 'monthly', 'always']:
+            for monthly_step in [False, True]:
+                sfx = f'_spin_{feedback}_{int(monthly_step)}'
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    run_from_climate_data(gdir, fixed_geometry_spinup_yr=1990,
+                                          ys=2000, ye=2002,
+                                          mb_elev_feedback=feedback,
+                                          store_monthly_step=monthly_step,
+                                          output_filesuffix=sfx)
+                fp = gdir.get_filepath('model_diagnostics', filesuffix=sfx)
+                with xr.open_dataset(fp) as ds:
+                    ds = ds.load()
+                # start of the years of the spinup
+                ds = ds.isel(time=ds.is_fixed_geometry_spinup.data)
+                ds = ds.isel(time=np.isclose(ds.time, np.floor(ds.time)))
+                assert len(ds.time) >= 5
+                vols[sfx] = ds.volume_m3.data
+        ref = vols.pop('_spin_annual_0')
+        assert np.std(ref) > 0
+        for sfx, vol in vols.items():
+            assert_allclose(vol, ref, rtol=1e-10, err_msg=sfx)
+
+
 @pytest.mark.test_env("models_dynamics")
 class TestIdealisedInversion():
     def simple_plot(self, model, gdir):  # pragma: no cover

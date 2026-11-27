@@ -958,24 +958,6 @@ class FlowlineModel(object):
             # memory (e.g. like the SfcTypeTIModel)
             return self._mb_model
 
-    def _get_mb_of_past_step(self, heights, year, fl_id):
-        """The mass balance of a step the model has already run through.
-
-        MB models with a memory of the past (e.g. SfcTypeTIModel) can not go
-        back in time, but they store the values they have computed: with
-        ``use_previous_mbs`` these are returned (and the heights are ignored,
-        i.e. we get the mass balance which was applied during the run).
-        """
-        fl_mb_model = self._get_fl_mb_model(fl_id)
-        if not hasattr(fl_mb_model, 'use_previous_mbs'):
-            return self.get_mb(heights, year, fl_id=fl_id)
-        use_previous_mbs = fl_mb_model.use_previous_mbs
-        fl_mb_model.use_previous_mbs = True
-        try:
-            return self.get_mb(heights, year, fl_id=fl_id)
-        finally:
-            fl_mb_model.use_previous_mbs = use_previous_mbs
-
     def _get_along_fl_thickness_firn_m(self, fl_id):
         fl_mb_model = self._get_fl_mb_model(fl_id)
         if hasattr(fl_mb_model, 'columns_thickness_m'):
@@ -1119,6 +1101,76 @@ class FlowlineModel(object):
                                                         fls=fls)
 
         return self._mb_current_out[fl_id]
+
+    def _get_mb_of_period(self, heights, year, fl_id=None, fls=None,
+                          monthly_period=False, past_period=False):
+        """Mass balance accumulated over one storage period (m of ice).
+
+        The period of a mass balance call follows ``mb_elev_feedback``, which
+        is independent of the period we store. Multiplying the rate of one
+        call with the seconds of the storage period is therefore only correct
+        if both agree: this method takes care of it.
+
+        Parameters
+        ----------
+        heights : ndarray
+            the surface heights at the start of the period
+        year : float
+            the start of the period (floating year convention)
+        fl_id : int
+            the flowline id
+        fls : list
+            the flowlines, handed over to the mass balance model
+        monthly_period : bool
+            if the period is the month starting at ``year``. Default is the
+            year starting at ``year``.
+        past_period : bool
+            if the model has already run through this period. MB models with
+            a memory of the past (e.g. SfcTypeTIModel) can not go back in
+            time, but they store the values they have computed: with
+            ``use_previous_mbs`` these are returned (and the heights are
+            ignored, i.e. we get the mass balance which was applied during
+            the run).
+
+        Returns
+        -------
+        ndarray
+            the mass balance of the period, in m of ice
+        """
+        if past_period:
+            fl_mb_model = self._get_fl_mb_model(fl_id)
+            if hasattr(fl_mb_model, 'use_previous_mbs'):
+                use_previous_mbs = fl_mb_model.use_previous_mbs
+                fl_mb_model.use_previous_mbs = True
+                try:
+                    return self._get_mb_of_period(
+                        heights, year, fl_id=fl_id, fls=fls,
+                        monthly_period=monthly_period)
+                finally:
+                    fl_mb_model.use_previous_mbs = use_previous_mbs
+
+        if monthly_period:
+            # With an annual feedback this is the annual rate applied during
+            # one month, which is what the dynamical model does as well
+            return (self.get_mb(heights, year=year, fl_id=fl_id, fls=fls) *
+                    self._get_sec_in_month(year))
+
+        if self.mb_elev_feedback in ['annual', 'never']:
+            return (self.get_mb(heights, year=year, fl_id=fl_id, fls=fls) *
+                    self._get_sec_in_year(year))
+
+        # The mass balance call is monthly: one call is only valid for one
+        # month, we have to add up the months of the year. We do not go
+        # through self.get_mb here, to not get a cached value which was
+        # computed for other heights.
+        yr = int(np.floor(year))
+        out = 0.
+        for month in range(1, 13):
+            yr_mo = utils.date_to_floatyear(yr, month)
+            out = out + (self._mb_call(heights, year=yr_mo, fl_id=fl_id,
+                                       fls=fls) *
+                         self._get_sec_in_month(yr_mo))
+        return out
 
     def to_geometry_netcdf(self, path):
         """Creates a netcdf group file storing the state of the model."""
@@ -1643,14 +1695,11 @@ class FlowlineModel(object):
                 a[fl.section <= 0] = 0
 
                 for j, yr in enumerate(monthly_time[is_spinup_time]):
-                    smb = self.get_mb(h, year=yr, fl_id=fl_id, fls=self.fls)
-                    # depening on resolution we get seconds of period -> we want
-                    # total mass not per second
-                    if store_monthly_step:
-                        seconds = self._get_sec_in_month(yr)
-                    else:
-                        seconds = self._get_sec_in_year(yr)
-                    spinup_vol[j] -= np.sum(smb * a) * seconds  # minus because backwards
+                    # total mb of the period (month or year), not per second
+                    smb = self._get_mb_of_period(
+                        h, yr, fl_id=fl_id, fls=self.fls,
+                        monthly_period=store_monthly_step)
+                    spinup_vol[j] -= np.sum(smb * a)  # minus because backwards
 
             # per unit time
             spinup_vol = np.cumsum(spinup_vol[::-1])[::-1]
@@ -1750,21 +1799,19 @@ class FlowlineModel(object):
                         if 'climatic_mb' in ovars_fl and (yr > self.y0) and (i != 0):
                             # yr - 1 to use the mb which lead to the current
                             # state, also using previous surface height
-                            val = self._get_mb_of_past_step(
+                            val = self._get_mb_of_period(
                                 surface_h_previous[fl_id],
-                                monthly_time[i-1], fl_id=fl_id)
+                                monthly_time[i-1], fl_id=fl_id,
+                                monthly_period=store_monthly_step,
+                                past_period=True)
                             # only save climatic mb where dhdt is non zero,
                             # isclose for avoiding numeric represention artefacts
                             dhdt_zero = np.isclose(ds['dhdt'].data[i, :],
                                                    0.)
-                            if store_monthly_step:
-                                fac_sec = self._get_sec_in_month(monthly_time[i - 1])
-                            else:
-                                fac_sec = self._get_sec_in_year(monthly_time[i - 1])
                             ds['climatic_mb'].data[i, :] = np.where(
                                 dhdt_zero,
                                 0.,
-                                val * fac_sec)
+                                val)
                             surface_h_previous[fl_id] = fl.surface_h
                         if 'flux_divergence' in ovars_fl and (yr > self.y0) and (i != 0):
                             # calculated after the formula mb = dhdt + flux_div

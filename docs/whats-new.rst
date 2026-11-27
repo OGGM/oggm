@@ -381,6 +381,17 @@ Enhancements
 Bug fixes
 ~~~~~~~~~
 
+- With ``mb_elev_feedback='monthly'`` (or ``'always'``) and annual storage
+  (``store_monthly_step=False``, the default), the flowline diagnostic
+  ``climatic_mb`` was the January mass balance rate multiplied by the seconds
+  of the whole year, instead of the annual mass balance. ``flux_divergence``
+  is computed from it and was wrong as well, and so was the volume of a
+  ``fixed_geometry_spinup_yr`` period in the same configuration. These
+  outputs are now the sum of the 12 monthly mass balances, computed on the
+  surface at the start of the year. The glacier dynamics and all other
+  outputs were not affected, and results with the default
+  ``mb_elev_feedback='annual'`` are unchanged.
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - The gridded shop tasks (ITS_LIVE, Millan thickness and velocity,
   Hugonnet, BedMachine, IceBoost) now raise an ``InvalidWorkflowError``
   when the product covers the region but has no valid value on the glacier
