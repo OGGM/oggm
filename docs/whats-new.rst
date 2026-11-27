@@ -237,8 +237,8 @@ Enhancements
   newly created URLs use the 100-glacier bundles. Both RGI6 and RGI7 IDs are
   supported (:pull:`1925`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
-- Some tests have been refactored from unittest to pytest. (:pull:`1925`,
-  :pull:`1936`).
+- All tests have been refactored from unittest to pytest, many are now
+  parametrised. (:pull:`1925`, :pull:`1936`, :pull:`2022`).
   By `Nicolas Gampierakis <https://github.com/gampnico>`_
 - Replaced `scipy.linalg.solve_banded` with `scipy.linalg.lapack.dgtsv` for
   solving linear systems with a tridiagonal matrix in `SemiImplicitModel`. This
@@ -495,6 +495,10 @@ Bug fixes
   ``error_during_run`` flags of the latter. Both files' attributes are now
   kept, the first file still winning on the keys they share (:pull:`1991`).
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- Tests no longer write to a shared file, test directories are no longer
+  persistent. This affects the test fixtures `hef_gdir`, `case_dir` and
+  `class_case_dir` (:pull:`2022`).
+  By `Nicolas Gampierakis <https://github.com/gampnico>`_.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~

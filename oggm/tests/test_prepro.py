@@ -23,7 +23,6 @@ from oggm.shop import gcm_climate
 import oggm.cfg as cfg
 from oggm import utils, tasks
 from oggm.utils import get_demo_file, tuple2int, get_days_of_year
-from oggm.tests.funcs import get_test_dir
 from oggm import workflow
 from oggm.exceptions import InvalidWorkflowError, InvalidParamsError
 from oggm.shop.w5e5 import process_gswp3_w5e5_data
