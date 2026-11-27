@@ -298,7 +298,7 @@ Enhancements
   from an outdated state, a run which replaces
   ``model_geometry{output_filesuffix}.nc`` also deletes an existing
   ``mb_diagnostics{output_filesuffix}.nc``
-  (:pull:`1899`, :issue:`2045`).
+  (:pull:`1899`, :pull:`2051`).
   By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - New model output variable ``mass_kg``, the total glacier mass. When using
   ``SfcTypeTIModel``, volume, mass and thickness diagnostics are further
