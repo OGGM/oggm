@@ -396,6 +396,14 @@ Bug fixes
   ``glen_a_factor`` and ``fs``. ``calibrate_inversion_from_volume`` now
   also includes the firn volume when it decides to use sliding.
   By `Fabien Maussion <https://github.com/fmaussion>`_
+- ``find_inversion_calving_from_any_mb`` stored the surface slope at the
+  calving front as ``calving_front_slope`` in the glacier settings, which
+  overwrote the parameter of the same name (the slope of the ocean floor
+  beyond the front, default 0.05). ``init_present_time_glacier`` then used
+  the surface slope to extend the bed of tidewater glaciers. The diagnostic
+  is now called ``calving_front_surface_slope`` (in the settings, the
+  diagnostics and the output of the task) (:issue:`2041`).
+  By `Patrick Schmitt <https://github.com/pat-schmitt>`_
 - :py:func:`utils.get_rgi_glacier_entities` now returns the glacier outlines
   in the same order as the input list of RGI ids. They were previously
   sorted by RGI region and by their order in the RGI files (:issue:`1005`).
