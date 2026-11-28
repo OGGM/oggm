@@ -30,6 +30,31 @@ The model needs to compute the temperature and precipitation at the altitude :ma
 grid points. The default is to use a fixed lapse rate of
 -6.5K km :math:`^{-1}` and no gradient for precipitation.
 
+Precipitation gradient
+~~~~~~~~~~~~~~~~~~~~~~
+
+Optionally, precipitation can increase with elevation (switched off by
+default). The approach follows `Huss and Hock, 2015`_ (GloGEM): the gradient
+is relative to the precipitation at the reference height :math:`z_{ref}` of
+the climate data, with a lower bound :math:`f_{min}`:
+
+.. math::
+
+    P_i(z) = P_f \, P_i^{clim} \, max \left( 1 + \gamma_P (z - z_{ref}), f_{min} \right)
+
+with :math:`\gamma_P` = ``prcp_default_gradient`` (m :math:`^{-1}`, e.g.
+1.5 10 :math:`^{-4}` for 1.5% per 100 m, the GloGEM default) and
+:math:`f_{min}` = ``prcp_gradient_min_fac`` (default: 0.8). For glaciers
+with an elevation range larger than 1000 m, the precipitation decreases again
+over the uppermost 25% of the elevation range (reduced air moisture and wind
+erosion at high elevations, down to 87.5% of the value at the threshold
+elevation with the default parameters, as in GloGEM). This elevation range
+is the one of the reference geometry (the inversion flowlines): it does not
+change during a run. See the ``prcp_*`` parameters in ``params.cfg`` for the
+details.
+
+.. _Huss and Hock, 2015: https://doi.org/10.3389/feart.2015.00054
+
 .. _mb-calib:
 
 Calibration

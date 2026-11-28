@@ -663,6 +663,11 @@ class TestMassBalanceModels:
             - temp_all_liq: 2.0
             - temp_melt: -1.0
             - temp_default_gradient: -0.0065
+            - prcp_default_gradient: 0.0
+            - prcp_gradient_min_fac: 0.8
+            - prcp_top_reduction_zfrac: 0.75
+            - prcp_top_reduction_fac: 0.875
+            - prcp_top_reduction_min_zrange: 1000.0
             - repeat: False
             - ref_hgt: 3160.0
             - ys: 1802
@@ -697,6 +702,11 @@ class TestMassBalanceModels:
             - temp_all_liq: 2.0
             - temp_melt: 0.0
             - temp_default_gradient: -0.0065
+            - prcp_default_gradient: 0.0
+            - prcp_gradient_min_fac: 0.8
+            - prcp_top_reduction_zfrac: 0.75
+            - prcp_top_reduction_fac: 0.875
+            - prcp_top_reduction_min_zrange: 1000.0
             - repeat: False
             - ref_hgt: 2252.0
             - ys: 1901
@@ -1564,6 +1574,137 @@ class TestMassBalanceModels:
         # monthly model still fine
         mb_mod = massbalance.MonthlyTIModel(gdir)
         assert mb_mod.temp_melt == gdir.settings["temp_melt"]
+
+    def test_prcp_gradient(self, hef_gdir, monkeypatch):
+
+        gdir = hef_gdir
+        heights = np.linspace(1000, 4500, 71)
+        fls = gdir.read_store('inversion_flowlines')
+        zmin = np.min([fl.surface_h.min() for fl in fls])
+        zmax = np.max([fl.surface_h.max() for fl in fls])
+        assert zmax - zmin > 1000
+
+        # Off by default
+        ref = massbalance.MonthlyTIModel(gdir)
+        assert ref.prcp_default_gradient == 0
+        assert ref._get_prcp_height_factor(heights) is None
+
+        # The calibration stored the global params
+        g = 1.5e-4
+        with pytest.raises(InvalidWorkflowError,
+                           match='prcp_default_gradient'):
+            massbalance.MonthlyTIModel(gdir, prcp_default_gradient=g)
+
+        mb = massbalance.MonthlyTIModel(gdir, prcp_default_gradient=g,
+                                        check_calib_params=False)
+        assert mb.prcp_top_reduction_zrange == (zmin, zmax)
+        fac = mb._get_prcp_height_factor(heights)
+
+        z_thr = zmin + 0.75 * (zmax - zmin)
+        f_thr = 1 + g * (z_thr - mb.ref_hgt)
+        lin = 1 + g * (heights - mb.ref_hgt)
+        # linear between the floor and the top reduction
+        ok = (heights <= z_thr) & (lin >= 0.8)
+        assert ok.sum() > 10
+        assert_allclose(fac[ok], lin[ok])
+        # floor below the reference height
+        low = lin < 0.8
+        assert low.sum() > 5
+        assert_allclose(fac[low], 0.8)
+        # GloGEM reduction at the top: down to 87.5% of the value at the
+        # threshold, constant above zmax
+        top = heights >= zmax
+        assert top.sum() > 5
+        assert_allclose(fac[top], 0.875 * f_thr)
+        mid = (heights > z_thr) & (heights < zmax)
+        assert mid.sum() > 3
+        assert np.all(np.diff(fac[mid]) < 0)
+        assert np.all((fac[mid] < f_thr) & (fac[mid] > 0.875 * f_thr))
+
+        # Applied to the model precipitation, 1D and 2D paths
+        _, _, p0, ps0 = ref.get_monthly_climate(heights, year=2000)
+        _, _, p1, ps1 = mb.get_monthly_climate(heights, year=2000)
+        assert_allclose(p1, p0 * fac)
+        assert_allclose(ps1, ps0 * fac)
+        _, _, p0, ps0 = ref.get_annual_climate(heights, year=2000)
+        _, _, p1, ps1 = mb.get_annual_climate(heights, year=2000)
+        assert_allclose(p1, p0 * fac)
+        assert_allclose(ps1, ps0 * fac)
+        dmb = (mb.get_annual_mb(heights, year=2000) -
+               ref.get_annual_mb(heights, year=2000))
+        ok = (ps0 > 0) & (np.abs(fac - 1) > 1e-3)
+        assert ok.sum() > 50
+        assert_allclose(np.sign(dmb[ok]), np.sign(fac[ok] - 1))
+
+        # Fast series and per-year methods agree
+        years = np.arange(1990, 2000)
+        loop = np.stack([mb.get_annual_mb(heights, year=y) for y in years],
+                        axis=1)
+        assert_allclose(mb.get_annual_mb_series(heights, years), loop)
+        myears = utils.date_to_floatyear(np.repeat(1999, 12), np.arange(1, 13))
+        loop = np.stack([mb.get_monthly_mb(heights, year=y) for y in myears],
+                        axis=1)
+        assert_allclose(mb.get_monthly_mb_series(heights, myears), loop)
+
+        # The parameters can be changed after instantiation
+        mb.prcp_top_reduction_fac = 1
+        assert_allclose(mb._get_prcp_height_factor(heights),
+                        np.clip(lin, 0.8, None))
+        mb.prcp_top_reduction_fac = 0.875
+        mb.prcp_top_reduction_zrange = (3000, 3900)  # range < 1000 m
+        assert_allclose(mb._get_prcp_height_factor(heights),
+                        np.clip(lin, 0.8, None))
+        # unless the min range is 0
+        mb.prcp_top_reduction_min_zrange = 0
+        fac_small = mb._get_prcp_height_factor(heights)
+        z_thr = 3000 + 0.75 * 900
+        assert_allclose(fac_small[heights <= z_thr],
+                        np.clip(lin, 0.8, None)[heights <= z_thr])
+        assert_allclose(fac_small[heights >= 3900],
+                        0.875 * (1 + g * (z_thr - mb.ref_hgt)))
+        mb.prcp_top_reduction_min_zrange = 1000
+        mb.prcp_top_reduction_zrange = (zmin, zmax)
+        # without the floor (and without the top reduction)
+        mb.prcp_top_reduction_fac = 1
+        mb.prcp_gradient_min_fac = 0
+        assert_allclose(mb._get_prcp_height_factor(heights),
+                        np.clip(lin, 0, None))
+        mb.prcp_default_gradient = 0
+        _, _, p1, _ = mb.get_annual_climate(heights, year=2000)
+        assert_allclose(p1, p0)
+
+        # Elevation range from the DEM without inversion flowlines
+        monkeypatch.setattr(gdir, 'has_file',
+                            lambda f, **kw: f == 'gridded_data')
+        mb = massbalance.MonthlyTIModel(gdir, prcp_default_gradient=g,
+                                        check_calib_params=False)
+        dzmin, dzmax = mb.prcp_top_reduction_zrange
+        assert dzmin < zmin < dzmin + 100
+        assert dzmax - 100 < zmax < dzmax
+        monkeypatch.setattr(gdir, 'has_file', lambda f, **kw: False)
+        mb = massbalance.MonthlyTIModel(gdir, prcp_default_gradient=g,
+                                        check_calib_params=False)
+        with pytest.raises(InvalidWorkflowError, match='zrange'):
+            mb.get_annual_mb(heights, year=2000)
+        mb = massbalance.MonthlyTIModel(gdir, prcp_default_gradient=g,
+                                        prcp_top_reduction_zrange=(zmin, zmax),
+                                        check_calib_params=False)
+        _, _, p1, _ = mb.get_annual_climate(heights, year=2000)
+        assert_allclose(p1, p0 * fac)
+        monkeypatch.undo()
+
+        # Daily and surface type models
+        tasks.process_gswp3_w5e5_data(gdir, daily=True)
+        kw = dict(check_calib_params=False)
+        ref = massbalance.DailyTIModel(gdir, **kw)
+        mb = massbalance.DailyTIModel(gdir, prcp_default_gradient=g, **kw)
+        fac = mb._get_prcp_height_factor(heights)
+        _, _, p0, _ = ref.get_daily_climate(heights, year=2000)
+        _, _, p1, _ = mb.get_daily_climate(heights, year=2000)
+        assert_allclose(p1, p0 * fac)
+        sfc = massbalance.SfcTypeTIModel(gdir, prcp_default_gradient=g, **kw)
+        assert sfc.mbmod.prcp_default_gradient == g
+        assert sfc.mbmod.prcp_top_reduction_zrange == (zmin, zmax)
 
     @pytest.mark.slow
     def test_sfc_type_mb_model(self, hef_gdir):
